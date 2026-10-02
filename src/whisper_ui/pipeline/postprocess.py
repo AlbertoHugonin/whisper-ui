@@ -44,7 +44,7 @@ def _resolve_language(context: dict[str, Any]) -> str:
     sentinels must never win over a real code: ``"unknown"`` (the whisper.cpp
     adapter's missing-language fallback, truthy but meaningless) and ``auto``
     (the configured value when detection was requested) — neither may reach
-    the zh-only conversion gate or the persisted transcript as-is.
+    the Chinese-only conversion gate or the persisted transcript as-is.
     """
     for key in ("final_result", "aligned_result", "transcription_result"):
         raw = context.get(key)
@@ -52,7 +52,7 @@ def _resolve_language(context: dict[str, Any]) -> str:
             detected = raw.get("language")
             if detected and detected != "unknown":
                 return detected
-    configured = context.get("language", "zh")
+    configured = context.get("language", AUTO_LANGUAGE)
     return "unknown" if configured == AUTO_LANGUAGE else configured
 
 

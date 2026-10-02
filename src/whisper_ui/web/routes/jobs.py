@@ -381,7 +381,7 @@ async def re_transcribe_job(
     settings: SettingsDep,
     filestore: FileStoreDep,
     user: CurrentUserDep,
-    language: Annotated[str, Form()] = "zh",
+    language: Annotated[str, Form()] = "auto",
     model_name: Annotated[str, Form()] = DEFAULT_WHISPER_MODEL,
     num_speakers: Annotated[int, Form()] = 0,
     enable_diarization: Annotated[bool, Form()] = False,

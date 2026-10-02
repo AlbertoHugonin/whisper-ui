@@ -125,7 +125,7 @@
           <div class="flex-1 min-w-0">
             <div class="font-medium truncate">{{ job.filename }}</div>
             <div class="text-sm opacity-60">
-              {% if job.duration %}{{ (job.duration // 60)|int }}分{{ (job.duration % 60)|int }}秒{% endif %}
+              {% if job.duration %}{{ labels.DASHBOARD_DURATION_SHORT.format(minutes=(job.duration // 60)|int, seconds=(job.duration % 60)|int) }}{% endif %}
               <span class="mx-1">|</span>
               {{ job.created_at|relative_time }}
             </div>

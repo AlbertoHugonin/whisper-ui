@@ -39,7 +39,7 @@ class TranscribeStage:
 
     def execute(self, context: dict[str, Any], on_progress: ProgressCallback | None = None) -> dict[str, Any]:
         audio_path = context["audio_path"]
-        language = context.get("language", "zh")
+        language = context.get("language", AUTO_LANGUAGE)
         # whisperx treats language=None as "detect from the first 30 s of
         # audio"; the detected code is reported in the result's ``language``.
         whisper_language = None if language == AUTO_LANGUAGE else language

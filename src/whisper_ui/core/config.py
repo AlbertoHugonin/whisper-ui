@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     log_json: bool = False
 
     # Language
-    language: str = "zh"
+    language: str = "auto"
 
     # HuggingFace
     hf_token: str = ""

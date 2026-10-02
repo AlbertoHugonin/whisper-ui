@@ -31,7 +31,7 @@ def test_default_settings(tmp_path, monkeypatch):
     assert s.whisper_model == "large-v3"
     assert s.compute_type == "int8_float16"
     assert s.device == "auto"
-    assert s.language == "zh"
+    assert s.language == "auto"
     assert s.batch_size == 4
     assert s.ollama_model == "gemma4:e4b"
 

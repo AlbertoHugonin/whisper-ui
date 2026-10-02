@@ -25,10 +25,11 @@ x-core-env: &core-env
   REDIS_HEALTH_CHECK_INTERVAL: ${REDIS_HEALTH_CHECK_INTERVAL:-30}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   LOG_JSON: ${LOG_JSON:-false}
+  UI_LANGUAGE: ${UI_LANGUAGE:-en}
   DATABASE_PATH: /app/data/db/whisper_ui.db
   UPLOAD_DIR: /app/data/uploads
   OUTPUT_DIR: /app/data/outputs
-  LANGUAGE: ${LANGUAGE:-zh}
+  LANGUAGE: ${LANGUAGE:-auto}
   # One cap, two consumers: the web tier enforces it on file uploads, the
   # download workers on Google Drive files (which carry no duration metadata
   # for the duration cap to act on).

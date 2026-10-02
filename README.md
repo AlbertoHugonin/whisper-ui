@@ -6,7 +6,7 @@ Speech-to-text system using [faster-whisper](https://github.com/SYSTRAN/faster-w
 a [FastAPI](https://fastapi.tiangolo.com/) + [htmx](https://htmx.org/) + [Alpine.js](https://alpinejs.dev/) web interface,
 and Docker deployment (NVIDIA GPU / CPU / AMD ROCm).
 
-> **Note:** The UI is in Traditional Chinese (繁體中文).
+> **Interface language:** English is the default. Set `UI_LANGUAGE=zh` to keep the upstream Traditional Chinese interface.
 
 ## Features
 
@@ -162,7 +162,8 @@ All settings are configured via environment variables (`.env` file):
 | `DEVICE`                      | `auto`                              | Inference device; compose profiles set `cuda` (GPU) / `rocm` (AMD) / `cpu` (CPU)                                                                                                                   |
 | `TRANSCRIBE_BACKEND`          | `whisperx`                          | `whisperx` (CTranslate2, CUDA/CPU) or `whispercpp` (whisper.cpp HIP; set by the rocm profile)                                                                                                      |
 | `BATCH_SIZE`                  | `4`                                 | Transcription batch size (whisperx backend only)                                                                                                                                                   |
-| `LANGUAGE`                    | `zh`                                | Default language code                                                                                                                                                                              |
+| `LANGUAGE`                    | `auto`                                | Default language code                                                                                                                                                                              |
+| `UI_LANGUAGE`                 | `en`                                | Interface and worker progress language: `en` or `zh`                                                                                                                                               |
 | `HF_TOKEN`                    | (empty)                             | HuggingFace token for speaker diarization                                                                                                                                                          |
 | `DIARIZATION_DEFAULT_ENABLED` | `true`                              | Initial state of the upload-form diarization toggle (only when `HF_TOKEN` is set). Set `false` so new uploads default to no diarization — the slowest stage — with per-job opt-in still available. |
 | `MAX_UPLOAD_SIZE`             | `2147483648`                        | Per-file upload cap in bytes (2 GB); also caps Google Drive downloads                                                                                                                              |
@@ -389,9 +390,12 @@ short-audio SLAs.
 ### Optional LLM text correction
 
 Whisper-UI can optionally post-process each transcription through a small
-LLM running on [Ollama](https://ollama.com) to fix obvious typos,
-homophones and punctuation errors — without rewriting wording or touching
-timestamps / speaker labels. The feature is:
+LLM running on [Ollama](https://ollama.com) to conservatively fix obvious ASR
+errors — spelling, homophones, punctuation, casing, spacing and unambiguous
+word-boundary mistakes — without touching timestamps or speaker labels. The
+prompt uses Whisper's detected language for every job and explicitly forbids
+translation, summarization, paraphrasing and stylistic rewriting, so the same
+stage works across all supported transcription languages. The feature is:
 
 - **Per-job** — users tick a checkbox on the upload form. Uninterested
   users see no change.

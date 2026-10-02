@@ -28,7 +28,7 @@ class Segment:
 @dataclass
 class TranscriptResult:
     segments: list[Segment] = field(default_factory=list)
-    language: str = "zh"
+    language: str = "unknown"
     duration: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -51,7 +51,7 @@ class TranscriptResult:
         segments = [Segment(**s) for s in data.get("segments", [])]
         return cls(
             segments=segments,
-            language=data.get("language", "zh"),
+            language=data.get("language", "unknown"),
             duration=data.get("duration", 0.0),
         )
 
@@ -64,11 +64,11 @@ class Job:
     status: JobStatus = JobStatus.PENDING
     progress: float = 0.0
     progress_message: str = ""
-    language: str = "zh"
+    language: str = "auto"
     model_name: str = DEFAULT_WHISPER_MODEL
     num_speakers: int | None = None
     enable_diarization: bool = True
-    convert_to_traditional: bool = True
+    convert_to_traditional: bool = False
     llm_correction_enabled: bool = False
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())

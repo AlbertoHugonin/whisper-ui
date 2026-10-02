@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'pending',
     progress REAL NOT NULL DEFAULT 0.0,
     progress_message TEXT DEFAULT '',
-    language TEXT NOT NULL DEFAULT 'zh',
+    language TEXT NOT NULL DEFAULT 'auto',
     model_name TEXT NOT NULL DEFAULT 'large-v3',
     num_speakers INTEGER,
     enable_diarization INTEGER NOT NULL DEFAULT 1,

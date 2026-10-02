@@ -103,7 +103,7 @@ const RT_OLLAMA_AVAILABLE = {{ 'true' if llm_correction_available else 'false' }
 function retranscribeDialog() {
   return {
     jobId: '',
-    language: 'zh',
+    language: 'auto',
     modelName: 'large-v3',
     numSpeakers: 0,
     diarization: false,

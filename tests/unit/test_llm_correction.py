@@ -112,33 +112,39 @@ def test_stage_skipped_when_base_url_empty():
     assert progress[-1] == (1.0, LLM_CORRECTION_SKIPPED)
 
 
-def test_stage_skipped_when_transcript_language_not_zh():
-    """The system prompt is crafted for Chinese; other languages must skip
-    entirely to avoid feeding Chinese instructions to non-Chinese input.
-    """
+@pytest.mark.parametrize(
+    ("language", "original", "corrected"),
+    [
+        ("en", "this are a test", "this is a test"),
+        ("it", "questo e un test", "questo è un test"),
+        ("ja", "テスト です", "テストです"),
+        ("ar", "هذا اختبار", "هذا اختبار"),
+    ],
+)
+def test_stage_runs_for_non_chinese_languages(language: str, original: str, corrected: str):
     stage, client = _make_stage()
-    transcript = _make_transcript(["hello world", "good morning"], language="en")
-    progress, on_progress = _capture_progress()
+    transcript = _make_transcript([original], language=language)
+    client.responses = [_valid_response_for([0], [corrected])]
 
-    stage.execute({"transcript_result": transcript, "language": "en"}, on_progress)
+    stage.execute({"transcript_result": transcript, "language": language})
 
-    assert client.calls == []
-    assert [s.text for s in transcript.segments] == ["hello world", "good morning"]
-    assert progress[-1] == (1.0, LLM_CORRECTION_SKIPPED)
+    assert transcript.segments[0].text == corrected
+    assert len(client.calls) == 1
+    assert f"language code: {language}" in client.calls[0].system
+    assert "Do not translate" in client.calls[0].system
 
 
-def test_stage_gates_on_transcript_language_not_context_language():
-    """The gate must read the detected language on the transcript: a job
-    configured zh whose audio was detected as English must still skip.
-    """
+def test_stage_uses_detected_transcript_language_not_configured_language():
+    """language=auto or a mismatched job setting must defer to Whisper detection."""
     stage, client = _make_stage()
     transcript = _make_transcript(["hello world"], language="en")
-    progress, on_progress = _capture_progress()
+    client.responses = [_valid_response_for([0], ["Hello world."])]
 
-    stage.execute({"transcript_result": transcript, "language": "zh"}, on_progress)
+    stage.execute({"transcript_result": transcript, "language": "zh"})
 
-    assert client.calls == []
-    assert progress[-1] == (1.0, LLM_CORRECTION_SKIPPED)
+    assert len(client.calls) == 1
+    assert "language code: en" in client.calls[0].system
+    assert "Transcript language code: en" in client.calls[0].user
 
 
 def test_stage_runs_for_zh_transcript_when_context_language_is_auto():
@@ -374,7 +380,9 @@ def test_request_parameters_passed_through():
     assert call.keep_alive == "1h"
     assert call.model == "gemma4:e2b"
     assert call.think is False  # default: thinking off for JSON correction
-    assert "中文轉錄校對助理" in call.system
+    assert "conservative ASR transcript proofreader" in call.system
+    assert "language code: zh" in call.system
+    assert "Do not translate" in call.system
 
 
 def test_think_flag_propagates_to_client():

@@ -237,9 +237,9 @@
     </div>
   </section>
 
-  {# Advanced settings — collapsed by default. The "已啟用 N 項" pill is a
+  {# Advanced settings — collapsed by default. The enabled-count pill is a
      summary so users never have to expand the panel just to see whether
-     diarization / 繁體 / LLM are on. #}
+     diarization / Traditional Chinese / LLM are on. #}
   <section class="mt-6 pt-6 border-t border-line">
     <button type="button"
             class="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none"
@@ -333,10 +333,10 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 const UPLOAD_PRESETS = {
-  meeting:   { language: 'zh', enable_diarization: true,  num_speakers: 0, convert_to_traditional: true,  llm_correction_enabled: true  },
-  podcast:   { language: 'zh', enable_diarization: true,  num_speakers: 2, convert_to_traditional: true,  llm_correction_enabled: true  },
-  interview: { language: 'zh', enable_diarization: true,  num_speakers: 2, convert_to_traditional: true,  llm_correction_enabled: false },
-  lecture:   { language: 'zh', enable_diarization: false, num_speakers: 0, convert_to_traditional: true,  llm_correction_enabled: true  }
+  meeting:   { language: 'auto', enable_diarization: true,  num_speakers: 0, convert_to_traditional: false, llm_correction_enabled: true  },
+  podcast:   { language: 'auto', enable_diarization: true,  num_speakers: 2, convert_to_traditional: false, llm_correction_enabled: true  },
+  interview: { language: 'auto', enable_diarization: true,  num_speakers: 2, convert_to_traditional: false, llm_correction_enabled: true  },
+  lecture:   { language: 'auto', enable_diarization: false, num_speakers: 0, convert_to_traditional: false, llm_correction_enabled: true  }
 };
 
 function uploadForm() {

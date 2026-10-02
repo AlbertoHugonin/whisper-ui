@@ -78,7 +78,7 @@ def test_job_diarization_fields():
     assert job.convert_to_traditional is False
     job2 = Job()
     assert job2.enable_diarization is True
-    assert job2.convert_to_traditional is True
+    assert job2.convert_to_traditional is False
 
 
 def test_job_status_values():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from whisper_ui.core.constants import VIEWER_SEARCH_SEGMENT_LIMIT
 from whisper_ui.core.models import JobStatus
 from whisper_ui.export.factory import get_exporter
+from whisper_ui.ui import labels as ui_labels
 from whisper_ui.web.auth import owner_filter
 from whisper_ui.web.deps import CurrentUserDep, DbDep, FileStoreDep, make_content_disposition, templates
 from whisper_ui.web.validation import validate_hex_id
@@ -171,7 +173,12 @@ async def share_create(job_id: str, db: DbDep, user: CurrentUserDep):
 
     return Response(
         status_code=200,
-        headers={"HX-Trigger": '{"showToast": {"message": "已產生分享連結", "type": "success"}}', "HX-Refresh": "true"},
+        headers={
+            "HX-Trigger": (
+                '{"showToast": {"message": ' + json.dumps(ui_labels.VIEWER_SHARE_LINK_CREATED) + ', "type": "success"}}'
+            ),
+            "HX-Refresh": "true",
+        },
     )
 
 

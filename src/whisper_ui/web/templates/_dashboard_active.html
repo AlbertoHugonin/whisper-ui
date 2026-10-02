@@ -33,13 +33,7 @@
     {%- set progress_val = pd.get('progress', '0')|float -%}
     {%- set progress_pct = (progress_val * 100)|int -%}
     {%- set progress_msg = pd.get('message', labels.JOBS_WAITING) -%}
-    {%- if '下載' in progress_msg %}{% set _stage = 'download' %}
-    {%- elif '預處理' in progress_msg or '轉換' in progress_msg %}{% set _stage = 'prepare' %}
-    {%- elif '對齊' in progress_msg or '轉錄' in progress_msg %}{% set _stage = 'transcribe' %}
-    {%- elif '分離' in progress_msg or '分配' in progress_msg %}{% set _stage = 'diarize' %}
-    {%- elif '校驗' in progress_msg %}{% set _stage = 'correct' %}
-    {%- elif '後處理' in progress_msg %}{% set _stage = 'export' %}
-    {%- else %}{% set _stage = 'transcribe' %}{% endif -%}
+    {%- set _stage = progress_msg|progress_stage -%}
     {%- set _stage_idx = _stage_keys.index(_stage) -%}
     <div id="dashboard-active-{{ job.id }}"
          class="card dashboard-hero border mb-2"
@@ -85,7 +79,7 @@
         {# Stage stepper — connected nodes (download → … → export) derived from
            the progress message. The node shape (check / pulse / number) and the
            filled connector are a non-color progress cue, and the labels stay
-           readable for users not following the 中文 status text. #}
+           readable independently of localized status text. #}
         <ol class="stage-pipeline mb-3" aria-label="{{ labels.DASHBOARD_HERO_IN_FLIGHT }}">
           {% for key in _stage_keys %}
           {%- set is_current = (loop.index0 == _stage_idx) -%}

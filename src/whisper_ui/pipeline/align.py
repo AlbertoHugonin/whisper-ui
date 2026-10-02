@@ -8,6 +8,7 @@ from rq.timeouts import BaseTimeoutException
 
 from whisper_ui.core.device import release_gpu_memory
 from whisper_ui.core.exceptions import AlignmentError
+from whisper_ui.core.languages import AUTO_LANGUAGE
 from whisper_ui.core.messages import ALIGN_DONE, ALIGN_LOADING, ALIGN_RUNNING, ALIGN_SKIPPED
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ class AlignStage:
         # as "alignment failed" and silently degrade to the unaligned result.
         transcription = context["transcription_result"]
         audio = context["whisperx_audio"]
-        language = transcription.get("language", context.get("language", "zh"))
+        language = transcription.get("language", context.get("language", AUTO_LANGUAGE))
         try:
             import whisperx
 

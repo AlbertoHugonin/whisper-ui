@@ -75,7 +75,7 @@ class WhisperCppTranscribeStage:
 
     def execute(self, context: dict[str, Any], on_progress: ProgressCallback | None = None) -> dict[str, Any]:
         audio_path = context["audio_path"]
-        language = context.get("language", "zh")
+        language = context.get("language", AUTO_LANGUAGE)
 
         if on_progress:
             on_progress(0.0, TRANSCRIBE_LOADING)
@@ -222,7 +222,7 @@ class WhisperCppTranscribeStage:
 
         When the JSON lacks ``result.language``, fall back to the language the
         job requested — it is what ``-l`` decoded with, and a truthy
-        ``"unknown"`` here would silently disable the zh-only postprocess and
+        ``"unknown"`` here would silently disable the Chinese-only postprocess and
         LLM gates downstream. Only an ``auto`` request is genuinely unknown.
         """
         fallback = "unknown" if requested_language == AUTO_LANGUAGE else requested_language

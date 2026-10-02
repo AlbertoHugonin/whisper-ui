@@ -56,7 +56,7 @@ class TestAdapter:
         }
 
     def test_missing_language_falls_back_to_requested(self):
-        # A truthy "unknown" would silently disable the zh-only postprocess
+        # A truthy "unknown" would silently disable the Chinese-only postprocess
         # and LLM gates; the explicitly requested language must win instead.
         assert WhisperCppTranscribeStage._to_whisperx_result({}, "zh") == {"language": "zh", "segments": []}
 

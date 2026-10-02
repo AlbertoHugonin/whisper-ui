@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 from typing import TYPE_CHECKING
 
 import pytest
+
+# The upstream test corpus asserts Traditional Chinese copy literally. Keep
+# those compatibility assertions in zh mode; dedicated i18n tests exercise
+# the fork's English default and both locale modules.
+os.environ.setdefault("UI_LANGUAGE", "zh")
 
 from whisper_ui.core.config import Settings
 from whisper_ui.storage.database import JobDatabase

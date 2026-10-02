@@ -77,7 +77,7 @@ def test_postprocess_falls_back_to_context_language_when_undetected():
 
 def test_postprocess_treats_unknown_sentinel_as_undetected():
     """The whisper.cpp adapter's truthy "unknown" must not beat the job's
-    configured language — that would silently disable the zh-only s2t and
+    configured language — that would silently disable the Chinese script conversion and
     LLM gates on an explicitly-zh job.
     """
     stage = PostprocessStage(convert_to_traditional=True)

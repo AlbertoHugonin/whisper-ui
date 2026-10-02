@@ -16,8 +16,6 @@ Failure semantics:
   ``DownloadStage`` / ``DiarizeStage``.
 """
 
-# ruff: noqa: RUF001
-
 from __future__ import annotations
 
 import json
@@ -28,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import httpx
 from rq.timeouts import BaseTimeoutException
 
+from whisper_ui.core.languages import LANGUAGE_LABELS
 from whisper_ui.core.messages import (
     LLM_CORRECTION_DEGRADED,
     LLM_CORRECTION_DONE,
@@ -42,13 +41,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_SYSTEM_PROMPT = (
-    "你是中文轉錄校對助理。只做以下事：修正明顯錯字、同音字與標點錯誤。\n"
-    "禁止：改寫語氣/詞彙/語序、合併/拆分/刪除段落、改動專有名詞/數字/英文。\n"
-    "若某段沒有明顯錯誤，原樣輸出。\n"
-    '輸出必須為合法 JSON，格式 {"segments":[{"idx":<int>,"text":"<str>"}, ...]}，\n'
-    "idx 必須與輸入 EDIT 區一一對應，數量必須相同，不得輸出任何多餘文字。"
-)
+def _language_name(code: str) -> str:
+    """Return a human-friendly language name while keeping unknown codes usable."""
+    label = LANGUAGE_LABELS.get(code, code or "unknown")
+    # Labels already contain the ISO code in parentheses; the prompt adds it
+    # explicitly so avoid repeating it when a known language is used.
+    suffix = f" ({code})" if code else ""
+    if suffix and label.endswith(suffix):
+        label = label[: -len(suffix)]
+    return label
+
+
+def _build_system_prompt(language: str) -> str:
+    """Build a conservative, language-aware ASR correction prompt.
+
+    The instructions are intentionally written in English for consistency,
+    while the detected transcript language is made explicit. The model must
+    never translate or stylistically rewrite the transcript.
+    """
+    code = language or "unknown"
+    name = _language_name(code)
+    return (
+        "You are a conservative ASR transcript proofreader.\n"
+        f"The transcript language is {name} (language code: {code}).\n"
+        "Correct only obvious speech-recognition errors: spelling, homophones, punctuation, casing, spacing, "
+        "word-boundary errors, and grammar only when the intended wording is unambiguous from context.\n"
+        "Preserve the original language, meaning, wording, tone, dialect, code-switching, proper nouns, technical "
+        "terms, numbers, URLs, and named entities. Do not translate, summarize, paraphrase, embellish, censor, or "
+        "change the level of formality. If uncertain, keep the original text unchanged.\n"
+        "Do not merge, split, add, remove, or reorder segments. Only edit segments in the EDIT block; CONTEXT blocks "
+        "are read-only.\n"
+        'Return valid JSON only, exactly in the form {"segments":[{"idx":<int>,"text":"<str>"}, ...]}. '
+        "Every EDIT idx must appear exactly once and no other text may be returned."
+    )
 
 
 class OllamaClient(Protocol):
@@ -170,15 +195,12 @@ class LLMCorrectionStage:
             if on_progress:
                 on_progress(1.0, LLM_CORRECTION_SKIPPED)
             return context
-        # The system prompt is crafted for Traditional Chinese typo / homophone
-        # correction. Running it on other languages would feed a Chinese
-        # instruction to a model looking at English (or other) text, with
-        # unpredictable results. Skip entirely for non-zh transcripts rather
-        # than silently producing garbage. The gate reads the *detected*
-        # language carried by the transcript (resolved by postprocess) rather
-        # than the job's configured language, so ``language=auto`` jobs are
-        # corrected when detection lands on zh and skipped otherwise.
-        if not isinstance(transcript, TranscriptResult) or transcript.language != "zh":
+        # Postprocess carries Whisper's detected language on TranscriptResult.
+        # Correction is deliberately multilingual: the detected language
+        # selects the prompt context, while the instructions explicitly forbid
+        # translation or stylistic rewriting. This also makes language=auto
+        # jobs work without a special case.
+        if not isinstance(transcript, TranscriptResult):
             if on_progress:
                 on_progress(1.0, LLM_CORRECTION_SKIPPED)
             return context
@@ -188,6 +210,7 @@ class LLMCorrectionStage:
             return context
 
         segments = transcript.segments
+        language = transcript.language or str(context.get("language") or "unknown")
         chunks = self._build_chunks(segments)
         total = len(chunks)
 
@@ -195,7 +218,7 @@ class LLMCorrectionStage:
         failed_chunks: list[int] = []
         for i, chunk in enumerate(chunks):
             try:
-                corrections = self._correct_chunk(client, chunk)
+                corrections = self._correct_chunk(client, chunk, language)
                 self._apply_corrections(segments, corrections)
             except BaseTimeoutException:
                 # RQ's death penalty must propagate unchanged so the worker
@@ -256,11 +279,11 @@ class LLMCorrectionStage:
             )
         return chunks
 
-    def _correct_chunk(self, client: OllamaClient, chunk: _Chunk) -> dict[int, str]:
-        user_prompt = _build_user_prompt(chunk)
+    def _correct_chunk(self, client: OllamaClient, chunk: _Chunk, language: str) -> dict[int, str]:
+        user_prompt = _build_user_prompt(chunk, language)
         raw_response = client.chat_json(
             model=self._model,
-            system=_SYSTEM_PROMPT,
+            system=_build_system_prompt(language),
             user=user_prompt,
             temperature=self._temperature,
             keep_alive=self._keep_alive,
@@ -274,10 +297,12 @@ class LLMCorrectionStage:
                 segments[idx].text = text
 
 
-def _build_user_prompt(chunk: _Chunk) -> str:
-    """Build the user-role message with CONTEXT_BEFORE / EDIT / CONTEXT_AFTER blocks."""
+def _build_user_prompt(chunk: _Chunk, language: str) -> str:
+    """Build the language-aware message with read-only context and editable segments."""
     return (
-        "以下是轉錄結果。CONTEXT 區僅供參考，不要輸出；只對 EDIT 區的每一段進行校對。\n\n"
+        f"Transcript language code: {language or 'unknown'}\n"
+        "Proofread only the EDIT segments. Use CONTEXT_BEFORE and CONTEXT_AFTER only to resolve obvious ASR "
+        "errors; do not return or modify context segments.\n\n"
         f"CONTEXT_BEFORE: {json.dumps(_to_json_list(chunk.context_before), ensure_ascii=False)}\n"
         f"EDIT: {json.dumps(_to_json_list(chunk.edit_items), ensure_ascii=False)}\n"
         f"CONTEXT_AFTER: {json.dumps(_to_json_list(chunk.context_after), ensure_ascii=False)}"

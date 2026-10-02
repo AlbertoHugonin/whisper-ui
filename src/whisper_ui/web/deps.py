@@ -9,10 +9,12 @@ from fastapi import Depends, Request
 from fastapi.templating import Jinja2Templates
 from redis import Redis
 
+from whisper_ui.core import messages_en, messages_zh
 from whisper_ui.core.config import Settings
 from whisper_ui.core.constants import MAX_BATCH_SIZE, TIMESTAMP_DISPLAY_LENGTH
 from whisper_ui.storage.database import JobDatabase
 from whisper_ui.storage.filestore import FileStore
+from whisper_ui.ui import labels as ui_labels
 from whisper_ui.web.flash import consume_flash
 
 _WEB_DIR = Path(__file__).parent
@@ -63,25 +65,51 @@ def _format_relative_time(iso_str: str) -> str:
         seconds = int(diff.total_seconds())
 
         if seconds < 60:
-            return "剛剛"
+            return ui_labels.TIME_JUST_NOW
         if seconds < 3600:
             minutes = seconds // 60
-            return f"{minutes} 分鐘前"
+            return ui_labels.TIME_MINUTES_AGO.format(minutes=minutes)
         if seconds < 86400:
             hours = seconds // 3600
-            return f"{hours} 小時前"
+            return ui_labels.TIME_HOURS_AGO.format(hours=hours)
         days = seconds // 86400
         if days == 1:
-            return "昨天"
+            return ui_labels.TIME_YESTERDAY
         if days < 30:
-            return f"{days} 天前"
+            return ui_labels.TIME_DAYS_AGO.format(days=days)
         return iso_str[:10]
     except (ValueError, TypeError):
         return iso_str
 
 
+def _message_prefix(value: str) -> str:
+    """Strip a format placeholder suffix so dynamic progress messages can be matched."""
+    return value.split("{", 1)[0]
+
+
+def _progress_stage(message: str) -> str:
+    """Map localized worker progress text to the dashboard stage key."""
+    groups = {
+        "download": ("DOWNLOAD_",),
+        "prepare": ("PREPROCESS_",),
+        "transcribe": ("TRANSCRIBE_", "ALIGN_"),
+        "diarize": ("DIARIZE_", "ASSIGN_"),
+        "correct": ("LLM_CORRECTION_",),
+        "export": ("POSTPROCESS_",),
+    }
+    for stage, prefixes in groups.items():
+        for module in (messages_en, messages_zh):
+            for name in dir(module):
+                if name.startswith(prefixes):
+                    value = getattr(module, name)
+                    if isinstance(value, str) and message.startswith(_message_prefix(value)):
+                        return stage
+    return "transcribe"
+
+
 templates.env.filters["format_time"] = _format_time
 templates.env.filters["relative_time"] = _format_relative_time
+templates.env.filters["progress_stage"] = _progress_stage
 templates.env.globals["TIMESTAMP_DISPLAY_LENGTH"] = TIMESTAMP_DISPLAY_LENGTH
 templates.env.globals["MAX_BATCH_SIZE"] = MAX_BATCH_SIZE
 # base.html consumes queued flash messages on full-page renders (see flash.py).

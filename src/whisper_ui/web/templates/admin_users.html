@@ -11,7 +11,7 @@
 {{ alert('error', error_message, 'mb-4') }}
 {% endif %}
 
-{# Single-dimension client-side filter chips: 全部 / Admin / User / Active /
+{# Single-dimension client-side filter chips: All / Admin / User / Active /
    Inactive. Each row carries its role+status so selecting a chip hides the
    non-matching rows without a round-trip. #}
 <div x-data="{ f: 'all' }">
@@ -48,7 +48,7 @@
         <tr x-show="f === 'all' || f === '{{ _role }}' || f === '{{ _status }}'">
           <td class="font-medium">
             {{ user.username }}
-            {% if user.id == current_admin_id %}<span class="badge badge-xs ml-2">您</span>{% endif %}
+            {% if user.id == current_admin_id %}<span class="badge badge-xs ml-2">{{ labels.ADMIN_SELF_BADGE }}</span>{% endif %}
           </td>
           <td>
             {% if user.is_admin %}
