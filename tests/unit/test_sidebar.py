@@ -68,3 +68,30 @@ def test_upload_navigation_uses_full_page_load_for_alpine_upload_script():
         start = source.index(marker)
         tag = source[start:source.index(">", start)]
         assert "hx-boost" not in tag
+
+
+def test_page_local_script_destinations_do_not_use_boosted_navigation():
+    """Pages with local Alpine factories must load their scripts before Alpine binds x-data."""
+    from pathlib import Path
+
+    templates = Path(__file__).parents[2] / "src" / "whisper_ui" / "web" / "templates"
+    checks = {
+        "_sidebar.html": ('href="/upload"', 'href="/jobs"', 'href="/admin/users"'),
+        "_bottom_nav.html": ('href="/upload"', 'href="/jobs"'),
+    }
+    for name, markers in checks.items():
+        source = (templates / name).read_text()
+        for marker in markers:
+            start = source.index(marker)
+            tag = source[start:source.index(">", start)]
+            assert "hx-boost" not in tag
+
+
+def test_dashboard_upload_shortcuts_use_full_navigation():
+    from pathlib import Path
+
+    source = (Path(__file__).parents[2] / "src" / "whisper_ui" / "web" / "templates" / "dashboard.html").read_text()
+    for marker in ('href="/upload?mode=files"', 'href="/upload?mode=folder"', 'href="/upload?mode=url"'):
+        for chunk in source.split(marker)[1:]:
+            tag = chunk[:chunk.index(">")]
+            assert "hx-boost" not in tag

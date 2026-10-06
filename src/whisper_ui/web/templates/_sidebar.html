@@ -46,7 +46,6 @@
       </li>
       <li>
         <a href="/jobs"
-           hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true"
            :class="{ 'menu-active': $store.nav.activePage === 'jobs' }"
            title="{{ labels.NAV_JOBS }}">
           {{ icon_list("w-5 h-5 shrink-0") }}
@@ -56,7 +55,6 @@
       {% if request.state and request.state.user and request.state.user.is_admin %}
       <li>
         <a href="/admin/users"
-           hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true"
            :class="{ 'menu-active': $store.nav.activePage === 'admin_users' }"
            title="{{ labels.ADMIN_NAV_USERS }}">
           {{ icon_list("w-5 h-5 shrink-0") }}

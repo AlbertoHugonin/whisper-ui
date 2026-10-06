@@ -35,8 +35,7 @@
    full-card click target (Fitts) leading to the matching upload tab. #}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
   <a href="/upload?mode=files"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift"
-     hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true">
+     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
     <div class="card-body p-4">
       <div class="flex items-center gap-3">
         <span class="quick-tile">{{ icon_file_audio("w-5 h-5") }}</span>
@@ -48,8 +47,7 @@
     </div>
   </a>
   <a href="/upload?mode=folder"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift"
-     hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true">
+     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
     <div class="card-body p-4">
       <div class="flex items-center gap-3">
         <span class="quick-tile">{{ icon_folder_open("w-5 h-5") }}</span>
@@ -61,8 +59,7 @@
     </div>
   </a>
   <a href="/upload?mode=url"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift"
-     hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true">
+     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
     <div class="card-body p-4">
       <div class="flex items-center gap-3">
         <span class="quick-tile">{{ icon_link("w-5 h-5") }}</span>
@@ -161,7 +158,6 @@
       </li>
     </ol>
     <a href="/upload?mode=files"
-       hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true"
        class="btn btn-primary gap-2 mt-6 w-full sm:w-auto">
       {{ icon_upload("w-4 h-4") }}
       {{ labels.DASHBOARD_ONBOARDING_CTA }}
