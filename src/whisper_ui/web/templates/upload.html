@@ -3,9 +3,19 @@
 {% from "_alert.html" import alert %}
 
 {% block content %}
-<h1 class="text-2xl font-medium mb-2">{{ labels.UPLOAD_HEADER }}</h1>
+{% set rt = retranscribe_source %}
+<h1 class="text-2xl font-medium mb-2">{% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_TITLE }}{% else %}{{ labels.UPLOAD_HEADER }}{% endif %}</h1>
+{% if rt %}
+<p class="text-sm opacity-60 mb-4">Configure all options before creating a new transcript version. The existing transcript is preserved.</p>
+<div class="card bg-base-200 border border-line mb-6"><div class="card-body p-4">
+  <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Source</div>
+  <div class="font-medium break-all">{{ rt.filename }}</div>
+  {% if rt.source_url %}<div class="text-xs opacity-50 truncate mt-1">{{ rt.source_url }}</div>{% endif %}
+</div></div>
+{% else %}
 <p class="text-sm opacity-60 mb-1">{{ labels.UPLOAD_DESCRIPTION }}</p>
 <p class="text-xs opacity-40 mb-6">{{ labels.UPLOAD_SUPPORTED_FORMATS.format(formats=supported_extensions|join(', ')) }}</p>
+{% endif %}
 
 {% set error = request.query_params.get('error', '') %}
 {% if error %}
@@ -51,12 +61,17 @@
 
 <form method="post"
       x-data="uploadForm()"
+      {% if rt %}
+      action="/jobs/{{ rt.id }}/re-transcribe"
+      hx-post="/jobs/{{ rt.id }}/re-transcribe"
+      {% else %}
       :action="tab === 'url' ? '/upload/url' : '/upload'"
       :enctype="tab === 'url' ? 'application/x-www-form-urlencoded' : 'multipart/form-data'"
       hx-post="/upload"
+      {% endif %}
       hx-encoding="multipart/form-data"
       hx-target="#upload-feedback" hx-swap="innerHTML"
-      @htmx:config-request="if (tab === 'url') { $event.detail.path = '/upload/url' }"
+      {% if not rt %}@htmx:config-request="if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
       @htmx:xhr:progress.window="onProgress($event)"
       @htmx:before-request="uploading = true"
       @htmx:after-request="uploading = false; progress = 0"
@@ -130,6 +145,7 @@
     </div>
   </template>
 
+  {% if not rt %}
   {# Source selection tabs — pill style #}
   <div role="tablist" class="tabs tabs-box mb-6 inline-flex" aria-label="{{ labels.UPLOAD_MODE_GROUP }}">
     <button type="button" role="tab" class="tab gap-2"
@@ -211,6 +227,8 @@
     <p class="text-xs opacity-40 mt-2">{{ labels.UPLOAD_URL_DISCLAIMER }}</p>
   </div>
 
+  {% endif %}
+
   {# Settings #}
   {# Basic settings — always visible, the two controls every user adjusts. #}
   <section class="mt-8 pt-6 border-t border-line">
@@ -220,7 +238,7 @@
         <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_LANGUAGE }}</legend>
         <select name="language" class="select w-full">
           {% for code in supported_languages %}
-          <option value="{{ code }}" {% if code == default_language %}selected{% endif %}>
+          <option value="{{ code }}" {% if code == (rt.language if rt else default_language) %}selected{% endif %}>
             {{ LANGUAGE_LABELS.get(code, code) }}
           </option>
           {% endfor %}
@@ -230,7 +248,7 @@
         <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_MODEL }}</legend>
         <select name="model_name" class="select w-full">
           {% for model in whisper_models %}
-          <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
+          <option value="{{ model }}" {% if model == (rt.model_name if rt else default_model) %}selected{% endif %}>{{ model }}</option>
           {% endfor %}
         </select>
       </fieldset>
@@ -241,12 +259,12 @@
     <h2 class="text-sm font-medium opacity-80 mb-3">Audio optimization for transcription</h2>
     <p class="text-xs opacity-60 mb-4">Auto analyzes loudness and dynamics first, then applies conservative speech cleanup before Whisper.</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Processing</legend><select name="audio_processing" class="select w-full"><option value="auto" selected>Auto (recommended)</option><option value="off">Convert only</option><option value="custom">Custom</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Noise reduction</legend><select name="audio_denoise" class="select w-full"><option value="auto" selected>Auto</option><option value="off">Off</option><option value="light">Light</option><option value="medium">Medium</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Voice compression</legend><select name="audio_compression" class="select w-full"><option value="auto" selected>Auto</option><option value="off">Off</option><option value="light">Light</option><option value="medium">Medium</option><option value="strong">Strong</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Target loudness (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="-16" class="input w-full"><p class="text-xs opacity-50 mt-1">Higher (closer to 0) is louder.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Maximum boost (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="18" class="input w-full"><p class="text-xs opacity-50 mt-1">Safety cap for very quiet recordings.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">High-pass (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="80" class="input w-full"><p class="text-xs opacity-50 mt-1">Removes rumble below speech.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Processing</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Auto (recommended)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Convert only</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Custom</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Noise reduction</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Voice compression</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Target loudness (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Higher (closer to 0) is louder.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Maximum boost (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Safety cap for very quiet recordings.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">High-pass (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Removes rumble below speech.</p></fieldset>
     </div>
   </section>
 
@@ -287,7 +305,7 @@
         <div x-show="diarization" x-transition class="ml-12 mt-2">
           <fieldset class="fieldset w-full max-w-xs">
             <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_NUM_SPEAKERS }}</legend>
-            <input type="number" name="num_speakers" value="0" min="0" max="20"
+            <input type="number" name="num_speakers" value="{{ rt.num_speakers or 0 if rt else 0 }}" min="0" max="20"
                    class="input input-sm w-full max-w-xs">
           </fieldset>
         </div>
@@ -336,7 +354,7 @@
       <span class="text-sm opacity-70 flex-1 min-w-0 truncate" x-text="statusLine"></span>
       <button type="submit" class="btn btn-primary btn-lg gap-2" :disabled="uploading">
         {{ icon_upload("w-5 h-5") }}
-        {{ labels.UPLOAD_START }}
+        {% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_SUBMIT }}{% else %}{{ labels.UPLOAD_START }}{% endif %}
       </button>
     </div>
   </div>
@@ -355,14 +373,15 @@ const UPLOAD_PRESETS = {
 function uploadForm() {
   return {
     tab: '{{ initial_tab|default("files") }}',
+    retranscribing: {{ 'true' if rt else 'false' }},
     uploading: false,
     progress: 0,
     selectedFiles: [],
     urlText: '',
     advancedOpen: false,
-    diarization: {{ 'true' if diarization_default else 'false' }},
-    convertTraditional: true,
-    llmCorrection: false,
+    diarization: {{ 'true' if (rt.enable_diarization if rt else diarization_default) else 'false' }},
+    convertTraditional: {{ 'true' if (rt.convert_to_traditional if rt else true) else 'false' }},
+    llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
     activePreset: null,
     presetsTouched: false,
     _applyingPreset: false,
@@ -374,6 +393,7 @@ function uploadForm() {
       return [this.diarization, this.convertTraditional, this.llmCorrection].filter(Boolean).length;
     },
     get statusLine() {
+      if (this.retranscribing) return 'New version of {{ rt.filename|e if rt else '' }}';
       if (this.tab === 'url') {
         const lines = this.urlText.split('\n').map(s => s.trim()).filter(Boolean);
         if (!lines.length) return '{{ labels.UPLOAD_SUBMIT_STATUS_EMPTY }}';

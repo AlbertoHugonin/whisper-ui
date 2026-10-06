@@ -30,6 +30,7 @@ from whisper_ui.core.url_validation import (
 from whisper_ui.pipeline.audio_probe import get_audio_duration_seconds
 from whisper_ui.pipeline.preprocess import SUPPORTED_EXTENSIONS
 from whisper_ui.ui import labels as ui_labels
+from whisper_ui.web.auth import owner_filter
 from whisper_ui.web.deps import CurrentUserDep, DbDep, FileStoreDep, RedisDep, SettingsDep, templates
 from whisper_ui.web.flash import set_flash
 from whisper_ui.web.playlist import (
@@ -141,11 +142,23 @@ _UPLOAD_TABS = frozenset({"files", "folder", "url"})
 
 
 @router.get("/upload", response_class=HTMLResponse)
-async def upload_page(request: Request, settings: SettingsDep, user: CurrentUserDep, mode: str = "files"):
+async def upload_page(
+    request: Request, settings: SettingsDep, db: DbDep, user: CurrentUserDep, mode: str = "files", source_job: str = ""
+):
     # `mode` is a UX hint from the dashboard quick-action cards
     # (/upload?mode=folder|url), not a security boundary — an unknown
     # value simply falls back to the default files tab.
     initial_tab = mode if mode in _UPLOAD_TABS else "files"
+    re_source = None
+    if source_job:
+        try:
+            from whisper_ui.web.validation import validate_hex_id
+            validate_hex_id(source_job, "source_job")
+            candidate = db.get_job(source_job, owner_id=owner_filter(user))
+            if candidate is not None and candidate.status == JobStatus.COMPLETED:
+                re_source = candidate
+        except Exception:
+            re_source = None
     return templates.TemplateResponse(
         request=request,
         name="upload.html",
@@ -162,6 +175,7 @@ async def upload_page(request: Request, settings: SettingsDep, user: CurrentUser
             "supported_languages": LANGUAGE_CHOICES,
             "whisper_models": WHISPER_MODELS,
             "initial_tab": initial_tab,
+            "retranscribe_source": re_source,
         },
     )
 

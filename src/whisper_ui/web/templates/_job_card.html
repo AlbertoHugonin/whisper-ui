@@ -73,16 +73,7 @@
        not re-run other users' jobs, and it avoids pulling the re-transcribe
        modal dependency into the admin page. #}
     {% if not admin_view %}
-    <button class="btn btn-ghost btn-xs"
-            @click="$dispatch('open-retranscribe', {
-              jobId: '{{ job.id }}',
-              language: '{{ job.language }}',
-              model: '{{ job.model_name }}',
-              numSpeakers: {{ job.num_speakers or 0 }},
-              diarization: {{ job.enable_diarization|tojson }},
-              traditional: {{ job.convert_to_traditional|tojson }},
-              llm: {{ job.llm_correction_enabled|tojson }}
-            })">{{ labels.JOBS_RE_TRANSCRIBE }}</button>
+    <a class="btn btn-ghost btn-xs" href="/upload?source_job={{ job.id }}">{{ labels.JOBS_RE_TRANSCRIBE }}</a>
     {% endif %}
     {% endif %}
 

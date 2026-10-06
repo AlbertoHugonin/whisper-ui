@@ -387,6 +387,12 @@ async def re_transcribe_job(
     enable_diarization: Annotated[bool, Form()] = False,
     convert_to_traditional: Annotated[bool, Form()] = False,
     llm_correction_enabled: Annotated[bool, Form()] = False,
+    audio_processing: Annotated[str, Form()] = "auto",
+    audio_denoise: Annotated[str, Form()] = "auto",
+    audio_compression: Annotated[str, Form()] = "auto",
+    audio_target_lufs: Annotated[float, Form()] = -16.0,
+    audio_max_gain_db: Annotated[float, Form()] = 18.0,
+    audio_highpass_hz: Annotated[int, Form()] = 80,
 ):
     """Re-run transcription on a completed job's audio with new parameters.
 
@@ -422,6 +428,12 @@ async def re_transcribe_job(
         enable_diarization=enable_diarization and settings.diarization_available,
         convert_to_traditional=convert_to_traditional,
         llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
+        audio_processing=audio_processing,
+        audio_denoise=audio_denoise,
+        audio_compression=audio_compression,
+        audio_target_lufs=max(-24.0, min(-12.0, audio_target_lufs)),
+        audio_max_gain_db=max(0.0, min(30.0, audio_max_gain_db)),
+        audio_highpass_hz=max(0, min(180, audio_highpass_hz)),
         source_url=src.source_url,
         owner_id=user.id,
         source_job_id=root_id,
@@ -465,7 +477,7 @@ async def re_transcribe_job(
     except Exception:
         mark_enqueue_failed(new_job, db)
 
-    return Response(status_code=204, headers={"HX-Trigger": "refreshJobList"})
+    return Response(status_code=204, headers={"HX-Redirect": "/jobs"})
 
 
 @router.delete("/jobs/{job_id}")
