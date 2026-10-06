@@ -70,6 +70,12 @@ class Job:
     enable_diarization: bool = True
     convert_to_traditional: bool = False
     llm_correction_enabled: bool = False
+    audio_processing: str = "auto"
+    audio_denoise: str = "auto"
+    audio_compression: str = "auto"
+    audio_target_lufs: float = -16.0
+    audio_max_gain_db: float = 18.0
+    audio_highpass_hz: int = 80
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     error: str | None = None

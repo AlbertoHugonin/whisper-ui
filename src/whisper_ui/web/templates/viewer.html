@@ -68,6 +68,27 @@
 </div>
 {% endif %}
 
+{% if processed_available %}
+<div class="card bg-base-200 border border-line mb-4">
+  <div class="card-body p-4">
+    <div class="text-sm font-medium mb-2">Processed audio sent to Whisper</div>
+    <audio controls preload="metadata" class="w-full"><source src="/viewer/{{ job.id }}/processed-audio" type="audio/wav"></audio>
+    {% if audio_analysis %}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
+      <div><span class="opacity-50">Original loudness</span><br>{{ audio_analysis.before.integrated_lufs }} LUFS</div>
+      <div><span class="opacity-50">Processed loudness</span><br>{{ audio_analysis.after.integrated_lufs }} LUFS</div>
+      <div><span class="opacity-50">Original / processed peak</span><br>{{ audio_analysis.before.true_peak_dbfs }} / {{ audio_analysis.after.true_peak_dbfs }} dBFS</div>
+      <div><span class="opacity-50">Loudness range</span><br>{{ audio_analysis.before.loudness_range_lu }} → {{ audio_analysis.after.loudness_range_lu }} LU</div>
+      <div><span class="opacity-50">Compression</span><br>{{ audio_analysis.processing.compression }}</div>
+      <div><span class="opacity-50">Denoise</span><br>{{ audio_analysis.processing.denoise }}</div>
+      <div><span class="opacity-50">High-pass</span><br>{{ audio_analysis.processing.highpass_hz }} Hz</div>
+      <div><span class="opacity-50">Target / applied</span><br>{{ audio_analysis.processing.target_lufs }} / {{ audio_analysis.processing.applied_target_lufs }} LUFS</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if result.segments %}
 {% set _speaker_glyphs = ['●', '▲', '■', '◆', '★', '✦', '◉', '♦'] %}
 <div class="{{ 'has-player' if media_available else '' }}"

@@ -62,7 +62,31 @@ class FileStore:
         tmp = job_dir / "result.json.tmp"
         tmp.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(dest)
+        text_dest = job_dir / "transcript.txt"
+        text_tmp = job_dir / "transcript.txt.tmp"
+        text_tmp.write_text("".join(seg.text for seg in result.segments).strip() + "\n", encoding="utf-8")
+        text_tmp.replace(text_dest)
         return dest
+
+    def save_audio_artifacts(self, job_id: str, original_path: str | None, processed_path: str | None) -> None:
+        """Persist exact source + exact Whisper input alongside the transcript."""
+        job_dir = self._output_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        if original_path:
+            src = Path(original_path)
+            if src.is_file():
+                shutil.copy2(src, job_dir / f"original{src.suffix.lower()}")
+        if processed_path:
+            src = Path(processed_path)
+            if src.is_file():
+                shutil.copy2(src, job_dir / "processed.wav")
+                analysis = src.with_suffix(".analysis.json")
+                if analysis.is_file():
+                    shutil.copy2(analysis, job_dir / "audio-analysis.json")
+
+    def get_output_artifact(self, job_id: str, name: str) -> Path | None:
+        path = self._output_dir / job_id / name
+        return path if path.is_file() else None
 
     def load_result(self, job_id: str) -> TranscriptResult | None:
         path = self._output_dir / job_id / "result.json"

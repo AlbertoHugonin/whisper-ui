@@ -188,6 +188,12 @@ async def upload_submit(
     enable_diarization: Annotated[bool, Form()] = False,
     convert_to_traditional: Annotated[bool, Form()] = False,
     llm_correction_enabled: Annotated[bool, Form()] = False,
+    audio_processing: Annotated[str, Form()] = "auto",
+    audio_denoise: Annotated[str, Form()] = "auto",
+    audio_compression: Annotated[str, Form()] = "auto",
+    audio_target_lufs: Annotated[float, Form()] = -16.0,
+    audio_max_gain_db: Annotated[float, Form()] = 18.0,
+    audio_highpass_hz: Annotated[int, Form()] = 80,
 ):
     htmx = _is_htmx(request)
 
@@ -263,6 +269,12 @@ async def upload_submit(
             enable_diarization=enable_diarization and settings.diarization_available,
             convert_to_traditional=convert_to_traditional,
             llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
+            audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
+            audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",
+            audio_compression=audio_compression if audio_compression in {"off", "auto", "light", "medium", "strong"} else "auto",
+            audio_target_lufs=max(-24.0, min(-12.0, audio_target_lufs)),
+            audio_max_gain_db=max(0.0, min(30.0, audio_max_gain_db)),
+            audio_highpass_hz=max(0, min(180, audio_highpass_hz)),
             batch_id=batch_id,
             owner_id=user.id,
         )
@@ -363,6 +375,12 @@ async def upload_url_submit(
     enable_diarization: Annotated[bool, Form()] = False,
     convert_to_traditional: Annotated[bool, Form()] = False,
     llm_correction_enabled: Annotated[bool, Form()] = False,
+    audio_processing: Annotated[str, Form()] = "auto",
+    audio_denoise: Annotated[str, Form()] = "auto",
+    audio_compression: Annotated[str, Form()] = "auto",
+    audio_target_lufs: Annotated[float, Form()] = -16.0,
+    audio_max_gain_db: Annotated[float, Form()] = 18.0,
+    audio_highpass_hz: Annotated[int, Form()] = 80,
 ):
     htmx = _is_htmx(request)
 
@@ -493,6 +511,12 @@ async def upload_url_submit(
             enable_diarization=enable_diarization and settings.diarization_available,
             convert_to_traditional=convert_to_traditional,
             llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
+            audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
+            audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",
+            audio_compression=audio_compression if audio_compression in {"off", "auto", "light", "medium", "strong"} else "auto",
+            audio_target_lufs=max(-24.0, min(-12.0, audio_target_lufs)),
+            audio_max_gain_db=max(0.0, min(30.0, audio_max_gain_db)),
+            audio_highpass_hz=max(0, min(180, audio_highpass_hz)),
             batch_id=batch_id,
             batch_title=batch_title,
             owner_id=user.id,

@@ -418,7 +418,7 @@ def run_preprocess(parent_job_id: str) -> str:
         parent_job_id,
         stage_name="preprocess",
         build_stage=lambda job, runtime: PreprocessStage(),
-        output_keys=("audio_path", "duration"),
+        output_keys=("audio_path", "duration", "audio_analysis"),
         pre_context_update=_seed_file_input,
         post_persist=_resize_downstream_timeouts,
     )

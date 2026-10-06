@@ -92,6 +92,15 @@ async def viewer_page(request: Request, db: DbDep, filestore: FileStoreDep, user
     media_path = filestore.get_any_media_path(job_id, job.filepath if job else None) if job is not None else None
     media_available = media_path is not None
     media_is_video = media_available and media_path.suffix.lower() in _VIDEO_EXTENSIONS
+    processed_path = filestore.get_output_artifact(job_id, "processed.wav") if job is not None else None
+    processed_available = processed_path is not None
+    analysis = None
+    analysis_path = filestore.get_output_artifact(job_id, "audio-analysis.json") if job is not None else None
+    if analysis_path is not None:
+        try:
+            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            analysis = None
 
     return templates.TemplateResponse(
         request=request,
@@ -105,6 +114,8 @@ async def viewer_page(request: Request, db: DbDep, filestore: FileStoreDep, user
             "search_disabled": search_disabled,
             "media_available": media_available,
             "media_is_video": media_is_video,
+            "processed_available": processed_available,
+            "audio_analysis": analysis,
         },
     )
 
@@ -158,6 +169,19 @@ async def media_download(job_id: str, db: DbDep, filestore: FileStoreDep, user: 
         media_type=mime,
         headers={"Content-Disposition": make_content_disposition(filename, "inline")},
     )
+
+
+
+@router.get("/viewer/{job_id}/processed-audio")
+async def processed_audio(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep):
+    validate_hex_id(job_id, "job_id")
+    job = db.get_job(job_id, owner_id=owner_filter(user))
+    if job is None:
+        raise HTTPException(status_code=404)
+    path = filestore.get_output_artifact(job_id, "processed.wav")
+    if path is None:
+        raise HTTPException(status_code=404)
+    return FileResponse(path=path, media_type="audio/wav", headers={"Content-Disposition": make_content_disposition(f"{Path(job.filename).stem}.processed.wav", "inline")})
 
 
 @router.post("/viewer/{job_id}/share")

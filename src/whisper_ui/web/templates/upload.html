@@ -237,6 +237,19 @@
     </div>
   </section>
 
+  <section class="mt-6 pt-6 border-t border-line">
+    <h2 class="text-sm font-medium opacity-80 mb-3">Audio optimization for transcription</h2>
+    <p class="text-xs opacity-60 mb-4">Auto analyzes loudness and dynamics first, then applies conservative speech cleanup before Whisper.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Processing</legend><select name="audio_processing" class="select w-full"><option value="auto" selected>Auto (recommended)</option><option value="off">Convert only</option><option value="custom">Custom</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Noise reduction</legend><select name="audio_denoise" class="select w-full"><option value="auto" selected>Auto</option><option value="off">Off</option><option value="light">Light</option><option value="medium">Medium</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Voice compression</legend><select name="audio_compression" class="select w-full"><option value="auto" selected>Auto</option><option value="off">Off</option><option value="light">Light</option><option value="medium">Medium</option><option value="strong">Strong</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Target loudness (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="-16" class="input w-full"><p class="text-xs opacity-50 mt-1">Higher (closer to 0) is louder.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Maximum boost (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="18" class="input w-full"><p class="text-xs opacity-50 mt-1">Safety cap for very quiet recordings.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">High-pass (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="80" class="input w-full"><p class="text-xs opacity-50 mt-1">Removes rumble below speech.</p></fieldset>
+    </div>
+  </section>
+
   {# Advanced settings — collapsed by default. The enabled-count pill is a
      summary so users never have to expand the panel just to see whether
      diarization / Traditional Chinese / LLM are on. #}

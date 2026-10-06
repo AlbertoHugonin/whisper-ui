@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     enable_diarization INTEGER NOT NULL DEFAULT 1,
     convert_to_traditional INTEGER NOT NULL DEFAULT 1,
     llm_correction_enabled INTEGER NOT NULL DEFAULT 0,
+    audio_processing TEXT NOT NULL DEFAULT 'auto',
+    audio_denoise TEXT NOT NULL DEFAULT 'auto',
+    audio_compression TEXT NOT NULL DEFAULT 'auto',
+    audio_target_lufs REAL NOT NULL DEFAULT -16.0,
+    audio_max_gain_db REAL NOT NULL DEFAULT 18.0,
+    audio_highpass_hz INTEGER NOT NULL DEFAULT 80,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     error TEXT,
@@ -65,6 +71,12 @@ _MIGRATIONS: list[str] = [
     "ALTER TABLE jobs ADD COLUMN batch_id TEXT",
     "ALTER TABLE jobs ADD COLUMN source_url TEXT",
     "ALTER TABLE jobs ADD COLUMN llm_correction_enabled INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN audio_processing TEXT NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE jobs ADD COLUMN audio_denoise TEXT NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE jobs ADD COLUMN audio_compression TEXT NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE jobs ADD COLUMN audio_target_lufs REAL NOT NULL DEFAULT -16.0",
+    "ALTER TABLE jobs ADD COLUMN audio_max_gain_db REAL NOT NULL DEFAULT 18.0",
+    "ALTER TABLE jobs ADD COLUMN audio_highpass_hz INTEGER NOT NULL DEFAULT 80",
     # owner_id is nullable so existing deployments with pre-auth jobs migrate
     # cleanly. Legacy rows stay NULL and remain visible only via the admin
     # /admin/jobs view (route-level filters use `WHERE owner_id = ?`, which

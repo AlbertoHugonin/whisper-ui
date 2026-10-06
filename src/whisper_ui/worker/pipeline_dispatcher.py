@@ -261,6 +261,12 @@ def enqueue_pipeline(
         "language": job.language,
         "batch_size": settings.batch_size,
         "num_speakers": job.num_speakers,
+        "audio_processing": job.audio_processing,
+        "audio_denoise": job.audio_denoise,
+        "audio_compression": job.audio_compression,
+        "audio_target_lufs": job.audio_target_lufs,
+        "audio_max_gain_db": job.audio_max_gain_db,
+        "audio_highpass_hz": job.audio_highpass_hz,
     }
     if job.source_url:
         initial_context["source_url"] = job.source_url
@@ -418,6 +424,7 @@ def _persist_completion(
     try:
         try:
             _apply_filename_from_video_title(job, context)
+            runtime.filestore.save_audio_artifacts(job.id, context.get("input_path"), context.get("audio_path"))
             result_path = runtime.filestore.save_result(job.id, transcript_result)
 
             job.status = JobStatus.COMPLETED
