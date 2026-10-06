@@ -38,7 +38,6 @@
       </li>
       <li>
         <a href="/upload"
-           hx-boost="true" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML transition:true"
            :class="{ 'menu-active': $store.nav.activePage === 'upload' }"
            title="{{ labels.NAV_UPLOAD }}">
           {{ icon_upload("w-5 h-5 shrink-0") }}

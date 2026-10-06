@@ -55,3 +55,16 @@ def test_rail_controls_use_sidebar_action_not_justify_start(render_sidebar):
     html = render_sidebar()
     assert html.count("sidebar-action") == 3
     assert "justify-start" not in html
+
+
+def test_upload_navigation_uses_full_page_load_for_alpine_upload_script():
+    """Upload owns inline Alpine setup, so boosted fragment nav can race on Safari/iOS."""
+    from pathlib import Path
+
+    templates = Path(__file__).parents[2] / "src" / "whisper_ui" / "web" / "templates"
+    for name in ("_sidebar.html", "_bottom_nav.html"):
+        source = (templates / name).read_text()
+        marker = 'href="/upload"'
+        start = source.index(marker)
+        tag = source[start:source.index(">", start)]
+        assert "hx-boost" not in tag
