@@ -436,6 +436,15 @@ def _persist_completion(
             # stale warning persisted by a previous degenerate attempt.
             job.quality_warning = context.get("quality_warning")
             runtime.db.update_job(job)
+            try:
+                runtime.filestore.archive_job(job.id, job.created_at, {
+                    "job_id": job.id, "filename": job.filename, "created_at": job.created_at,
+                    "language": job.language, "model": job.model_name,
+                    "audio_processing": context.get("audio_analysis", {}).get("processing", {}),
+                    "audio_analysis": context.get("audio_analysis", {}),
+                })
+            except Exception:
+                logger.warning("NAS archive failed for completed job %s; local artifacts are intact", job.id, exc_info=True)
         except Exception as exc:
             # Persisting the finished transcript failed (e.g. disk full writing
             # the result file, or a DB error). Never leave the parent stuck in

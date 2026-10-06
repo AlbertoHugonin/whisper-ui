@@ -183,7 +183,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
     app.state.db = JobDatabase(settings.database_path)
-    app.state.filestore = FileStore(settings.upload_dir, settings.output_dir)
+    app.state.filestore = FileStore(settings.upload_dir, settings.output_dir, settings.archive_dir)
     app.state.redis = create_redis(settings)
     try:
         app.state.redis.ping()

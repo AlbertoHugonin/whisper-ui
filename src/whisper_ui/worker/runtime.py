@@ -87,7 +87,7 @@ def build_worker_runtime(job_id: str, *, generation: int | None = None) -> Itera
         generation=generation,
     )
     db = JobDatabase(settings.database_path)
-    filestore = FileStore(settings.upload_dir, settings.output_dir)
+    filestore = FileStore(settings.upload_dir, settings.output_dir, settings.archive_dir)
     try:
         yield WorkerRuntime(
             settings=settings,

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     database_path: Path = Field(default=_PROJECT_ROOT / "data" / "db" / "whisper_ui.db")
     upload_dir: Path = Field(default=_PROJECT_ROOT / "data" / "uploads")
     output_dir: Path = Field(default=_PROJECT_ROOT / "data" / "outputs")
+    archive_dir: Path | None = None
 
     # Whisper
     whisper_model: str = DEFAULT_WHISPER_MODEL

@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 class FileStore:
-    def __init__(self, upload_dir: Path, output_dir: Path) -> None:
+    def __init__(self, upload_dir: Path, output_dir: Path, archive_dir: Path | None = None) -> None:
         self._upload_dir = upload_dir
         self._output_dir = output_dir
+        self._archive_dir = archive_dir
         self._upload_dir.mkdir(parents=True, exist_ok=True)
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,6 +84,21 @@ class FileStore:
                 analysis = src.with_suffix(".analysis.json")
                 if analysis.is_file():
                     shutil.copy2(analysis, job_dir / "audio-analysis.json")
+
+    def archive_job(self, job_id: str, created_at: str, metadata: dict) -> Path | None:
+        """Best-effort caller hook: copy durable job artifacts to external archive."""
+        if self._archive_dir is None:
+            return None
+        date = created_at[:10].split("-")
+        year, month = (date[0], date[1]) if len(date) >= 2 else ("unknown", "unknown")
+        dest = self._archive_dir / year / month / job_id
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src = self._output_dir / job_id
+        shutil.copytree(src, dest, dirs_exist_ok=True)
+        tmp = dest / "metadata.json.tmp"
+        tmp.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(dest / "metadata.json")
+        return dest
 
     def get_output_artifact(self, job_id: str, name: str) -> Path | None:
         path = self._output_dir / job_id / name
