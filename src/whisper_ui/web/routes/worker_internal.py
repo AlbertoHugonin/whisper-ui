@@ -86,5 +86,6 @@ async def write_progress(request: Request, job_id: str):
 async def pending_jobs(request: Request):
     _authorize(request)
     db = request.app.state.db
-    return {"queued": db.count_jobs(status=JobStatus.QUEUED.value),
+    return {"pending": db.count_jobs(status=JobStatus.PENDING.value),
+            "queued": db.count_jobs(status=JobStatus.QUEUED.value),
             "processing": db.count_jobs(status=JobStatus.PROCESSING.value)}

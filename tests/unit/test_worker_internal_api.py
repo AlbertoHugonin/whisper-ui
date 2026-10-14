@@ -45,14 +45,14 @@ def test_worker_api_requires_token_and_preserves_owner(monkeypatch):
     assert result.status_code == 200
     assert result.json()["owner_id"] == 7
     assert result.json()["status"] == "queued"
-    assert client.get("/internal/worker/pending", headers=headers).json() == {"queued": 1, "processing": 0}
+    assert client.get("/internal/worker/pending", headers=headers).json() == {"pending": 0, "queued": 1, "processing": 0}
     update = result.json()
     update["status"] = "processing"
     update["progress"] = 12.5
     assert client.put(route, json=update, headers=headers).status_code == 200
     assert db.job.status == JobStatus.PROCESSING
     assert db.job.progress == 12.5
-    assert client.get("/internal/worker/pending", headers=headers).json() == {"queued": 0, "processing": 1}
+    assert client.get("/internal/worker/pending", headers=headers).json() == {"pending": 0, "queued": 0, "processing": 1}
     update["owner_id"] = 2
     assert client.put(route, json=update, headers=headers).status_code == 409
     assert db.job.owner_id == 7
