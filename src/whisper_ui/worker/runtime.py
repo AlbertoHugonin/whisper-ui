@@ -14,6 +14,7 @@ from.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sqlite3
 import threading
@@ -86,7 +87,11 @@ def build_worker_runtime(job_id: str, *, generation: int | None = None) -> Itera
         processing_ttl=settings.redis_processing_expiry,
         generation=generation,
     )
-    db = JobDatabase(settings.database_path)
+    if os.environ.get("WHISPER_DB_API_URL"):
+        from whisper_ui.storage.remote_job_database import RemoteJobDatabase
+        db = RemoteJobDatabase(os.environ["WHISPER_DB_API_URL"], os.environ.get("WHISPER_WORKER_TOKEN", ""))
+    else:
+        db = JobDatabase(settings.database_path)
     filestore = FileStore(settings.upload_dir, settings.output_dir, settings.archive_dir)
     try:
         yield WorkerRuntime(

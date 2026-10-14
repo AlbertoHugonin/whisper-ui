@@ -163,6 +163,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # work without a session cookie. /health in particular should answer
         # even before the bootstrap latch has been resolved, so external
         # monitors don't see the app as down during initial setup.
+        # Internal workers authenticate with a dedicated strong token in the
+        # route itself, not with browser session cookies or CSRF headers.
+        if path.startswith('/internal/worker/'):
+            return await call_next(request)
         if path == "/health" or path.startswith(PUBLIC_PREFIXES):
             return await call_next(request)
 

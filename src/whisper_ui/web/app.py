@@ -321,6 +321,8 @@ def create_app() -> FastAPI:
     application.include_router(shared.router)
     application.include_router(admin.router)
     application.include_router(metrics.router)
+    from whisper_ui.web.routes import worker_internal
+    application.include_router(worker_internal.router)
 
     @application.get("/health")
     async def health():
