@@ -81,6 +81,11 @@ class WhisperCppTranscribeStage:
             on_progress(0.0, TRANSCRIBE_LOADING)
 
         try:
+            # Best-effort admission guard: no GPU model load if GRE is full.
+            # This deliberately does not reserve VRAM or touch Strata/Ollama.
+            from whisper_ui.core.gpu_memory_guard import check_rocm_vram_before_transcription
+
+            check_rocm_vram_before_transcription(self._device)
             model_path = self._resolve_model_path()
             vad_model_path = self._resolve_vad_model_path() if self._vad else None
 
