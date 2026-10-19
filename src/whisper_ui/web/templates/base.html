@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=canvasfix1">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=wide-layout1">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
@@ -99,8 +99,8 @@
     </aside>
 
     {# Main content area #}
-    <main class="main-content flex-1 md:ml-14 lg:ml-60 pb-16 md:pb-0">
-      <div id="page-content" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <main class="main-content min-w-0 flex-1 md:ml-14 lg:ml-60 pb-16 md:pb-0">
+      <div id="page-content" class="app-page-shell mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-8 2xl:px-12 py-6 sm:py-8">
         {% block content %}{% endblock %}
         {% block scripts %}{% endblock %}
       </div>

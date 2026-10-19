@@ -14,7 +14,9 @@
 </div>
 
 {# Job list fragment — replaced by htmx polling and actions #}
+<section class="jobs-scroll-panel" aria-label="Elenco delle trascrizioni, area a scorrimento indipendente">
 {% include "_job_list.html" %}
+</section>
 
 {# Bulk action bar + confirm/batch-download dialogs + jobSelection store. #}
 {% include "_job_interactions.html" %}

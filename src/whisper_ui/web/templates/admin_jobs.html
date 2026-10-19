@@ -18,7 +18,9 @@
 
 {# Job list fragment — owner badges + bulk-select checkboxes; polling/pagination
    target /admin/jobs/list via the list_url passed from the route. #}
+<section class="jobs-scroll-panel" aria-label="Elenco dei lavori amministrativi, area a scorrimento indipendente">
 {% include "_job_list.html" %}
+</section>
 
 {# Bulk action bar + confirm/batch-download dialogs + jobSelection store.
    Bulk delete/retry/export reuse /jobs/bulk/* — admin's owner_filter is None

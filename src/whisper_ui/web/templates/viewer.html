@@ -226,7 +226,7 @@
 
   {# Segments #}
   <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>Seleziona una battuta per ascoltarla</span></div><span class="viewer-segments-counter">{{ result.segments|length }} segmenti</span></div>
-  <div class="transcript-container viewer-transcript-list" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
+  <div class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
     {% for seg in result.segments %}
     {%- set _color_class = speaker_colors.get(seg.speaker, '') if seg.speaker else '' -%}
     {%- set _glyph_idx_raw = _color_class.rsplit('-', 1)[-1] if _color_class else '' -%}
@@ -310,7 +310,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='viewer-timeline.js') }}?v=canvasfix1"></script>
+<script src="{{ url_for('static', path='viewer-timeline.js') }}?v=wide-layout1"></script>
 <script nonce="{{ csp_nonce }}">
 window.viewerData = function(segmentCount) {
   return {
@@ -339,7 +339,7 @@ window.viewerData = function(segmentCount) {
       if (!visible.length) return;
       this.activeIndex = Math.max(0, Math.min(visible.length - 1, this.activeIndex + delta));
       var target = visible[this.activeIndex];
-      if (target) target.scrollIntoView({block: 'center', behavior: 'smooth'});
+      if (target) this.scrollSegmentWithinTranscript(target);
     },
     copyActive() {
       var visible = this._visibleSegments();
@@ -395,7 +395,7 @@ window.viewerData = function(segmentCount) {
       if (now - this._lastScrollTime < 1000) return;
       this._lastScrollTime = now;
       var el = document.querySelector('[data-seg-idx="' + idx + '"]');
-      if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (el && el.offsetParent !== null) this.scrollSegmentWithinTranscript(el);
     },
     timelineZoom(factor) { this._timeline?.zoom(factor); },
     timelinePan(fraction) { this._timeline?.pan(fraction); },
@@ -420,10 +420,20 @@ window.viewerData = function(segmentCount) {
     },
     pauseFollow() { this._manualScrollUntil = Date.now() + 6000; },
     toggleFollow() { this.followPlayback = !this.followPlayback; if (this.followPlayback) { this._manualScrollUntil = 0; this.scrollToCurrent(); } },
+    // Scroll ONLY the transcript panel. Native scrollIntoView also scrolls
+    // outer ancestors and used to pull the entire page away from the player.
+    scrollSegmentWithinTranscript(el) {
+      const pane = document.querySelector('.viewer-transcript-list');
+      if (!pane || !el || !pane.contains(el)) return;
+      const paneBox = pane.getBoundingClientRect();
+      const segmentBox = el.getBoundingClientRect();
+      const shift = (segmentBox.top + segmentBox.height / 2) - (paneBox.top + paneBox.height / 2);
+      pane.scrollTo({top: Math.max(0, pane.scrollTop + shift), behavior: 'smooth'});
+    },
     scrollToCurrent() {
       if (this.currentSegIdx < 0) return;
-      var el = document.querySelector('[data-seg-idx="' + this.currentSegIdx + '"]');
-      if (el && el.offsetParent !== null) el.scrollIntoView({block: 'center', behavior: 'smooth'});
+      const el = document.querySelector('[data-seg-idx="' + this.currentSegIdx + '"]');
+      if (el && el.offsetParent !== null) this.scrollSegmentWithinTranscript(el);
     },
     seekTo(time) {
       this.followPlayback = true; this._manualScrollUntil = 0;

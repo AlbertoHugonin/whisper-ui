@@ -149,8 +149,12 @@
       if (!total) return;
       if(event.ctrlKey || event.metaKey) {
         event.preventDefault();changeZoom(event.deltaY>0?1/1.35:1.35);
-      } else if (zoom>1 && (event.shiftKey || Math.abs(event.deltaX)>1)) {
-        event.preventDefault();pan((event.deltaX||event.deltaY)/Math.max(150,shell.clientWidth));
+      } else if (zoom>1) {
+        // When zoomed into the waveform, the wheel navigates that timeline
+        // instead of unexpectedly scrolling the outer page. At fit-to-width,
+        // native page scrolling remains available as usual.
+        event.preventDefault();
+        pan((event.deltaX || event.deltaY) / Math.max(150, shell.clientWidth));
       }
     }
     let abort=null;
@@ -165,7 +169,7 @@
       }).then(d=>{
         if(destroyed||generation!==thisGeneration)return;
         points=Array.isArray(d.peaks)?d.peaks.map(v=>clamp(Number(v)||0,0,1)):[];
-        if(status)status.textContent=points.length?'Forma d’onda · Zoom +/−, trascina il cursore, scorri con Shift + rotella':'Forma d’onda vuota';
+        if(status)status.textContent=points.length?'Forma d’onda · Zoom +/−, trascina il cursore; rotella per navigare quando ingrandita':'Forma d’onda vuota';
         update();
       }).catch(error=>{
         if(destroyed||generation!==thisGeneration||error.name==='AbortError')return;

@@ -553,3 +553,42 @@ dialog {
 #viewer-waveform{display:block!important;box-sizing:border-box;min-width:0!important;max-width:100%!important;min-height:0!important;max-height:106px!important;object-fit:fill}
 #viewer-overview{display:block!important;box-sizing:border-box;min-width:0!important;width:100%!important;max-width:100%!important;height:32px!important;min-height:32px!important;max-height:32px!important;object-fit:fill}
 @media(max-width:680px){.viewer-waveform-wrap{height:89px!important;min-height:89px!important;max-height:89px!important}#viewer-waveform{max-height:87px!important}}
+
+/* Wide responsive app shells: max 1920px instead of the old 896px desktop cap.
+   Keep the left sidebar layout and comfortable inner padding. */
+html,body{max-width:100%;overflow-x:clip}
+.main-content{min-width:0;max-width:100%;}
+#page-content.app-page-shell,.shared-page-shell.app-page-shell{
+  width:100%;max-width:1920px;min-width:0;margin-inline:auto;
+}
+#page-content.app-page-shell>*{min-width:0}
+
+/* Independent panels: do not propagate wheel/touch scroll to the page when
+   a user reaches the end of a transcript, job list or large admin table. */
+.viewer-workspace .transcript-container.viewer-transcript-list,
+.shared-transcript-list,.jobs-scroll-panel,.admin-table-scroll{
+  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-gutter:stable;scrollbar-width:thin;min-width:0;
+  touch-action:pan-y;
+}
+.viewer-workspace .transcript-container.viewer-transcript-list{
+  height:clamp(360px,calc(100dvh - 420px),920px);
+  min-height:260px;max-height:920px;
+  scroll-behavior:auto;
+}
+.shared-transcript-list{
+  height:clamp(340px,72dvh,900px);min-height:260px;max-height:900px;
+}
+.jobs-scroll-panel{
+  max-height:min(74dvh,1000px);padding:0 5px 12px 0;
+}
+.admin-table-scroll{
+  max-height:min(70dvh,920px);overflow-x:auto;
+}
+.admin-table-scroll .table thead{position:sticky;top:0;z-index:2;background:var(--color-base-200)}
+@media(max-width:767px){
+  .viewer-workspace .transcript-container.viewer-transcript-list{height:54dvh;min-height:210px;max-height:none}
+  .shared-transcript-list{height:60dvh;min-height:210px}
+  .jobs-scroll-panel{max-height:none;overflow:visible;overscroll-behavior:auto;scrollbar-gutter:auto}
+  .admin-table-scroll{max-height:65dvh}
+}
