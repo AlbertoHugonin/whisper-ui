@@ -92,6 +92,9 @@ class Settings(BaseSettings):
 
     # HuggingFace
     hf_token: str = ""
+    # In split deployments the frontend queues jobs to a remote GPU worker.
+    # That worker holds HF_TOKEN; the frontend never needs the credential.
+    diarization_remote_worker_available: bool = False
 
     # Diarization
     # Initial state of the upload form's "enable speaker diarization" toggle.
@@ -320,7 +323,7 @@ class Settings(BaseSettings):
         persisted (or a diarize sub-job enqueued) for a feature the stage
         would only skip — see ``DiarizeStage.execute``.
         """
-        return bool(self.hf_token)
+        return bool(self.hf_token) or self.diarization_remote_worker_available
 
     @property
     def diarization_default_for_form(self) -> bool:

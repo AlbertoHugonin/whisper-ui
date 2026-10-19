@@ -241,6 +241,14 @@ def test_ollama_base_url_accepts_valid_values(tmp_path, good_url):
     assert s.ollama_base_url == good_url
 
 
+def test_remote_worker_can_advertise_diarization_without_frontend_token(tmp_path):
+    settings = _make_settings(tmp_path, hf_token="", diarization_remote_worker_available=True)
+    assert settings.diarization_available is True
+    assert settings.diarization_default_for_form is True
+    settings = _make_settings(tmp_path, hf_token="", diarization_remote_worker_available=False)
+    assert settings.diarization_available is False
+
+
 def test_diarization_available_reflects_hf_token(tmp_path):
     assert _make_settings(tmp_path, hf_token="").diarization_available is False
     assert _make_settings(tmp_path, hf_token="hf-test-not-real").diarization_available is True

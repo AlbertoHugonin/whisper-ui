@@ -8,8 +8,8 @@ def test_viewer_references_local_secure_waveform_and_sticky_controls():
     markup = (ROOT / 'templates/viewer.html').read_text()
     assert markup.count('id="viewer-waveform"') == 1
     assert markup.count('id="viewer-seek"') == 1
-    assert markup.count('id="media-player"') == 2  # video and audio mutually exclusive in template
-    for item in ('viewer-dock', 'viewer-transcript-list', 'followPlayback', 'WhisperTimeline.init', "'/viewer/{{ job.id }}/waveform'"):
+    assert markup.count('id="media-player"') == 1  # one player, one track at a time
+    for item in ('viewer-dock', 'viewer-transcript-list', 'followPlayback', 'WhisperTimeline.init', 'viewer-overview', 'switchAudio(source)', 'timelineZoom(', 'initial_media_source', 'waveform?source='):
         assert item in markup
     assert 'src="{{ url_for(\'static\', path=\'viewer-timeline.js\') }}"' in markup
 

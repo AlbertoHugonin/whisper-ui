@@ -57,7 +57,7 @@
 <details class="viewer-processing-details mb-4"><summary>Audio elaborato · dettagli tecnici</summary>
 <div class="card bg-base-200 border border-line mb-4"><div class="card-body p-4">
     <div class="text-sm font-medium mb-2">Processed audio sent to Whisper</div>
-    <audio controls preload="metadata" class="w-full"><source src="/viewer/{{ job.id }}/processed-audio" type="audio/wav"></audio>
+
     {% if audio_analysis %}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
       <div><span class="opacity-50">Original loudness</span><br>{{ audio_analysis.before.integrated_lufs }} LUFS</div>
@@ -96,12 +96,23 @@
   <div class="viewer-dock sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
     {% if media_available %}
     <div class="viewer-transport" aria-label="Controlli audio e forma d'onda">
+      <div class="viewer-source-switch" role="group" aria-label="Versione della registrazione">
+        {% if original_available %}<button type="button" :class="{'is-selected': audioSource==='original'}" :aria-pressed="(audioSource==='original').toString()" @click="switchAudio('original')">◉ Originale</button>{% endif %}
+        {% if processed_available %}<button type="button" :class="{'is-selected': audioSource==='processed'}" :aria-pressed="(audioSource==='processed').toString()" @click="switchAudio('processed')">✦ Elaborato</button>{% endif %}
+        <span>Una sola traccia · stessa posizione</span>
+      </div>
       <div class="viewer-transport-head"><div><span class="viewer-transport-kicker">NAVIGAZIONE AUDIO</span><p>Scorri la voce, trova la battuta</p></div>
         <div class="viewer-transport-time"><span x-text="clock">00:00</span><span class="viewer-time-divider">/</span><span x-text="clockTotal">--:--</span></div></div>
       <div class="viewer-waveform-wrap">
         <canvas id="viewer-waveform" class="viewer-waveform" height="76" aria-hidden="true"></canvas>
         <input id="viewer-seek" type="range" min="0" max="{{ result.duration or 1 }}" step="0.1" value="0" aria-label="Scorri la registrazione" title="Sposta la riproduzione al tempo desiderato">
       </div>
+      <div class="viewer-audacity-tools" aria-label="Zoom e panoramica della registrazione">
+        <span x-text="viewWindow">Intera registrazione</span>
+        <div><button type="button" @click="timelineZoom(1.7)" aria-label="Aumenta lo zoom">＋ Zoom</button><button type="button" @click="timelineZoom(1/1.7)" aria-label="Riduci lo zoom">－ Zoom</button><button type="button" @click="timelinePan(-.55)" aria-label="Scorri la traccia indietro">◀</button><button type="button" @click="timelinePan(.55)" aria-label="Scorri la traccia avanti">▶</button><button type="button" @click="timelineFit()">Tutto</button></div>
+      </div>
+      <canvas id="viewer-overview" class="viewer-overview" height="32" aria-label="Panoramica completa, clicca per spostare la vista" title="Panoramica; clicca per centrare la selezione"></canvas>
+      <div class="viewer-waveform-help">Ingrandisci per leggere le singole battute · sposta la vista con le frecce o Shift + rotella</div>
       <div class="viewer-transport-footer">
         <div class="viewer-transport-buttons">
           <button type="button" class="viewer-control-main" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'" x-text="playing ? '❚❚ Pausa' : '▶ Riproduci'">▶ Riproduci</button>
@@ -111,8 +122,10 @@
         </div>
         <span id="viewer-waveform-status" class="viewer-waveform-status" role="status">Caricamento della forma d’onda…</span>
       </div>
-      {% if media_is_video %}<div class="viewer-video-detail"><details><summary>Mostra video originale</summary><video id="media-player" controls preload="metadata"><source src="/viewer/{{ job.id }}/media"></video></details></div>
-      {% else %}<audio id="media-player" preload="metadata" class="viewer-audio-native" controls><source src="/viewer/{{ job.id }}/media"></audio>{% endif %}
+      <audio id="media-player" preload="metadata" class="viewer-audio-native" aria-label="Riproduzione della traccia selezionata">
+        <source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}">
+      </audio>
+      {% if media_is_video %}<a class="viewer-source-note" href="/viewer/{{ job.id }}/media" download>Scarica anche il video originale</a>{% endif %}
     </div>
     {% endif %}
 
@@ -272,7 +285,7 @@
 </div>
 {% else %}
 {# No segments: export-only toolbar #}
-{% if media_available %}<div class="player-wrapper mb-4"><audio controls preload="metadata"><source src="/viewer/{{ job.id }}/media"></audio></div>{% endif %}
+{% if media_available %}<div class="player-wrapper mb-4"><audio controls preload="metadata"><source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}"></audio></div>{% endif %}
 <div class="sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
   <div class="flex flex-wrap items-center gap-2">
     <div class="flex flex-wrap gap-1">
@@ -297,7 +310,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='viewer-timeline.js') }}" defer></script>
+<script src="{{ url_for('static', path='viewer-timeline.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 window.viewerData = function(segmentCount) {
   return {
@@ -305,7 +318,7 @@ window.viewerData = function(segmentCount) {
     activeIndex: 0,
     shortcutsOpen: false,
     currentSegIdx: -1,
-    clock: '00:00', clockTotal: '--:--', playing: false, followPlayback: true, _timeline: null, _manualScrollUntil: 0,
+    clock: '00:00', clockTotal: '--:--', viewWindow: 'Intera registrazione', playing: false, followPlayback: true, audioSource: '{{ initial_media_source }}', _timeline: null, _manualScrollUntil: 0,
     _segments: [],
     _lastScrollTime: 0,
     _segmentCount: segmentCount,
@@ -353,12 +366,15 @@ window.viewerData = function(segmentCount) {
         self._timeline = window.WhisperTimeline.init({
           player: player,
           canvas: document.getElementById('viewer-waveform'),
+          overview: document.getElementById('viewer-overview'),
+          segments: self._segments,
           range: document.getElementById('viewer-seek'),
           status: document.getElementById('viewer-waveform-status'),
-          url: '/viewer/{{ job.id }}/waveform',
+          url: '/viewer/{{ job.id }}/waveform?source={{ initial_media_source }}',
           duration: {{ result.duration or 0 }},
           onClock: function(t, duration) { self.clock = window.WhisperTimeline.formatTime(t); self.clockTotal = window.WhisperTimeline.formatTime(duration); },
-          onSeek: function(t) { self._onTimeUpdate(t); self.scrollToCurrent(); }
+          onSeek: function(t) { self._onTimeUpdate(t); self.scrollToCurrent(); },
+          onWindow: function(a,b,z) { self.viewWindow = a + ' – ' + b + (z > 1.05 ? ' · ' + z.toFixed(1) + '×' : ' · Vista completa'); }
         });
       }
     },
@@ -380,6 +396,27 @@ window.viewerData = function(segmentCount) {
       this._lastScrollTime = now;
       var el = document.querySelector('[data-seg-idx="' + idx + '"]');
       if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
+    timelineZoom(factor) { this._timeline?.zoom(factor); },
+    timelinePan(fraction) { this._timeline?.pan(fraction); },
+    timelineFit() { this._timeline?.fit(); },
+    switchAudio(source) {
+      if (source === this.audioSource) return;
+      const player = document.getElementById('media-player');
+      if (!player) return;
+      const pos = player.currentTime || 0, playing = !player.paused;
+      // The SAME HTMLAudioElement is reused; no second parallel player.
+      player.pause();
+      this.audioSource = source;
+      player.addEventListener('loadedmetadata', () => {
+        player.currentTime = Math.min(pos,Math.max(0,player.duration || pos));
+        this._onTimeUpdate(player.currentTime);
+        this._timeline?.refresh();
+        if (playing) player.play().catch(() => {});
+      }, {once:true});
+      player.src = source === 'original' ? '/viewer/{{ job.id }}/media' : '/viewer/{{ job.id }}/processed-audio';
+      player.load();
+      this._timeline?.setSource('/viewer/{{ job.id }}/waveform?source='+encodeURIComponent(source));
     },
     pauseFollow() { this._manualScrollUntil = Date.now() + 6000; },
     toggleFollow() { this.followPlayback = !this.followPlayback; if (this.followPlayback) { this._manualScrollUntil = 0; this.scrollToCurrent(); } },

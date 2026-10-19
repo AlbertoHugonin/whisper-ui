@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -91,10 +92,12 @@ async def viewer_page(request: Request, db: DbDep, filestore: FileStoreDep, user
     # of file-system access and avoids the 404 dead-click the button
     # would otherwise produce.
     media_path = filestore.get_any_media_path(job_id, job.filepath if job else None) if job is not None else None
-    media_available = media_path is not None
+    original_available = media_path is not None
+    media_available = original_available
     media_is_video = media_available and media_path.suffix.lower() in _VIDEO_EXTENSIONS
     processed_path = filestore.get_output_artifact(job_id, "processed.wav") if job is not None else None
     processed_available = processed_path is not None
+    media_available = original_available or processed_available
     analysis = None
     analysis_path = filestore.get_output_artifact(job_id, "audio-analysis.json") if job is not None else None
     if analysis_path is not None:
@@ -114,6 +117,8 @@ async def viewer_page(request: Request, db: DbDep, filestore: FileStoreDep, user
             "speaker_colors": speaker_colors,
             "search_disabled": search_disabled,
             "media_available": media_available,
+            "original_available": original_available,
+            "initial_media_source": "original" if original_available else "processed",
             "media_is_video": media_is_video,
             "processed_available": processed_available,
             "audio_analysis": analysis,
@@ -175,22 +180,36 @@ async def media_download(job_id: str, db: DbDep, filestore: FileStoreDep, user: 
 
 
 @router.get("/viewer/{job_id}/waveform")
-async def media_waveform(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep):
-    """Authenticated lightweight overview; no media or filesystem paths leaked."""
+async def media_waveform(
+    job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep,
+    source: str = "original",
+):
+    """Authenticated peaks of the SELECTED audio track (never both at once)."""
     validate_hex_id(job_id, "job_id")
+    if source not in ("original", "processed"):
+        raise HTTPException(status_code=400, detail="Unknown audio source")
     job = db.get_job(job_id, owner_id=owner_filter(user))
     if job is None or job.status != JobStatus.COMPLETED:
         raise HTTPException(status_code=404)
-    path = filestore.get_output_artifact(job_id, "processed.wav")
+    if source == "processed":
+        path = filestore.get_output_artifact(job_id, "processed.wav")
+    else:
+        path = filestore.get_any_media_path(job_id, job.filepath)
     if path is None:
         raise HTTPException(status_code=404)
     try:
         stat = await asyncio.to_thread(path.stat)
-        values = await asyncio.to_thread(cached_peaks, str(path), stat.st_mtime_ns, stat.st_size)
-    except (OSError, ValueError, EOFError):
+        values = await asyncio.wait_for(
+            asyncio.to_thread(cached_peaks, str(path), stat.st_mtime_ns, stat.st_size),
+            timeout=75,
+        )
+    except (OSError, ValueError, EOFError, TimeoutError, RuntimeError, subprocess.SubprocessError):
         raise HTTPException(status_code=422, detail="Waveform unavailable") from None
-    return Response(content=json.dumps({"peaks": values}), media_type="application/json",
-                    headers={"Cache-Control": "private, max-age=300"})
+    return Response(
+        content=json.dumps({"peaks": values, "source": source}),
+        media_type="application/json",
+        headers={"Cache-Control": "private, max-age=600"},
+    )
 
 
 @router.get("/viewer/{job_id}/processed-audio")

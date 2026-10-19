@@ -527,3 +527,21 @@ dialog {
 .viewer-segment .btn{align-self:start}
 @media(max-width:680px){.viewer-heading-chip{display:none}.viewer-dock{top:0;padding:.5rem;border-radius:.8rem}.viewer-transport{padding:.7rem}.viewer-waveform-wrap{height:61px;min-height:61px}.viewer-transport-head p{font-size:.8rem}.viewer-transport-footer{gap:.35rem}.viewer-waveform-status{display:none}.viewer-export-actions{max-height:72px;overflow-y:auto}.viewer-workspace .transcript-container.viewer-transcript-list{max-height:55vh}.viewer-segment{gap:.6rem!important;padding:.55rem!important}.viewer-transport-buttons{gap:.3rem}.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{min-height:38px;padding:.35rem .5rem;font-size:.72rem}}
 @media(prefers-reduced-motion:reduce){.viewer-segment,.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{transition:none}}
+
+/* Audio studio v2: one source/player, Audacity-like overview + zoom. */
+.viewer-source-switch{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin-bottom:.9rem}
+.viewer-source-switch button{border:1px solid var(--whisper-line);border-radius:.65rem;padding:.48rem .86rem;background:var(--color-base-100);font-size:.75rem;font-weight:750;color:var(--color-base-content);cursor:pointer;min-height:38px}
+.viewer-source-switch button.is-selected{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-primary-content);box-shadow:0 3px 18px rgba(34,187,177,.15)}
+.viewer-source-switch span{font-size:.68rem;opacity:.6;margin-left:auto}
+.viewer-audacity-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin:.45rem 0 .3rem}
+.viewer-audacity-tools>span{font-size:.68rem;font-variant-numeric:tabular-nums;opacity:.7}
+.viewer-audacity-tools>div{display:flex;gap:.25rem;flex-wrap:wrap}
+.viewer-audacity-tools button{background:var(--color-base-100);color:var(--color-base-content);border:1px solid var(--whisper-line);border-radius:.45rem;font-size:.69rem;font-weight:700;padding:.38rem .65rem;min-height:30px;cursor:pointer}
+.viewer-audacity-tools button:hover{border-color:var(--color-primary);color:var(--color-primary)}
+.viewer-overview{display:block;cursor:crosshair;height:32px;width:100%;border-radius:.42rem;border:1px solid var(--whisper-line);background:color-mix(in oklch,var(--color-base-content) 5%,var(--color-base-100))}
+.viewer-waveform-help{opacity:.55;font-size:.63rem;margin:.38rem 0 .05rem;line-height:1.4}
+/* All playback controls live in the sticky studio dock, not a second browser player. */
+.viewer-transport .viewer-audio-native{display:none}
+.viewer-transport .viewer-source-note{display:inline-block;font-size:.69rem;color:var(--color-primary);margin-top:.25rem}
+.viewer-waveform-wrap{height:108px;min-height:108px}
+@media(max-width:680px){.viewer-waveform-wrap{height:87px;min-height:87px}.viewer-source-switch span{flex:1 0 100%;margin-left:0}.viewer-audacity-tools>span{flex:1 0 100%}.viewer-audacity-tools button{padding:.35rem .47rem}}
