@@ -1,0 +1,75 @@
+{# Native dialog in the browser top layer: retains focus, Escape dismissal,
+   and works in the viewport-locked transcript editor and on small screens. #}
+<dialog class="viewer-export-dialog" id="viewer-export-dialog" x-ref="exportDialog"
+        aria-labelledby="viewer-export-title"
+        @click="if ($event.target === $el) $el.close()">
+  <div class="viewer-export-surface" x-data="{ copied: false, linkCopied: false }">
+    <header class="viewer-export-header">
+      <div>
+        <span class="viewer-export-eyebrow">SALVA E CONDIVIDI</span>
+        <h2 id="viewer-export-title">Esporta trascrizione</h2>
+        <p>Seleziona il formato desiderato per scaricare il file.</p>
+      </div>
+      <button type="button" class="viewer-export-close" aria-label="Chiudi esportazione"
+              @click="$el.closest('dialog').close()">✕</button>
+    </header>
+    <div class="viewer-export-scroll">
+      <div class="viewer-export-section-title">Formato del testo</div>
+      <div class="viewer-export-format-grid">
+        {% for fmt in export_formats %}
+        <a class="viewer-export-format" href="/viewer/{{ job.id }}/export/{{ fmt }}" download
+           title="{{ labels.VIEWER_EXPORT_TOOLTIPS.get(fmt, '') }}">
+          <span class="viewer-export-format-icon">{{ fmt|upper }}</span>
+          <span class="viewer-export-format-desc">
+            <strong>{{ fmt|upper }}</strong>
+            <small>{{ labels.VIEWER_EXPORT_TOOLTIPS.get(fmt, 'Scarica la trascrizione') }}</small>
+          </span>
+          {{ icon_download('w-4 h-4') }}
+        </a>
+        {% endfor %}
+      </div>
+      <div class="viewer-export-section-title">Altre opzioni</div>
+      <div class="viewer-export-utilities">
+        {% if result.segments %}
+        <button type="button" class="viewer-export-utility"
+                @click="window.whisperCopy(Array.from(document.querySelectorAll('.viewer-transcript-list .segment'))
+                  .filter(s => s.offsetParent !== null)
+                  .map(s => s.textContent.trim()).join('\n'))
+                  .then(() => { copied = true; setTimeout(() => copied = false, 2000); })">
+          {{ icon_copy('w-4 h-4') }}
+          <span x-text="copied ? '{{ labels.VIEWER_COPIED }}' : '{{ labels.VIEWER_COPY }}'">{{ labels.VIEWER_COPY }}</span>
+        </button>
+        {% endif %}
+        {% if media_available %}
+        <a class="viewer-export-utility" href="/viewer/{{ job.id }}/media" download>
+          {{ icon_download('w-4 h-4') }} {{ labels.VIEWER_DOWNLOAD_MEDIA }}
+        </a>
+        {% endif %}
+      </div>
+      <div class="viewer-export-section-title">Condivisione</div>
+      <div class="viewer-export-utilities">
+        {% if job.share_token %}
+        <button type="button" class="viewer-export-utility"
+                @click="window.whisperCopy(window.location.origin + '/shared/{{ job.share_token }}')
+                  .then(() => { linkCopied = true; setTimeout(() => linkCopied = false, 2000); })">
+          {{ icon_link('w-4 h-4') }}
+          <span x-text="linkCopied ? '{{ labels.VIEWER_SHARE_LINK_COPIED }}' : '{{ labels.VIEWER_SHARE_COPY_LINK }}'">{{ labels.VIEWER_SHARE_COPY_LINK }}</span>
+        </button>
+        <button type="button" class="viewer-export-utility viewer-export-revoke"
+                hx-delete="/viewer/{{ job.id }}/share"
+                hx-confirm="{{ labels.VIEWER_SHARE_REVOKE_CONFIRM }}">
+          {{ labels.VIEWER_SHARE_REVOKE }}
+        </button>
+        {% else %}
+        <button type="button" class="viewer-export-utility"
+                hx-post="/viewer/{{ job.id }}/share">
+          {{ icon_link('w-4 h-4') }} {{ labels.VIEWER_SHARE }}
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    <footer class="viewer-export-footer">
+      <button type="button" class="viewer-export-done" @click="$el.closest('dialog').close()">Chiudi</button>
+    </footer>
+  </div>
+</dialog>

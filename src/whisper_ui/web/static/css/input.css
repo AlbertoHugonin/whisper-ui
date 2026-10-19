@@ -513,7 +513,7 @@ dialog {
 .viewer-audio-native{width:100%;height:35px;margin:.45rem 0 0;opacity:.85}
 .viewer-video-detail summary{cursor:pointer;font-size:.78rem;padding:.5rem 0;color:var(--color-primary)}
 .viewer-video-detail video{max-height:200px;width:100%;object-fit:contain}
-.viewer-export-actions{padding:.2rem 0 .45rem;margin:0!important}
+
 .viewer-transcript-head{display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.45rem .4rem .85rem}
 .viewer-transcript-head strong{font-size:1rem;font-weight:780;display:block}
 .viewer-transcript-head span{font-size:.7rem;opacity:.65}
@@ -525,7 +525,7 @@ dialog {
 .viewer-segment .timestamp-btn{opacity:.9;font-weight:750;color:var(--color-primary);font-size:.75rem;font-variant-numeric:tabular-nums;padding:.12rem .35rem;border-radius:.3rem;background:color-mix(in oklch,var(--color-primary) 6%,var(--color-base-100));text-decoration:none}
 .viewer-segment strong{display:block;margin-bottom:.2rem;letter-spacing:.01em}
 .viewer-segment .btn{align-self:start}
-@media(max-width:680px){.viewer-heading-chip{display:none}.viewer-dock{top:0;padding:.5rem;border-radius:.8rem}.viewer-transport{padding:.7rem}.viewer-waveform-wrap{height:61px;min-height:61px}.viewer-transport-head p{font-size:.8rem}.viewer-transport-footer{gap:.35rem}.viewer-waveform-status{display:none}.viewer-export-actions{max-height:72px;overflow-y:auto}.viewer-workspace .transcript-container.viewer-transcript-list{max-height:55vh}.viewer-segment{gap:.6rem!important;padding:.55rem!important}.viewer-transport-buttons{gap:.3rem}.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{min-height:38px;padding:.35rem .5rem;font-size:.72rem}}
+@media(max-width:680px){.viewer-heading-chip{display:none}.viewer-dock{top:0;padding:.5rem;border-radius:.8rem}.viewer-transport{padding:.7rem}.viewer-waveform-wrap{height:61px;min-height:61px}.viewer-transport-head p{font-size:.8rem}.viewer-transport-footer{gap:.35rem}.viewer-waveform-status{display:none}.viewer-workspace .transcript-container.viewer-transcript-list{max-height:55vh}.viewer-segment{gap:.6rem!important;padding:.55rem!important}.viewer-transport-buttons{gap:.3rem}.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{min-height:38px;padding:.35rem .5rem;font-size:.72rem}}
 @media(prefers-reduced-motion:reduce){.viewer-segment,.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{transition:none}}
 
 /* Audio studio v2: one source/player, Audacity-like overview + zoom. */
@@ -664,7 +664,7 @@ html:has(#page-content.viewer-page-fit){height:100dvh;overflow:hidden}
 .viewer-workspace .viewer-audacity-tools{margin-top:4px;margin-bottom:4px}
 .viewer-workspace .viewer-transport-footer{margin-top:5px}
 .viewer-workspace .viewer-waveform-help{display:none}
-.viewer-workspace .viewer-export-actions{margin-bottom:5px!important;padding:0 0 3px}
+
 @media(max-width:767px){
   .viewer-workspace .viewer-transport{padding:7px 9px}
   #page-content:has(.viewer-transcript-frame)>.viewer-heading h1{font-size:1.05rem}
@@ -678,3 +678,42 @@ html:has(#page-content.viewer-page-fit){height:100dvh;overflow:hidden}
   .viewer-workspace .viewer-transport-footer{gap:2px}
   .viewer-workspace .viewer-transport-buttons{gap:3px}
 }
+
+/* Export dialog: one compact entry point inside the transcript header.
+   A native dialog enters the browser top layer and stays independent of
+   viewport-locked, overflow-clipped transcript workspaces. */
+.viewer-transcript-frame .viewer-transcript-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.viewer-transcript-head>div{min-width:0;flex:1}
+.viewer-transcript-head>div>span{display:block;font-size:.7rem;opacity:.68;line-height:1.4}
+.viewer-export-trigger{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:0 0 auto;min-height:37px;padding:7px 14px;border-radius:9px;background:var(--color-primary);color:var(--color-primary-content);font-size:.78rem;font-weight:750;cursor:pointer;border:1px solid transparent}
+.viewer-export-trigger:hover{filter:brightness(1.09)}
+.viewer-export-trigger:focus-visible,.viewer-export-close:focus-visible,.viewer-export-done:focus-visible,.viewer-export-format:focus-visible,.viewer-export-utility:focus-visible{outline:3px solid var(--color-primary);outline-offset:3px}
+.viewer-empty-export{display:flex;justify-content:flex-end;margin:0 0 12px}
+.viewer-export-dialog{position:fixed;inset:0;margin:auto;padding:0;border:1px solid var(--whisper-line);border-radius:18px;width:min(660px,calc(100vw - 28px));max-width:calc(100vw - 28px);max-height:min(86dvh,760px);box-shadow:0 24px 70px rgba(0,0,0,.35);background:var(--color-base-100);color:var(--color-base-content);overflow:hidden;overscroll-behavior:contain}
+.viewer-export-dialog::backdrop{background:rgba(9,16,30,.7);backdrop-filter:blur(5px)}
+.viewer-export-dialog[open]{display:flex;flex-direction:column}
+.viewer-export-surface{display:flex;flex-direction:column;min-height:0;min-width:0;width:100%;max-height:inherit}
+.viewer-export-header{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;padding:23px 24px 15px;border-bottom:1px solid var(--whisper-line)}
+.viewer-export-eyebrow{display:block;margin:0 0 5px;color:var(--color-primary);font-size:.62rem;letter-spacing:.14em;font-weight:850}
+.viewer-export-header h2{font-size:1.2rem;font-weight:800;line-height:1.3;letter-spacing:-.02em}
+.viewer-export-header p{margin-top:5px;font-size:.78rem;line-height:1.5;opacity:.62}
+.viewer-export-close{flex-shrink:0;border:1px solid var(--whisper-line);background:var(--color-base-200);border-radius:9px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer}
+.viewer-export-scroll{overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:17px 24px 19px;min-height:0}
+.viewer-export-section-title{margin:17px 0 9px;font-size:.69rem;letter-spacing:.075em;text-transform:uppercase;font-weight:800;opacity:.72}
+.viewer-export-section-title:first-child{margin-top:0}
+.viewer-export-format-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.viewer-export-format{min-width:0;display:flex;align-items:center;gap:10px;border:1px solid var(--whisper-line);background:var(--color-base-200);border-radius:12px;min-height:72px;padding:11px 12px;color:var(--color-base-content);text-decoration:none;transition:border-color .15s,transform .15s}
+.viewer-export-format:hover{border-color:var(--color-primary);transform:translateY(-1px)}
+.viewer-export-format-icon{flex:none;min-width:42px;min-height:36px;padding:4px;border-radius:8px;display:grid;place-items:center;background:color-mix(in oklch,var(--color-primary) 15%,var(--color-base-100));color:var(--color-primary);font-size:.73rem;font-weight:800}
+.viewer-export-format-desc{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.viewer-export-format-desc strong{font-size:.85rem;font-weight:760}
+.viewer-export-format-desc small{font-size:.68rem;line-height:1.4;opacity:.65;overflow-wrap:anywhere}
+.viewer-export-format>svg{flex:none;opacity:.6}
+.viewer-export-utilities{display:flex;flex-wrap:wrap;gap:8px}
+.viewer-export-utility{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:39px;border:1px solid var(--whisper-line);background:var(--color-base-100);color:var(--color-base-content);border-radius:9px;padding:7px 11px;font-size:.76rem;font-weight:690;text-decoration:none;cursor:pointer}
+.viewer-export-utility:hover{border-color:var(--color-primary);color:var(--color-primary)}
+.viewer-export-revoke{color:var(--color-error)}
+.viewer-export-footer{flex:0 0 auto;display:flex;justify-content:flex-end;border-top:1px solid var(--whisper-line);padding:12px 24px}
+.viewer-export-done{background:var(--color-primary);color:var(--color-primary-content);border-radius:9px;min-height:36px;padding:7px 22px;font-size:.8rem;font-weight:750;cursor:pointer}
+@media(max-width:640px){.viewer-export-dialog{width:calc(100vw - 18px);max-width:calc(100vw - 18px);max-height:88dvh;border-radius:14px}.viewer-export-header{padding:17px 15px 12px}.viewer-export-scroll{padding:12px 15px 16px}.viewer-export-footer{padding:10px 15px}.viewer-export-format-grid{grid-template-columns:1fr}.viewer-export-format{min-height:58px}.viewer-export-utilities{flex-direction:column}.viewer-export-utility{justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){.viewer-export-format{transition:none}.viewer-export-format:hover{transform:none}}

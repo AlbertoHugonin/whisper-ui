@@ -81,7 +81,7 @@
      x-init="initPlayer()"
 @keydown.window="
   const tag = document.activeElement.tagName;
-  const inField = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable;
+  const inField = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable || Boolean($refs.exportDialog?.open);
   if ($event.key === '/' && !inField) { $event.preventDefault(); focusSearch(); }
   else if ($event.key === 'Escape' && document.activeElement.matches('input[type=search]')) { clearSearch(); document.activeElement.blur(); }
   else if (!inField && $event.key === 'ArrowDown') { $event.preventDefault(); navigateSegments(1); }
@@ -129,66 +129,6 @@
     </div>
     {% endif %}
 
-    {# Export buttons #}
-    <div class="viewer-export-actions flex flex-wrap items-center gap-2 mb-3">
-      <div class="flex flex-wrap gap-1">
-        {% for fmt in export_formats %}
-        <a href="/viewer/{{ job.id }}/export/{{ fmt }}" class="btn btn-sm btn-outline" download
-           title="{{ labels.VIEWER_EXPORT_TOOLTIPS.get(fmt, '') }}">
-          {{ fmt|upper }}
-        </a>
-        {% endfor %}
-        {% if media_available %}
-        <a href="/viewer/{{ job.id }}/media" class="btn btn-sm btn-outline" download>
-          {{ icon_download("w-4 h-4") }} {{ labels.VIEWER_DOWNLOAD_MEDIA }}
-        </a>
-        {% endif %}
-      </div>
-      <button class="btn btn-sm btn-ghost gap-1"
-              x-data="{ copied: false }"
-              @click="
-                const text = Array.from(document.querySelectorAll('.segment'))
-                  .filter(s => s.style.display !== 'none')
-                  .map(s => s.textContent.trim()).join('\n');
-                navigator.clipboard.writeText(text).then(() => { copied = true; setTimeout(() => copied = false, 2000) });
-              ">
-        <template x-if="!copied">
-          <span class="flex items-center gap-1">{{ icon_copy("w-4 h-4") }} {{ labels.VIEWER_COPY }}</span>
-        </template>
-        <template x-if="copied">
-          <span class="flex items-center gap-1 text-success">{{ icon_check("w-4 h-4") }} {{ labels.VIEWER_COPIED }}</span>
-        </template>
-      </button>
-
-      {# Share button #}
-      {% if job.share_token %}
-      <div class="flex items-center gap-1" x-data="{ linkCopied: false }">
-        <button class="btn btn-sm btn-ghost gap-1"
-                @click="
-                  window.whisperCopy(window.location.origin + '/shared/{{ job.share_token }}')
-                    .then(() => { linkCopied = true; setTimeout(() => linkCopied = false, 2000) });
-                ">
-          <template x-if="!linkCopied">
-            <span class="flex items-center gap-1">{{ icon_link("w-4 h-4") }} {{ labels.VIEWER_SHARE_COPY_LINK }}</span>
-          </template>
-          <template x-if="linkCopied">
-            <span class="flex items-center gap-1 text-success">{{ icon_check("w-4 h-4") }} {{ labels.VIEWER_SHARE_LINK_COPIED }}</span>
-          </template>
-        </button>
-        <button class="btn btn-sm btn-ghost text-error"
-                hx-delete="/viewer/{{ job.id }}/share"
-                hx-confirm="{{ labels.VIEWER_SHARE_REVOKE_CONFIRM }}">
-          {{ labels.VIEWER_SHARE_REVOKE }}
-        </button>
-      </div>
-      {% else %}
-      <button class="btn btn-sm btn-ghost gap-1"
-              hx-post="/viewer/{{ job.id }}/share">
-        {{ icon_link("w-4 h-4") }} {{ labels.VIEWER_SHARE }}
-      </button>
-      {% endif %}
-    </div>
-
     {% if search_disabled %}
     {# Live search would lock up the browser tab on transcripts this large. #}
     {{ alert('info', labels.VIEWER_SEARCH_DISABLED.format(count=result.segments|length), 'text-xs') }}
@@ -226,7 +166,12 @@
 
   {# Only the conversation scrolls. Header/search/export remain outside. #}
   <section class="viewer-transcript-frame" aria-label="Pannello della trascrizione">
-  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>Seleziona una battuta per ascoltarla</span></div><span class="viewer-segments-counter">{{ result.segments|length }} segmenti</span></div>
+  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>{{ result.segments|length }} segmenti · Seleziona una battuta per ascoltarla</span></div>
+    <button type="button" class="viewer-export-trigger" aria-haspopup="dialog" aria-controls="viewer-export-dialog"
+            @click="$refs.exportDialog.showModal()">
+      {{ icon_download('w-4 h-4') }} <span>Esporta</span>
+    </button>
+  </div>
   <div class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
     {% for seg in result.segments %}
     {%- set _color_class = speaker_colors.get(seg.speaker, '') if seg.speaker else '' -%}
@@ -284,26 +229,15 @@
   </p>
   {% endif %}
   </section>
+  {% include "_viewer_export_dialog.html" %}
 </div>
 {% else %}
-{# No segments: export-only toolbar #}
+{# No segments: exports still available from the same compact trigger. #}
 {% if media_available %}<div class="player-wrapper mb-4"><audio controls preload="metadata"><source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}"></audio></div>{% endif %}
-<div class="sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
-  <div class="flex flex-wrap items-center gap-2">
-    <div class="flex flex-wrap gap-1">
-      {% for fmt in export_formats %}
-      <a href="/viewer/{{ job.id }}/export/{{ fmt }}" class="btn btn-sm btn-outline" download
-         title="{{ labels.VIEWER_EXPORT_TOOLTIPS.get(fmt, '') }}">
-        {{ fmt|upper }}
-      </a>
-      {% endfor %}
-      {% if media_available %}
-      <a href="/viewer/{{ job.id }}/media" class="btn btn-sm btn-outline" download>
-        {{ icon_download("w-4 h-4") }} {{ labels.VIEWER_DOWNLOAD_MEDIA }}
-      </a>
-      {% endif %}
-    </div>
-  </div>
+<div class="viewer-empty-export" x-data="{}">
+  <button type="button" class="viewer-export-trigger" aria-haspopup="dialog" aria-controls="viewer-export-dialog"
+          @click="$refs.exportDialog.showModal()">{{ icon_download('w-4 h-4') }} Esporta</button>
+  {% include "_viewer_export_dialog.html" %}
 </div>
 <p class="text-sm opacity-50">{{ labels.VIEWER_NO_SEGMENTS }}</p>
 {% endif %}
