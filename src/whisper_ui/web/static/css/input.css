@@ -480,3 +480,50 @@ dialog {
     opacity: 0.5;
   }
 }
+
+/* Transcription Studio: the transport stays alongside the conversation.
+   Works in both Whisper themes and never uses viewport-wide scrolling. */
+.viewer-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin:0 0 1rem}
+.viewer-heading h1{font-size:clamp(1.15rem,2.5vw,1.7rem);line-height:1.25;font-weight:750;letter-spacing:-.025em;overflow-wrap:anywhere}
+.viewer-eyebrow{font-size:.65rem;letter-spacing:.16em;font-weight:800;color:var(--color-primary);margin:0 0 .4rem}
+.viewer-heading-chip{white-space:nowrap;align-self:center;border:1px solid var(--whisper-line);border-radius:999px;padding:.5rem .75rem;font-size:.72rem;color:var(--color-base-content);opacity:.8}
+.viewer-processing-details{padding:.45rem 0;color:var(--color-base-content)}
+.viewer-processing-details summary{cursor:pointer;width:max-content;max-width:100%;font-size:.8rem;opacity:.68;margin:.3rem 0 .8rem}
+.viewer-workspace{min-width:0}
+.viewer-dock{position:sticky;top:0;z-index:30;background:var(--color-base-100);border:1px solid var(--whisper-line);border-radius:1.15rem;padding:clamp(.7rem,1.5vw,1rem);box-shadow:0 12px 32px rgba(10,18,32,.12);margin-bottom:1rem}
+.viewer-transport{border-radius:1rem;padding:clamp(.8rem,1.7vw,1.1rem);background:color-mix(in oklch,var(--color-primary) 5%,var(--color-base-200));border:1px solid color-mix(in oklch,var(--color-primary) 17%,var(--whisper-line));margin:0 0 .85rem}
+.viewer-transport-head{display:flex;justify-content:space-between;gap:.7rem;align-items:center;margin-bottom:.6rem}
+.viewer-transport-kicker{display:block;letter-spacing:.14em;font-size:.6rem;font-weight:850;color:var(--color-primary)}
+.viewer-transport-head p{font-size:.91rem;line-height:1.3;font-weight:720;margin-top:.1rem}
+.viewer-transport-time{font-size:clamp(.78rem,1.3vw,1rem);font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}
+.viewer-time-divider{opacity:.3;margin:0 .3rem}
+.viewer-waveform-wrap{position:relative;height:76px;min-height:76px;border-radius:.7rem;overflow:hidden;background:color-mix(in oklch,var(--color-base-content) 4%,var(--color-base-100));border:1px solid var(--whisper-line)}
+.viewer-waveform{display:block;height:100%;width:100%;color:var(--color-primary)}
+#viewer-seek{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:crosshair;touch-action:pan-y}
+#viewer-seek:focus-visible{outline:3px solid var(--color-primary);outline-offset:-3px;opacity:.2}
+.viewer-transport-footer{display:flex;justify-content:space-between;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.65rem}
+.viewer-transport-buttons{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem}
+.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{min-height:34px;border-radius:.65rem;padding:.35rem .8rem;font-size:.75rem;font-weight:730;cursor:pointer;transition:background .15s,border .15s}
+.viewer-control-main{color:var(--color-primary-content);background:var(--color-primary)}
+.viewer-control-main:hover{filter:brightness(1.08)}
+.viewer-control-quiet,.viewer-control-follow{color:var(--color-base-content);background:var(--color-base-100);border:1px solid var(--whisper-line)}
+.viewer-control-quiet:hover,.viewer-control-follow:hover{border-color:var(--color-primary)}
+.viewer-control-follow.is-on{border-color:var(--color-primary);color:var(--color-primary);background:color-mix(in oklch,var(--color-primary) 9%,var(--color-base-100))}
+.viewer-waveform-status{font-size:.64rem;opacity:.58;line-height:1.4}
+.viewer-audio-native{width:100%;height:35px;margin:.45rem 0 0;opacity:.85}
+.viewer-video-detail summary{cursor:pointer;font-size:.78rem;padding:.5rem 0;color:var(--color-primary)}
+.viewer-video-detail video{max-height:200px;width:100%;object-fit:contain}
+.viewer-export-actions{padding:.2rem 0 .45rem;margin:0!important}
+.viewer-transcript-head{display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.45rem .4rem .85rem}
+.viewer-transcript-head strong{font-size:1rem;font-weight:780;display:block}
+.viewer-transcript-head span{font-size:.7rem;opacity:.65}
+.viewer-segments-counter{white-space:nowrap;border-radius:.5rem;border:1px solid var(--whisper-line);padding:.35rem .6rem}
+.viewer-workspace .transcript-container.viewer-transcript-list{max-height:min(58vh,750px);min-height:180px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scroll-padding-top:1rem;padding:.2rem .2rem .5rem}
+.viewer-segment{align-items:flex-start;margin:.35rem .15rem;padding:.85rem!important;min-height:3rem;border:1px solid var(--whisper-line);border-left:3px solid transparent;border-radius:.8rem!important;background:var(--color-base-100);line-height:1.65;scroll-margin-block:10px}
+.viewer-segment:hover{border-color:color-mix(in oklch,var(--color-primary) 30%,var(--whisper-line));background:var(--color-base-200)}
+.viewer-segment.segment-active{border-left-color:var(--color-primary);background:color-mix(in oklch,var(--color-primary) 9%,var(--color-base-100));box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--color-primary) 17%,transparent);padding-left:.85rem!important}
+.viewer-segment .timestamp-btn{opacity:.9;font-weight:750;color:var(--color-primary);font-size:.75rem;font-variant-numeric:tabular-nums;padding:.12rem .35rem;border-radius:.3rem;background:color-mix(in oklch,var(--color-primary) 6%,var(--color-base-100));text-decoration:none}
+.viewer-segment strong{display:block;margin-bottom:.2rem;letter-spacing:.01em}
+.viewer-segment .btn{align-self:start}
+@media(max-width:680px){.viewer-heading-chip{display:none}.viewer-dock{top:0;padding:.5rem;border-radius:.8rem}.viewer-transport{padding:.7rem}.viewer-waveform-wrap{height:61px;min-height:61px}.viewer-transport-head p{font-size:.8rem}.viewer-transport-footer{gap:.35rem}.viewer-waveform-status{display:none}.viewer-export-actions{max-height:72px;overflow-y:auto}.viewer-workspace .transcript-container.viewer-transcript-list{max-height:55vh}.viewer-segment{gap:.6rem!important;padding:.55rem!important}.viewer-transport-buttons{gap:.3rem}.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{min-height:38px;padding:.35rem .5rem;font-size:.72rem}}
+@media(prefers-reduced-motion:reduce){.viewer-segment,.viewer-control-main,.viewer-control-quiet,.viewer-control-follow{transition:none}}

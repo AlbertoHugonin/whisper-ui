@@ -32,7 +32,7 @@
 
 {# Transcript display #}
 {% if result %}
-<h1 class="text-xl font-medium mb-2">{{ labels.VIEWER_TRANSCRIPT_TITLE.format(name=job.filename) }}</h1>
+<header class="viewer-heading"><div><p class="viewer-eyebrow">STUDIO / TRASCRIZIONE</p><h1>{{ job.filename }}</h1></div><span class="viewer-heading-chip">{{ result.segments|length }} battute</span></header>
 
 {% if job.quality_warning %}
 {{ alert('warning', job.quality_warning, 'mb-4') }}
@@ -52,25 +52,10 @@
 <p class="text-sm opacity-50 mb-4">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
 {% endif %}
 
-{% if media_available %}
-<div class="player-wrapper">
-  {% if media_is_video %}
-  <video id="media-player" controls preload="metadata">
-    <source src="/viewer/{{ job.id }}/media">
-    <p>{{ labels.VIEWER_PLAYER_UNAVAILABLE }}</p>
-  </video>
-  {% else %}
-  <audio id="media-player" controls preload="metadata" class="p-2">
-    <source src="/viewer/{{ job.id }}/media">
-    <p>{{ labels.VIEWER_PLAYER_UNAVAILABLE }}</p>
-  </audio>
-  {% endif %}
-</div>
-{% endif %}
 
 {% if processed_available %}
-<div class="card bg-base-200 border border-line mb-4">
-  <div class="card-body p-4">
+<details class="viewer-processing-details mb-4"><summary>Audio elaborato · dettagli tecnici</summary>
+<div class="card bg-base-200 border border-line mb-4"><div class="card-body p-4">
     <div class="text-sm font-medium mb-2">Processed audio sent to Whisper</div>
     <audio controls preload="metadata" class="w-full"><source src="/viewer/{{ job.id }}/processed-audio" type="audio/wav"></audio>
     {% if audio_analysis %}
@@ -86,12 +71,12 @@
     </div>
     {% endif %}
   </div>
-</div>
+</div></details>
 {% endif %}
 
 {% if result.segments %}
 {% set _speaker_glyphs = ['●', '▲', '■', '◆', '★', '✦', '◉', '♦'] %}
-<div class="{{ 'has-player' if media_available else '' }}"
+<div class="viewer-workspace {{ 'has-player' if media_available else '' }}"
      x-data="viewerData({{ result.segments|length }})"
      x-init="initPlayer()"
 @keydown.window="
@@ -108,9 +93,31 @@
   else if (!inField && ($event.key === 'l' || $event.key === 'L') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(5); }
 ">
   {# Sticky toolbar #}
-  <div class="sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
+  <div class="viewer-dock sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
+    {% if media_available %}
+    <div class="viewer-transport" aria-label="Controlli audio e forma d'onda">
+      <div class="viewer-transport-head"><div><span class="viewer-transport-kicker">NAVIGAZIONE AUDIO</span><p>Scorri la voce, trova la battuta</p></div>
+        <div class="viewer-transport-time"><span x-text="clock">00:00</span><span class="viewer-time-divider">/</span><span x-text="clockTotal">--:--</span></div></div>
+      <div class="viewer-waveform-wrap">
+        <canvas id="viewer-waveform" class="viewer-waveform" height="76" aria-hidden="true"></canvas>
+        <input id="viewer-seek" type="range" min="0" max="{{ result.duration or 1 }}" step="0.1" value="0" aria-label="Scorri la registrazione" title="Sposta la riproduzione al tempo desiderato">
+      </div>
+      <div class="viewer-transport-footer">
+        <div class="viewer-transport-buttons">
+          <button type="button" class="viewer-control-main" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'" x-text="playing ? '❚❚ Pausa' : '▶ Riproduci'">▶ Riproduci</button>
+          <button type="button" class="viewer-control-quiet" @click="seekDelta(-5)" aria-label="Indietro di 5 secondi">−5s</button>
+          <button type="button" class="viewer-control-quiet" @click="seekDelta(5)" aria-label="Avanti di 5 secondi">+5s</button>
+          <button type="button" class="viewer-control-follow" :class="{'is-on': followPlayback}" @click="toggleFollow()" :aria-pressed="followPlayback.toString()" title="Mantieni la trascrizione sincronizzata">↳ Segui testo</button>
+        </div>
+        <span id="viewer-waveform-status" class="viewer-waveform-status" role="status">Caricamento della forma d’onda…</span>
+      </div>
+      {% if media_is_video %}<div class="viewer-video-detail"><details><summary>Mostra video originale</summary><video id="media-player" controls preload="metadata"><source src="/viewer/{{ job.id }}/media"></video></details></div>
+      {% else %}<audio id="media-player" preload="metadata" class="viewer-audio-native" controls><source src="/viewer/{{ job.id }}/media"></audio>{% endif %}
+    </div>
+    {% endif %}
+
     {# Export buttons #}
-    <div class="flex flex-wrap items-center gap-2 mb-3">
+    <div class="viewer-export-actions flex flex-wrap items-center gap-2 mb-3">
       <div class="flex flex-wrap gap-1">
         {% for fmt in export_formats %}
         <a href="/viewer/{{ job.id }}/export/{{ fmt }}" class="btn btn-sm btn-outline" download
@@ -205,13 +212,16 @@
   </div>
 
   {# Segments #}
-  <div class="transcript-container">
+  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>Seleziona una battuta per ascoltarla</span></div><span class="viewer-segments-counter">{{ result.segments|length }} segmenti</span></div>
+  <div class="transcript-container viewer-transcript-list" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
     {% for seg in result.segments %}
     {%- set _color_class = speaker_colors.get(seg.speaker, '') if seg.speaker else '' -%}
     {%- set _glyph_idx_raw = _color_class.rsplit('-', 1)[-1] if _color_class else '' -%}
-    <div class="segment group flex gap-3 py-2 px-3 rounded-box hover:bg-base-200 transition-colors"
+    <div class="segment viewer-segment group flex gap-3 py-2 px-3 rounded-box hover:bg-base-200 transition-colors"
          data-seg-idx="{{ loop.index0 }}" data-start="{{ seg.start }}" data-end="{{ seg.end }}"
+         {% if seg.speaker %}data-speaker="{{ seg.speaker|e }}"{% endif %}
          :class="{ 'segment-active': currentSegIdx === {{ loop.index0 }} }"
+         {% if media_available %}@click="if (!$event.target.closest('button')) seekTo({{ seg.start }})"{% endif %}
          {% if not search_disabled %}data-text="{{ seg.text|lower|e }}"
          x-show="!search || $el.dataset.text.includes(search.toLowerCase())"
          x-transition.opacity{% endif %}>
@@ -262,6 +272,7 @@
 </div>
 {% else %}
 {# No segments: export-only toolbar #}
+{% if media_available %}<div class="player-wrapper mb-4"><audio controls preload="metadata"><source src="/viewer/{{ job.id }}/media"></audio></div>{% endif %}
 <div class="sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
   <div class="flex flex-wrap items-center gap-2">
     <div class="flex flex-wrap gap-1">
@@ -286,6 +297,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', path='viewer-timeline.js') }}" defer></script>
 <script nonce="{{ csp_nonce }}">
 window.viewerData = function(segmentCount) {
   return {
@@ -293,6 +305,7 @@ window.viewerData = function(segmentCount) {
     activeIndex: 0,
     shortcutsOpen: false,
     currentSegIdx: -1,
+    clock: '00:00', clockTotal: '--:--', playing: false, followPlayback: true, _timeline: null, _manualScrollUntil: 0,
     _segments: [],
     _lastScrollTime: 0,
     _segmentCount: segmentCount,
@@ -334,6 +347,20 @@ window.viewerData = function(segmentCount) {
       });
       var self = this;
       player.addEventListener('timeupdate', function() { self._onTimeUpdate(player.currentTime); });
+      player.addEventListener('play', function() { self.playing = true; });
+      player.addEventListener('pause', function() { self.playing = false; });
+      if (window.WhisperTimeline) {
+        self._timeline = window.WhisperTimeline.init({
+          player: player,
+          canvas: document.getElementById('viewer-waveform'),
+          range: document.getElementById('viewer-seek'),
+          status: document.getElementById('viewer-waveform-status'),
+          url: '/viewer/{{ job.id }}/waveform',
+          duration: {{ result.duration or 0 }},
+          onClock: function(t, duration) { self.clock = window.WhisperTimeline.formatTime(t); self.clockTotal = window.WhisperTimeline.formatTime(duration); },
+          onSeek: function(t) { self._onTimeUpdate(t); self.scrollToCurrent(); }
+        });
+      }
     },
     _onTimeUpdate(t) {
       var segs = this._segments;
@@ -347,18 +374,27 @@ window.viewerData = function(segmentCount) {
       if (idx >= 0 && t > segs[idx].end) idx = -1;
       if (idx === this.currentSegIdx) return;
       this.currentSegIdx = idx;
-      if (idx < 0) return;
+      if (idx < 0 || !this.followPlayback || Date.now() < this._manualScrollUntil) return;
       var now = Date.now();
       if (now - this._lastScrollTime < 1000) return;
       this._lastScrollTime = now;
       var el = document.querySelector('[data-seg-idx="' + idx + '"]');
       if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     },
+    pauseFollow() { this._manualScrollUntil = Date.now() + 6000; },
+    toggleFollow() { this.followPlayback = !this.followPlayback; if (this.followPlayback) { this._manualScrollUntil = 0; this.scrollToCurrent(); } },
+    scrollToCurrent() {
+      if (this.currentSegIdx < 0) return;
+      var el = document.querySelector('[data-seg-idx="' + this.currentSegIdx + '"]');
+      if (el && el.offsetParent !== null) el.scrollIntoView({block: 'center', behavior: 'smooth'});
+    },
     seekTo(time) {
+      this.followPlayback = true; this._manualScrollUntil = 0;
       var player = document.getElementById('media-player');
       if (!player) return;
       player.currentTime = time;
-      player.play();
+      this._onTimeUpdate(time); this.scrollToCurrent();
+      player.play().catch(function () {});
     },
     togglePlayPause() {
       var player = document.getElementById('media-player');

@@ -15,6 +15,7 @@ from whisper_ui.ui import labels as ui_labels
 from whisper_ui.web.auth import owner_filter
 from whisper_ui.web.deps import CurrentUserDep, DbDep, FileStoreDep, make_content_disposition, templates
 from whisper_ui.web.validation import validate_hex_id
+from whisper_ui.web.waveform import cached_peaks
 
 _MEDIA_MIME_TYPES: dict[str, str] = {
     ".mp4": "video/mp4",
@@ -170,6 +171,26 @@ async def media_download(job_id: str, db: DbDep, filestore: FileStoreDep, user: 
         headers={"Content-Disposition": make_content_disposition(filename, "inline")},
     )
 
+
+
+
+@router.get("/viewer/{job_id}/waveform")
+async def media_waveform(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep):
+    """Authenticated lightweight overview; no media or filesystem paths leaked."""
+    validate_hex_id(job_id, "job_id")
+    job = db.get_job(job_id, owner_id=owner_filter(user))
+    if job is None or job.status != JobStatus.COMPLETED:
+        raise HTTPException(status_code=404)
+    path = filestore.get_output_artifact(job_id, "processed.wav")
+    if path is None:
+        raise HTTPException(status_code=404)
+    try:
+        stat = await asyncio.to_thread(path.stat)
+        values = await asyncio.to_thread(cached_peaks, str(path), stat.st_mtime_ns, stat.st_size)
+    except (OSError, ValueError, EOFError):
+        raise HTTPException(status_code=422, detail="Waveform unavailable") from None
+    return Response(content=json.dumps({"peaks": values}), media_type="application/json",
+                    headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.get("/viewer/{job_id}/processed-audio")
