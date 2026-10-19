@@ -545,3 +545,11 @@ dialog {
 .viewer-transport .viewer-source-note{display:inline-block;font-size:.69rem;color:var(--color-primary);margin-top:.25rem}
 .viewer-waveform-wrap{height:108px;min-height:108px}
 @media(max-width:680px){.viewer-waveform-wrap{height:87px;min-height:87px}.viewer-source-switch span{flex:1 0 100%;margin-left:0}.viewer-audacity-tools>span{flex:1 0 100%}.viewer-audacity-tools button{padding:.35rem .47rem}}
+
+/* Safety guard for Canvas, even when a browser reuses a stale stylesheet. */
+.viewer-workspace,.viewer-dock,.viewer-transport{min-width:0;max-width:100%;box-sizing:border-box}
+.viewer-dock,.viewer-transport{overflow-x:clip}
+.viewer-waveform-wrap{width:100%;max-width:100%;height:108px!important;min-height:108px!important;max-height:108px!important;contain:size layout;box-sizing:border-box}
+#viewer-waveform{display:block!important;box-sizing:border-box;min-width:0!important;max-width:100%!important;min-height:0!important;max-height:106px!important;object-fit:fill}
+#viewer-overview{display:block!important;box-sizing:border-box;min-width:0!important;width:100%!important;max-width:100%!important;height:32px!important;min-height:32px!important;max-height:32px!important;object-fit:fill}
+@media(max-width:680px){.viewer-waveform-wrap{height:89px!important;min-height:89px!important;max-height:89px!important}#viewer-waveform{max-height:87px!important}}

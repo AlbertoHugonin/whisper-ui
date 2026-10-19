@@ -30,10 +30,30 @@
     }
     function pan(fraction) { start += visible() * fraction; bound(); update(); }
     function canvasSize(c, context) {
-      const w = Math.max(2, c.clientWidth || 600), h = Math.max(2, c.clientHeight || 76);
-      const d = Math.min(2, devicePixelRatio || 1), iw = Math.round(w * d), ih = Math.round(h * d);
-      if (c.width !== iw || c.height !== ih) { c.width = iw; c.height = ih; }
-      context.setTransform(d, 0, 0, d, 0, 0);
+      // Never derive canvas size from its own intrinsic bitmap dimensions.
+      // On an older/cached stylesheet that creates a feedback loop:
+      // setting canvas.height enlarges the element, then ResizeObserver
+      // measures that larger element, eventually producing a giant blank page.
+      const isOverview = c === overview;
+      const host = isOverview ? c.parentElement : shell;
+      const rawWidth = host?.getBoundingClientRect().width || window.innerWidth || 600;
+      const w = clamp(Math.floor(rawWidth - (isOverview ? 0 : 2)), 2, 4096);
+      const h = isOverview ? 32 : (window.matchMedia('(max-width:680px)').matches ? 87 : 106);
+      // Explicit CSS pixels protect even if the browser has cached old CSS.
+      c.style.display = 'block';
+      c.style.boxSizing = 'border-box';
+      c.style.width = '100%';
+      c.style.maxWidth = '100%';
+      c.style.height = h + 'px';
+      c.style.minHeight = '0';
+      c.style.maxHeight = h + 'px';
+      const d = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      const iw = Math.min(4096, Math.round(w * d));
+      const ih = Math.round(h * d);
+      if (c.width !== iw) c.width = iw;
+      if (c.height !== ih) c.height = ih;
+      // Use the actual backing-store scale if width was capped.
+      context.setTransform(iw / w, 0, 0, ih / h, 0, 0);
       context.clearRect(0, 0, w, h);
       return { w, h };
     }
@@ -154,7 +174,8 @@
       });
     }
     const resize = typeof ResizeObserver!=='undefined'?new ResizeObserver(update):null;
-    resize?.observe(canvas);
+    resize?.observe(shell || canvas);
+    if (overview?.parentElement && overview.parentElement !== shell) resize?.observe(overview.parentElement);
     player.addEventListener('timeupdate',clockUpdate);
     player.addEventListener('durationchange',clockUpdate);
     player.addEventListener('loadedmetadata',clockUpdate);
