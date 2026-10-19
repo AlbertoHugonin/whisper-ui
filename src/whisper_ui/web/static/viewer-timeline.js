@@ -95,13 +95,8 @@
       if (destroyed || !canvas.isConnected) return;
       const { w, h } = canvasSize(canvas, ctx);
       drawPeaks(ctx, w, h, start, start + visible(), false);
-      // Speaker boundaries are understated waveform markers, not an overlay
-      // that steals scrolling or clicks from the scrubber.
-      for (const seg of segments) {
-        if (seg.start < start || seg.start > start + visible()) continue;
-        const x = (seg.start - start) / visible() * w;
-        ctx.fillStyle = 'rgba(242,185,91,.36)';ctx.fillRect(x, 0, 1, h - 18);
-      }
+      // Keep the waveform clean. Segment start boundaries are synchronized
+      // with the transcript but intentionally not drawn as orange stripes.
       ruler(ctx, w, h);
       const playhead = (player.currentTime - start) / visible() * w;
       if (playhead >= 0 && playhead <= w) {

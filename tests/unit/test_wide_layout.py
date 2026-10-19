@@ -38,5 +38,5 @@ def test_waveform_owns_wheel_only_when_zoomed():
     js = (ROOT / 'static/viewer-timeline.js').read_text()
     assert 'else if (zoom>1)' in js
     assert 'event.preventDefault();' in js
-    assert '?v=wide-layout1' in (TEMPLATES / 'viewer.html').read_text()
+    assert '?v=clean-waveform1' in (TEMPLATES / 'viewer.html').read_text()
     assert '?v=wide-layout1' in (TEMPLATES / 'base.html').read_text()

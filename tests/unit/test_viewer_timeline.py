@@ -11,7 +11,7 @@ def test_viewer_references_local_secure_waveform_and_sticky_controls():
     assert markup.count('id="media-player"') == 1  # one player, one track at a time
     for item in ('viewer-dock', 'viewer-transcript-list', 'followPlayback', 'WhisperTimeline.init', 'viewer-overview', 'switchAudio(source)', 'timelineZoom(', 'initial_media_source', 'waveform?source='):
         assert item in markup
-    assert 'src="{{ url_for(\'static\', path=\'viewer-timeline.js\') }}"' in markup
+    assert "path='viewer-timeline.js') }}?v=clean-waveform1" in markup
 
 
 def test_waveform_api_requires_job_owner():
@@ -23,3 +23,15 @@ def test_waveform_api_requires_job_owner():
     assert 'JobStatus.COMPLETED' in fn
     assert 'filestore.get_output_artifact' in fn
     assert 'Cache-Control' in fn
+
+
+def test_dense_orange_segment_boundaries_are_not_drawn():
+    js = (ROOT / 'static/viewer-timeline.js').read_text()
+    assert 'for (const seg of segments)' not in js
+    assert 'rgba(242,185,91,.36)' not in js
+    # One movable playhead still exists to show the playback position.
+    assert "const playhead =" in js
+    assert "ctx.fillStyle = '#ffbf67'" in js
+    # No changes to audio source swapping, zoom, seek or waveform rendering.
+    for feature in ('function changeZoom', 'function pan(', 'function scrub(', 'function drawPeaks(', 'function setSource('):
+        assert feature in js
