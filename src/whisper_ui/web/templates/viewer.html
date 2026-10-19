@@ -93,7 +93,7 @@
   else if (!inField && ($event.key === 'l' || $event.key === 'L') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(5); }
 ">
   {# Sticky toolbar #}
-  <div class="viewer-dock sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
+  <div class="viewer-dock viewer-controls-fixed bg-base-100 border-b border-line">
     {% if media_available %}
     <div class="viewer-transport" aria-label="Controlli audio e forma d'onda">
       <div class="viewer-source-switch" role="group" aria-label="Versione della registrazione">
@@ -224,7 +224,8 @@
     {% endif %}
   </div>
 
-  {# Segments #}
+  {# Only the conversation scrolls. Header/search/export remain outside. #}
+  <section class="viewer-transcript-frame" aria-label="Pannello della trascrizione">
   <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>Seleziona una battuta per ascoltarla</span></div><span class="viewer-segments-counter">{{ result.segments|length }} segmenti</span></div>
   <div class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
     {% for seg in result.segments %}
@@ -276,12 +277,13 @@
     {% endfor %}
   </div>
   {% if not search_disabled %}
-  <p class="text-center py-8 opacity-50"
+  <p class="viewer-transcript-empty text-center py-8 opacity-50"
      x-show="search && matchCount === 0"
      x-transition.opacity>
     {{ labels.VIEWER_SEARCH_NO_RESULTS }}
   </p>
   {% endif %}
+  </section>
 </div>
 {% else %}
 {# No segments: export-only toolbar #}
@@ -311,6 +313,7 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', path='viewer-timeline.js') }}?v=clean-waveform1"></script>
+<script src="{{ url_for('static', path='viewer-docked-layout.js') }}?v=docked-v1"></script>
 <script nonce="{{ csp_nonce }}">
 window.viewerData = function(segmentCount) {
   return {
@@ -320,6 +323,7 @@ window.viewerData = function(segmentCount) {
     currentSegIdx: -1,
     clock: '00:00', clockTotal: '--:--', viewWindow: 'Intera registrazione', playing: false, followPlayback: true, audioSource: '{{ initial_media_source }}', _timeline: null, _manualScrollUntil: 0,
     _segments: [],
+    _editorLayout: null,
     _lastScrollTime: 0,
     _segmentCount: segmentCount,
     get matchCount() {
@@ -352,6 +356,7 @@ window.viewerData = function(segmentCount) {
     },
     clearSearch() { this.search = ''; },
     initPlayer() {
+      this._editorLayout = window.WhisperDockedLayout?.init();
       var player = document.getElementById('media-player');
       if (!player) return;
       var segs = Array.from(document.querySelectorAll('.segment[data-start]'));
@@ -377,6 +382,10 @@ window.viewerData = function(segmentCount) {
           onWindow: function(a,b,z) { self.viewWindow = a + ' – ' + b + (z > 1.05 ? ' · ' + z.toFixed(1) + '×' : ' · Vista completa'); }
         });
       }
+    },
+    destroy() {
+      this._editorLayout?.destroy();
+      this._timeline?.destroy();
     },
     _onTimeUpdate(t) {
       var segs = this._segments;
