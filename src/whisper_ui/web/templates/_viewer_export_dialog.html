@@ -40,9 +40,14 @@
           <span x-text="copied ? '{{ labels.VIEWER_COPIED }}' : '{{ labels.VIEWER_COPY }}'">{{ labels.VIEWER_COPY }}</span>
         </button>
         {% endif %}
-        {% if media_available %}
+        {% if original_available %}
         <a class="viewer-export-utility" href="/viewer/{{ job.id }}/media" download>
           {{ icon_download('w-4 h-4') }} {{ labels.VIEWER_DOWNLOAD_MEDIA }}
+        </a>
+        {% endif %}
+        {% if processed_available %}
+        <a class="viewer-export-utility" href="/viewer/{{ job.id }}/processed-audio?download=1" download>
+          {{ icon_download('w-4 h-4') }} Scarica audio elaborato (WAV)
         </a>
         {% endif %}
       </div>

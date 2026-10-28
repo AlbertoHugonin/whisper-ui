@@ -1237,6 +1237,34 @@ class TestViewerRoutes:
         assert resp.status_code == 200
         assert "下載影片" in resp.text
 
+    def test_processed_audio_is_playable_and_downloadable(self, client, db, filestore):
+        job = _create_completed_job(db, filestore)
+        path = filestore._output_dir / job.id / "processed.wav"
+        path.write_bytes(b"RIFFtestWAVE")
+
+        playable = client.get(f"/viewer/{job.id}/processed-audio")
+        assert playable.status_code == 200
+        assert playable.content == b"RIFFtestWAVE"
+        assert playable.headers["content-disposition"].startswith("inline;")
+
+        downloadable = client.get(f"/viewer/{job.id}/processed-audio?download=1")
+        assert downloadable.status_code == 200
+        assert downloadable.content == b"RIFFtestWAVE"
+        assert downloadable.headers["content-disposition"].startswith("attachment;")
+        assert "test.processed.wav" in downloadable.headers["content-disposition"]
+
+        viewer = client.get(f"/viewer/{job.id}")
+        assert viewer.status_code == 200
+        assert f'/viewer/{job.id}/processed-audio?download=1' in viewer.text
+        assert "Scarica audio elaborato (WAV)" in viewer.text
+        assert f'/viewer/{job.id}/media" download' not in viewer.text
+
+    def test_processed_audio_download_missing_or_nonexistent(self, client, db, filestore):
+        job = _create_completed_job(db, filestore)
+        assert client.get(f"/viewer/{job.id}/processed-audio?download=1").status_code == 404
+        assert client.get(f"/viewer/{'0' * 32}/processed-audio?download=1").status_code == 404
+        assert client.get("/viewer/bad-id/processed-audio?download=1").status_code == 400
+
     def test_export_srt(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
         resp = client.get(f"/viewer/{job.id}/export/srt")

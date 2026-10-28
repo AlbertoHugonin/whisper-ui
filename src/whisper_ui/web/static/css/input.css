@@ -531,6 +531,8 @@ dialog {
 /* Audio studio v2: one source/player, Audacity-like overview + zoom. */
 .viewer-source-switch{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin-bottom:.9rem}
 .viewer-source-switch button{border:1px solid var(--whisper-line);border-radius:.65rem;padding:.48rem .86rem;background:var(--color-base-100);font-size:.75rem;font-weight:750;color:var(--color-base-content);cursor:pointer;min-height:38px}
+.viewer-source-switch .viewer-source-download{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--whisper-line);border-radius:.65rem;padding:.48rem .75rem;min-height:38px;background:var(--color-base-100);color:var(--color-primary);font-size:.75rem;font-weight:750;text-decoration:none}
+.viewer-source-switch .viewer-source-download:hover{border-color:var(--color-primary);background:var(--color-base-200)}
 .viewer-source-switch button.is-selected{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-primary-content);box-shadow:0 3px 18px rgba(34,187,177,.15)}
 .viewer-source-switch span{font-size:.68rem;opacity:.6;margin-left:auto}
 .viewer-audacity-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem;margin:.45rem 0 .3rem}

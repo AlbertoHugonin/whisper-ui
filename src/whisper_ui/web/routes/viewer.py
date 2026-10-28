@@ -213,7 +213,7 @@ async def media_waveform(
 
 
 @router.get("/viewer/{job_id}/processed-audio")
-async def processed_audio(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep):
+async def processed_audio(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep, download: bool = False):
     validate_hex_id(job_id, "job_id")
     job = db.get_job(job_id, owner_id=owner_filter(user))
     if job is None:
@@ -221,7 +221,15 @@ async def processed_audio(job_id: str, db: DbDep, filestore: FileStoreDep, user:
     path = filestore.get_output_artifact(job_id, "processed.wav")
     if path is None:
         raise HTTPException(status_code=404)
-    return FileResponse(path=path, media_type="audio/wav", headers={"Content-Disposition": make_content_disposition(f"{Path(job.filename).stem}.processed.wav", "inline")})
+    return FileResponse(
+        path=path,
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": make_content_disposition(
+                f"{Path(job.filename).stem}.processed.wav", "attachment" if download else "inline"
+            )
+        },
+    )
 
 
 @router.post("/viewer/{job_id}/share")

@@ -19,7 +19,7 @@ class Nodes(HTMLParser):
         self.nodes.append((tag, dict(attrs)))
 
 
-def rendered_export_dialog(*, has_segments=True, share_token=None, has_media=True):
+def rendered_export_dialog(*, has_segments=True, share_token=None, has_media=True, has_processed=False):
     env = Environment(loader=FileSystemLoader(str(TEMPLATES)), autoescape=True)
     labels = SimpleNamespace(
         VIEWER_EXPORT_TOOLTIPS={name: f'Download {name}' for name in FORMATS},
@@ -32,6 +32,7 @@ def rendered_export_dialog(*, has_segments=True, share_token=None, has_media=Tru
         job=SimpleNamespace(id='0123456789abcdef0123456789abcdef', share_token=share_token),
         result=SimpleNamespace(segments=['segment'] if has_segments else []),
         export_formats=FORMATS, labels=labels, media_available=has_media,
+        original_available=has_media, processed_available=has_processed,
         icon_download=lambda *args: '<svg></svg>', icon_copy=lambda *args: '<svg></svg>',
         icon_link=lambda *args: '<svg></svg>',
     )
@@ -51,6 +52,19 @@ def test_one_dialog_and_real_download_links():
     assert '/viewer/0123456789abcdef0123456789abcdef/media' in urls
     assert 'PDF' not in markup  # PDF is not implemented by the export factory.
     assert "closest('dialog').close()" in markup
+
+
+def test_processed_audio_only_has_its_own_download_link():
+    markup, nodes = rendered_export_dialog(has_media=False, has_processed=True)
+    urls = [attrs.get('href', '') for tag, attrs in nodes if tag == 'a']
+    assert '/viewer/0123456789abcdef0123456789abcdef/processed-audio?download=1' in urls
+    assert '/viewer/0123456789abcdef0123456789abcdef/media' not in urls
+    assert 'Scarica audio elaborato (WAV)' in markup
+
+
+def test_processed_audio_download_hidden_when_missing():
+    _, nodes = rendered_export_dialog(has_media=True, has_processed=False)
+    assert not any('/processed-audio?' in attrs.get('href', '') for tag, attrs in nodes)
 
 
 def test_share_actions_preserved_with_and_without_existing_link():

@@ -99,6 +99,7 @@
       <div class="viewer-source-switch" role="group" aria-label="Versione della registrazione">
         {% if original_available %}<button type="button" :class="{'is-selected': audioSource==='original'}" :aria-pressed="(audioSource==='original').toString()" @click="switchAudio('original')">◉ Originale</button>{% endif %}
         {% if processed_available %}<button type="button" :class="{'is-selected': audioSource==='processed'}" :aria-pressed="(audioSource==='processed').toString()" @click="switchAudio('processed')">✦ Elaborato</button>{% endif %}
+        {% if processed_available %}<a class="viewer-source-download" href="/viewer/{{ job.id }}/processed-audio?download=1" download aria-label="Scarica audio elaborato WAV">{{ icon_download("w-4 h-4") }} Scarica elaborato</a>{% endif %}
         <span>Una sola traccia · stessa posizione</span>
       </div>
       <div class="viewer-transport-head"><div><span class="viewer-transport-kicker">NAVIGAZIONE AUDIO</span><p>Scorri la voce, trova la battuta</p></div>
