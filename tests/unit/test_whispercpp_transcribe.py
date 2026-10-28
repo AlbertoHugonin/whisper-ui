@@ -178,11 +178,31 @@ class TestCliFlags:
         assert "--vad" in cmd
         assert cmd[cmd.index("-vm") + 1] == "/m/vad.bin"
         assert cmd[cmd.index("-mc") + 1] == "0"
+        # Conservative recall preset: protect weak words without removing VAD.
+        assert cmd[cmd.index("-vt") + 1] == "0.25"
+        assert cmd[cmd.index("-vspd") + 1] == "100"
+        assert cmd[cmd.index("-vsd") + 1] == "300"
+        assert cmd[cmd.index("-vp") + 1] == "400"
+        assert cmd[cmd.index("-vo") + 1] == "0.2"
 
     def test_vad_disabled_omits_vad_flags(self):
         cmd = self._run_and_capture(WhisperCppTranscribeStage(vad=False))
         assert "--vad" not in cmd
         assert "-vm" not in cmd
+        for option in ("-vt", "-vspd", "-vsd", "-vp", "-vo"):
+            assert option not in cmd
+
+    def test_vad_tuning_is_passed_to_whisper_cli(self):
+        cmd = self._run_and_capture(WhisperCppTranscribeStage(
+            vad_threshold=0.10,
+            vad_min_speech_ms=80,
+            vad_min_silence_ms=450,
+            vad_speech_pad_ms=600,
+            vad_samples_overlap=0.35,
+        ))
+        for flag, value in (("-vt", "0.1"), ("-vspd", "80"), ("-vsd", "450"),
+                            ("-vp", "600"), ("-vo", "0.35")):
+            assert cmd[cmd.index(flag) + 1] == value
 
     def test_negative_max_context_keeps_cli_default(self):
         cmd = self._run_and_capture(WhisperCppTranscribeStage(max_context=-1))
@@ -214,6 +234,20 @@ class TestCliFlags:
             pytest.raises(TranscriptionError, match="download failed"),
         ):
             stage.execute({"audio_path": "/tmp/a.wav"})
+
+
+def test_vad_coverage_is_logged_without_transcript(caplog):
+    stage = WhisperCppTranscribeStage()
+    payload = {"result": {"language": "it"}, "transcription": []}
+
+    def cli_run(cmd, *args, **kwargs):
+        result = _fake_cli_writer(payload)(cmd, *args, **kwargs)
+        result.stderr = "whisper_vad: Reduced audio from 100000 to 75000 samples (25.0% reduction)"
+        return result
+
+    with patch(f"{_MODULE}.subprocess.run", side_effect=cli_run), caplog.at_level("INFO"):
+        stage._run_whisper_cli("/m/model.bin", "/tmp/audio.wav", "it", "/m/vad.bin")
+    assert any("VAD coverage: retained 75000/100000" in msg for msg in caplog.messages)
 
 
 class TestModelResolution:
@@ -277,6 +311,11 @@ class TestBackendSelection:
         runtime.settings.whispercpp_threads = 0
         runtime.settings.whispercpp_vad = True
         runtime.settings.whispercpp_vad_model = "ggml-silero-v5.1.2.bin"
+        runtime.settings.whispercpp_vad_threshold = 0.25
+        runtime.settings.whispercpp_vad_min_speech_ms = 100
+        runtime.settings.whispercpp_vad_min_silence_ms = 300
+        runtime.settings.whispercpp_vad_speech_pad_ms = 400
+        runtime.settings.whispercpp_vad_samples_overlap = 0.2
         runtime.settings.whispercpp_max_context = 0
         runtime.settings.compute_type = "int8_float16"
         runtime.settings.device = "rocm"
@@ -298,6 +337,11 @@ class TestBackendSelection:
         assert stage._vad is False
         assert stage._vad_model == "ggml-silero-v5.1.2.bin"
         assert stage._max_context == -1
+        assert stage._vad_threshold == 0.25
+        assert stage._vad_min_speech_ms == 100
+        assert stage._vad_min_silence_ms == 300
+        assert stage._vad_speech_pad_ms == 400
+        assert stage._vad_samples_overlap == 0.2
 
     def test_defaults_to_whisperx_backend(self):
         job = MagicMock()
@@ -321,6 +365,11 @@ class TestWhispercppVadConfig:
         settings = Settings(_env_file=None)
         assert settings.whispercpp_vad is True
         assert settings.whispercpp_vad_model == "ggml-silero-v5.1.2.bin"
+        assert settings.whispercpp_vad_threshold == 0.25
+        assert settings.whispercpp_vad_min_speech_ms == 100
+        assert settings.whispercpp_vad_min_silence_ms == 300
+        assert settings.whispercpp_vad_speech_pad_ms == 400
+        assert settings.whispercpp_vad_samples_overlap == 0.20
         assert settings.whispercpp_max_context == 0
 
     def test_env_overrides(self, monkeypatch):
@@ -329,6 +378,19 @@ class TestWhispercppVadConfig:
         settings = Settings(_env_file=None)
         assert settings.whispercpp_vad is False
         assert settings.whispercpp_max_context == -1
+
+    def test_vad_parameter_overrides_and_bounds(self, monkeypatch):
+        monkeypatch.setenv("WHISPERCPP_VAD_THRESHOLD", "0.15")
+        monkeypatch.setenv("WHISPERCPP_VAD_SPEECH_PAD_MS", "600")
+        settings = Settings(_env_file=None)
+        assert settings.whispercpp_vad_threshold == 0.15
+        assert settings.whispercpp_vad_speech_pad_ms == 600
+        with pytest.raises(ValidationError):
+            Settings(whispercpp_vad_threshold=1.5, _env_file=None)
+        with pytest.raises(ValidationError):
+            Settings(whispercpp_vad_min_speech_ms=-1, _env_file=None)
+        with pytest.raises(ValidationError):
+            Settings(whispercpp_vad_samples_overlap=-0.1, _env_file=None)
 
     def test_rejects_max_context_below_minus_one(self):
         with pytest.raises(ValidationError):

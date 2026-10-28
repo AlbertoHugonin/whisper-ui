@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     # by the pinned whisper.cpp (WHISPER_CPP_REF in Dockerfile.worker.rocm);
     # validated against the current pin, so revalidate when bumping either.
     whispercpp_vad_model: str = "ggml-silero-v5.1.2.bin"
+    # Recall-oriented defaults, validated on low-volume Italian meetings.
+    # Whisper.cpp defaults (threshold .50, padding 30 ms) can discard clear,
+    # short utterances. Keep VAD on to suppress silence hallucinations while
+    # allowing weaker speech and keeping more consonants at speech edges.
+    whispercpp_vad_threshold: float = Field(default=0.25, ge=0.01, le=1.0)
+    whispercpp_vad_min_speech_ms: int = Field(default=100, ge=0, le=5000)
+    whispercpp_vad_min_silence_ms: int = Field(default=300, ge=0, le=10000)
+    whispercpp_vad_speech_pad_ms: int = Field(default=400, ge=0, le=5000)
+    whispercpp_vad_samples_overlap: float = Field(default=0.20, ge=0, le=1.0)
     # Maximum text-context tokens carried across 30 s decode windows
     # (whisper-cli ``-mc``). 0 disables conditioning entirely — parity with
     # the whisperx batched pipeline and the guard that stops a hallucination

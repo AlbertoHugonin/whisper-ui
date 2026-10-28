@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,6 +32,10 @@ _VAD_HF_REPO = "ggml-org/whisper-vad"
 # without parsing stderr, so we report load -> running -> done coarsely; the
 # 0.0-0.1 slice covers model resolution to match the whisperx stage's feel.
 _RUN_PROGRESS_START = 0.1
+# Upstream whisper.cpp logs retained sample counts during VAD processing.
+# This enables an inexpensive coverage diagnostic without exporting audio or
+# transcript text into logs.
+_VAD_REDUCTION_RE = re.compile(r"Reduced audio from (\d+) to (\d+) samples \(([\d.]+)% reduction\)")
 
 
 class WhisperCppTranscribeStage:
@@ -55,6 +60,11 @@ class WhisperCppTranscribeStage:
         device: str = "rocm",
         vad: bool = True,
         vad_model: str = "ggml-silero-v5.1.2.bin",
+        vad_threshold: float = 0.25,
+        vad_min_speech_ms: int = 100,
+        vad_min_silence_ms: int = 300,
+        vad_speech_pad_ms: int = 400,
+        vad_samples_overlap: float = 0.20,
         max_context: int = 0,
     ) -> None:
         # ``device`` is accepted for interface symmetry with TranscribeStage;
@@ -67,6 +77,11 @@ class WhisperCppTranscribeStage:
         self._device = device
         self._vad = vad
         self._vad_model = vad_model
+        self._vad_threshold = vad_threshold
+        self._vad_min_speech_ms = vad_min_speech_ms
+        self._vad_min_silence_ms = vad_min_silence_ms
+        self._vad_speech_pad_ms = vad_speech_pad_ms
+        self._vad_samples_overlap = vad_samples_overlap
         self._max_context = max_context
 
     @property
@@ -185,18 +200,29 @@ class WhisperCppTranscribeStage:
             if self._threads and self._threads > 0:
                 cmd += ["-t", str(self._threads)]
             if vad_model_path is not None:
-                cmd += ["--vad", "-vm", vad_model_path]
+                cmd += [
+                    "--vad", "-vm", vad_model_path,
+                    "-vt", str(self._vad_threshold),
+                    "-vspd", str(self._vad_min_speech_ms),
+                    "-vsd", str(self._vad_min_silence_ms),
+                    "-vp", str(self._vad_speech_pad_ms),
+                    "-vo", str(self._vad_samples_overlap),
+                ]
             if self._max_context >= 0:
                 cmd += ["-mc", str(self._max_context)]
 
             logger.info(
-                "whisper-cli starting (vad=%s max_context=%d language=%s)",
+                "whisper-cli starting (vad=%s threshold=%.2f pad_ms=%d max_context=%d language=%s)",
                 vad_model_path is not None,
+                self._vad_threshold,
+                self._vad_speech_pad_ms,
                 self._max_context,
                 language,
                 extra={
                     "event": "whispercpp_cli",
                     "vad": vad_model_path is not None,
+                    "vad_threshold": self._vad_threshold if vad_model_path else None,
+                    "vad_speech_pad_ms": self._vad_speech_pad_ms if vad_model_path else None,
                     "max_context": self._max_context,
                     "language": language,
                 },
@@ -205,6 +231,17 @@ class WhisperCppTranscribeStage:
             # encoding/errors (not text=True) so non-ASCII output — e.g. zh
             # transcripts or file names — cannot raise UnicodeDecodeError.
             proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+            if vad_model_path is not None and proc.returncode == 0:
+                match = _VAD_REDUCTION_RE.search(proc.stderr or "")
+                if match:
+                    before, after = int(match.group(1)), int(match.group(2))
+                    logger.info(
+                        "whisper.cpp VAD coverage: retained %d/%d samples (%.1f%%), excluded %.1f%%",
+                        after, before, 100 * after / before if before else 0.0,
+                        float(match.group(3)),
+                        extra={"event": "whispercpp_vad_coverage", "vad_retained_samples": after,
+                               "vad_input_samples": before},
+                    )
             if proc.returncode != 0:
                 # Some builds emit diagnostics on stdout; fall back to it.
                 detail = proc.stderr.strip() or proc.stdout.strip()
