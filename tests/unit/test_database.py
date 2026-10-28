@@ -23,6 +23,15 @@ def test_insert_and_get(db: JobDatabase):
     assert fetched.status == JobStatus.PENDING
 
 
+def test_vad_threshold_persists_per_job_and_can_be_updated(db: JobDatabase):
+    job = Job(filename="meeting.wav", vad_threshold=0.10)
+    db.insert_job(job)
+    assert db.get_job(job.id).vad_threshold == 0.10
+    job.vad_threshold = 0.55
+    db.update_job(job)
+    assert db.get_job(job.id).vad_threshold == 0.55
+
+
 def test_insert_and_get_preserves_owner_id(db: JobDatabase):
     job = Job(filename="owned.mp3", filepath="/tmp/owned.mp3", owner_id=42)
     db.insert_job(job)

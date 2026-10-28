@@ -326,6 +326,25 @@
         </label>
       </div>
 
+      <div class="fieldset rounded-box border border-base-300 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <label for="vad-threshold" class="fieldset-label font-semibold">Sensibilità rilevamento voce (Silero VAD)</label>
+          <output for="vad-threshold" class="badge badge-primary badge-outline font-mono" x-text="Number(vadThreshold).toFixed(2)">{{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }}</output>
+        </div>
+        <input type="range" id="vad-threshold" name="vad_threshold" min="0.10" max="0.60" step="0.05"
+               class="range range-primary range-sm w-full" x-model.number="vadThreshold"
+               aria-label="Soglia di rilevamento della voce: valori bassi riconoscono voci più deboli">
+        <div class="flex justify-between text-xs opacity-70">
+          <span>0,10 · Più sensibile</span>
+          <span>0,25 · Consigliato</span>
+          <span>0,60 · Più selettivo</span>
+        </div>
+        <p class="text-xs opacity-75 mt-2" aria-live="polite"
+           x-text="vadThreshold <= 0.15 ? 'Recupera anche voci deboli, ma può confondere rumori con parlato.' : vadThreshold <= 0.30 ? 'Bilanciato: mantiene più parole brevi e deboli. Valore raccomandato: 0,25.' : 'Riduce rumori e falsi riconoscimenti, ma può saltare parole o interventi brevi.'">
+        </p>
+        <p class="text-xs opacity-60">Non cambia il volume: decide quanto il VAD deve essere sicuro che un tratto sia parlato prima di passarlo a Whisper. Si applica soltanto a questa trascrizione.</p>
+      </div>
+
       <div class="fieldset">
         <label for="whisper-keywords" class="fieldset-label">Parole chiave per Whisper</label>
         <textarea id="whisper-keywords" name="whisper_keywords" rows="2" maxlength="1500"
@@ -395,6 +414,7 @@ function uploadForm() {
     diarization: {{ 'true' if (rt.enable_diarization if rt else diarization_default) else 'false' }},
     convertTraditional: {{ 'true' if (rt.convert_to_traditional if rt else true) else 'false' }},
     llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
+    vadThreshold: {{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }},
     activePreset: null,
     presetsTouched: false,
     _applyingPreset: false,

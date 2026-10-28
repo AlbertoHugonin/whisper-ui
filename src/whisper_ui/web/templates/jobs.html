@@ -73,6 +73,13 @@
           </label>
         </div>
 
+        <div class="fieldset rounded-box border border-base-300 p-3">
+          <label for="retranscribe-vad-threshold" class="fieldset-label font-semibold">Sensibilità voce (Silero VAD): <span x-text="Number(vadThreshold).toFixed(2)"></span></label>
+          <input id="retranscribe-vad-threshold" type="range" class="range range-primary range-sm w-full"
+                 min="0.10" max="0.60" step="0.05" x-model.number="vadThreshold">
+          <div class="flex justify-between text-xs opacity-60"><span>Voci deboli</span><span>0,25 consigliato</span><span>Filtra di più</span></div>
+        </div>
+
         <div class="fieldset">
           <label class="fieldset-label gap-3">
             <input type="checkbox" class="toggle toggle-primary toggle-sm"
@@ -111,6 +118,7 @@ function retranscribeDialog() {
     diarization: false,
     traditional: false,
     llm: false,
+    vadThreshold: 0.25,
     submitting: false,
     show(detail) {
       this.jobId = detail.jobId;
@@ -120,6 +128,7 @@ function retranscribeDialog() {
       this.diarization = !!detail.diarization && RT_HF_AVAILABLE;
       this.traditional = !!detail.traditional;
       this.llm = !!detail.llm && RT_OLLAMA_AVAILABLE;
+      this.vadThreshold = Number(detail.vadThreshold ?? 0.25);
       this.submitting = false;
       this.$refs.rtDialog.showModal();
     },
@@ -136,6 +145,7 @@ function retranscribeDialog() {
       fd.set('language', this.language);
       fd.set('model_name', this.modelName);
       fd.set('num_speakers', this.numSpeakers);
+      fd.set('vad_threshold', Number(this.vadThreshold).toFixed(2));
       // Only send checkboxes that are on, matching HTML form semantics; the
       // route's Form(bool) defaults to False when the field is absent.
       if (this.diarization) fd.set('enable_diarization', 'true');

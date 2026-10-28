@@ -42,6 +42,7 @@ _JOB_COLUMNS = [
     "convert_to_traditional",
     "llm_correction_enabled",
     "whisper_keywords",
+    "vad_threshold",
     "llm_context_prompt",
     "audio_processing",
     "audio_denoise",

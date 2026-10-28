@@ -71,6 +71,7 @@ class Job:
     convert_to_traditional: bool = False
     llm_correction_enabled: bool = False
     whisper_keywords: str = "Airdass"
+    vad_threshold: float = 0.25  # Silero speech probability threshold; lower detects fainter speech
     llm_context_prompt: str = ""
     audio_processing: str = "auto"
     audio_denoise: str = "auto"

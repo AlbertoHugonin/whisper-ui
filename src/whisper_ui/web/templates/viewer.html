@@ -53,6 +53,11 @@
 {% endif %}
 
 
+<p class="text-xs opacity-60 mb-3" title="Probabilità minima per Silero VAD: più bassa significa più sensibile alle voci deboli.">
+  Sensibilità voce utilizzata: <strong>{{ '%.2f'|format(job.vad_threshold) }}</strong> (valore più basso = più parole deboli riconosciute).
+  Per modificarla, scegli <a class="link link-primary" href="/upload?source_job={{ job.id }}">Ritrascrivi con altre impostazioni</a>: la versione esistente rimane disponibile.
+</p>
+
 {% if processed_available %}
 <details class="viewer-processing-details mb-4"><summary>Audio elaborato · dettagli tecnici</summary>
 <div class="card bg-base-200 border border-line mb-4"><div class="card-body p-4">

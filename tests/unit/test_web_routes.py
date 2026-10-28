@@ -713,16 +713,18 @@ class TestJobsRoutes:
         ):
             resp = client.post(
                 f"/jobs/{src.id}/re-transcribe",
-                data={"language": "en", "model_name": "medium", "enable_diarization": "true"},
+                data={"language": "en", "model_name": "medium", "enable_diarization": "true", "vad_threshold": "0.55"},
             )
 
         assert resp.status_code == 204
-        assert resp.headers.get("hx-trigger") == "refreshJobList"
+        # Re-transcribe goes to the new jobs list, unlike inline delete/retry.
+        assert resp.headers.get("hx-redirect") == "/jobs"
         new_job = mock_enqueue.call_args[0][0]
         # A distinct job carrying the new parameters, linked to the source.
         assert new_job.id != src.id
         assert new_job.language == "en"
         assert new_job.model_name == "medium"
+        assert new_job.vad_threshold == 0.55
         assert new_job.enable_diarization is True
         assert new_job.source_job_id == src.id
         assert new_job.status == JobStatus.QUEUED
@@ -1447,6 +1449,46 @@ class TestUploadPost:
         job = mock_enqueue.call_args[0][0]
         assert job.enable_diarization is True
         assert job.llm_correction_enabled is True
+
+    def test_upload_vad_slider_is_saved(self, client, db):
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            resp = client.post(
+                "/upload",
+                data={"language": "it", "model_name": "large-v3", "vad_threshold": "0.10"},
+                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
+                follow_redirects=False,
+            )
+        assert resp.status_code == 303
+        assert enqueue.call_args[0][0].vad_threshold == 0.10
+        assert list_jobs(db)[0].vad_threshold == 0.10
+
+    def test_upload_vad_slider_rejects_out_of_range(self, client, db):
+        for value in ("0", "0.05", "0.75", "1", "abc"):
+            resp = client.post(
+                "/upload",
+                data={"language": "it", "vad_threshold": value},
+                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
+            )
+            assert resp.status_code == 422, value
+        assert list_jobs(db) == []
+
+    def test_url_upload_vad_threshold_is_persisted(self, client, db):
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            resp = client.post(
+                "/upload/url",
+                data={"url": "https://youtu.be/dQw4w9WgXcQ", "vad_threshold": "0.60"},
+                follow_redirects=False,
+            )
+        assert resp.status_code == 303
+        assert enqueue.call_args[0][0].vad_threshold == 0.60
+        assert list_jobs(db)[0].vad_threshold == 0.60
+
+    def test_upload_slider_is_rendered_with_hint(self, client):
+        resp = client.get('/upload')
+        assert resp.status_code == 200
+        assert 'name="vad_threshold"' in resp.text
+        assert 'Più sensibile' in resp.text
+        assert '0,25 · Consigliato' in resp.text
 
     def test_upload_no_file_redirects(self, client):
         resp = client.post("/upload", data={"language": "zh"}, follow_redirects=False)
