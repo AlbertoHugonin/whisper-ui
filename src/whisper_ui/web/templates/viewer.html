@@ -74,6 +74,19 @@
 </div></details>
 {% endif %}
 
+{% if correction_available %}
+<details class="border border-base-300 rounded-box p-3 mb-3" {% if not corrected_result %}open{% endif %}>
+  <summary class="font-semibold cursor-pointer">Correzione LLM separata {% if corrected_result %}· disponibile{% endif %}</summary>
+  <p class="text-xs opacity-70 my-2">Il risultato Whisper rimane disponibile. La correzione viene eseguita in coda senza ritrascrivere l'audio.</p>
+  <form method="post" action="/viewer/{{ job.id }}/correct" class="flex flex-col gap-2">
+    <label for="studio-llm-context" class="text-xs font-semibold">Contesto e terminologia LLM</label>
+    <textarea id="studio-llm-context" name="llm_context_prompt" maxlength="4000" rows="3" class="textarea textarea-bordered w-full" placeholder="Meeting Airdass, nomi, acronimi...">{{ job.llm_context_prompt }}</textarea>
+    <button type="submit" class="btn btn-primary btn-sm self-start">{{ 'Ricorreggi con LLM' if corrected_result else 'Correggi con LLM' }}</button>
+  </form>
+  <p id="studio-correction-status" class="text-xs opacity-70 mt-2" role="status">Controllo stato correzione…</p>
+</details>
+{% endif %}
+
 {% if result.segments %}
 {% set _speaker_glyphs = ['●', '▲', '■', '◆', '★', '✦', '◉', '♦'] %}
 <div class="viewer-workspace {{ 'has-player' if media_available else '' }}"
@@ -167,13 +180,19 @@
 
   {# Only the conversation scrolls. Header/search/export remain outside. #}
   <section class="viewer-transcript-frame" aria-label="Pannello della trascrizione">
-  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>{{ result.segments|length }} segmenti · Seleziona una battuta per ascoltarla</span></div>
+  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>{{ result.segments|length }} segmenti · Seleziona una battuta per ascoltarla</span>
+  <div class="flex flex-wrap gap-1 mt-2" aria-label="Versione e formato testo">
+    {% if corrected_result %}<button type="button" class="btn btn-xs" :class="textSource==='corrected' ? 'btn-primary' : 'btn-outline'" @click="switchText('corrected')">✦ Corretta</button>
+    <button type="button" class="btn btn-xs" :class="textSource==='original' ? 'btn-primary' : 'btn-outline'" @click="switchText('original')">Whisper originale</button>{% endif %}
+    <button type="button" class="btn btn-xs" :class="!readingMode ? 'btn-primary' : 'btn-outline'" @click="readingMode=false">Battute</button>
+    <button type="button" class="btn btn-xs" :class="readingMode ? 'btn-primary' : 'btn-outline'" @click="readingMode=true">Paragrafi</button>
+  </div></div>
     <button type="button" class="viewer-export-trigger" aria-haspopup="dialog" aria-controls="viewer-export-dialog"
             @click="$refs.exportDialog.showModal()">
       {{ icon_download('w-4 h-4') }} <span>Esporta</span>
     </button>
   </div>
-  <div class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
+  <div x-show="!readingMode" class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
     {% for seg in result.segments %}
     {%- set _color_class = speaker_colors.get(seg.speaker, '') if seg.speaker else '' -%}
     {%- set _glyph_idx_raw = _color_class.rsplit('-', 1)[-1] if _color_class else '' -%}
@@ -182,7 +201,8 @@
          {% if seg.speaker %}data-speaker="{{ seg.speaker|e }}"{% endif %}
          :class="{ 'segment-active': currentSegIdx === {{ loop.index0 }} }"
          {% if media_available %}@click="if (!$event.target.closest('button')) seekTo({{ seg.start }})"{% endif %}
-         {% if not search_disabled %}data-text="{{ seg.text|lower|e }}"
+         {% if corrected_result %}data-original-search="{{ seg.text|lower|e }}" data-corrected-search="{{ corrected_result.segments[loop.index0].text|lower|e }}"{% endif %}
+         {% if not search_disabled %}data-text="{{ (corrected_result.segments[loop.index0].text if corrected_result else seg.text)|lower|e }}"
          x-show="!search || $el.dataset.text.includes(search.toLowerCase())"
          x-transition.opacity{% endif %}>
       {% if media_available %}
@@ -208,17 +228,29 @@
             nothing to highlight and the per-segment data-raw copy + x-html eval
             would be wasted work. Reading from data-raw also avoids tojson's
             quotes breaking the attribute. -#}
-        <span {% if not search_disabled %}data-raw="{{ seg.text|e }}"
-              x-html="window.whisperHighlight($el.dataset.raw, search)"{% endif %}>{{ seg.text }}</span>
+        <span {% if corrected_result %}data-original="{{ seg.text|e }}" data-corrected="{{ corrected_result.segments[loop.index0].text|e }}"{% endif %}
+              {% if not search_disabled %}data-raw="{{ seg.text|e }}"
+              x-html="window.whisperHighlight({% if corrected_result %}textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original{% else %}$el.dataset.raw{% endif %},search)"
+              {% elif corrected_result %}x-text="textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original"{% endif %}>{{ seg.text }}</span>
       </div>
       <button class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
               type="button"
               title="{{ labels.VIEWER_COPY_SEGMENT }}"
               aria-label="{{ labels.VIEWER_COPY_SEGMENT }}"
-              data-copy-text="{{ seg.text|e }}"
+              data-copy-text="{{ (corrected_result.segments[loop.index0].text if corrected_result else seg.text)|e }}"
+              {% if corrected_result %}data-copy-original="{{ seg.text|e }}" data-copy-corrected="{{ corrected_result.segments[loop.index0].text|e }}"{% endif %}
               @click="navigator.clipboard.writeText($el.dataset.copyText)">
         {{ icon_copy("w-3 h-3") }}
       </button>
+    </div>
+    {% endfor %}
+  </div>
+  <div x-cloak x-show="readingMode" class="transcript-container viewer-reading-list" aria-label="Lettura per paragrafi">
+    {% for start, speaker, original, corrected in reading_paragraphs %}
+    <div class="rounded-box border border-base-300 p-3 mb-2">
+      <button class="timestamp-btn text-xs opacity-60" type="button" @click="seekTo({{ start }})">{{ start|format_time }}</button>
+      {% if speaker %}<strong class="text-xs opacity-60 ml-2">{{ speaker }}</strong>{% endif %}
+      <p class="mt-2 leading-relaxed whitespace-pre-wrap" {% if corrected_result %}data-original="{{ original|e }}" data-corrected="{{ corrected|e }}" x-text="textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original"{% endif %}>{{ corrected if corrected_result else original }}</p>
     </div>
     {% endfor %}
   </div>
@@ -250,9 +282,30 @@
 <script src="{{ url_for('static', path='viewer-timeline.js') }}?v=clean-waveform1"></script>
 <script src="{{ url_for('static', path='viewer-docked-layout.js') }}?v=docked-v1"></script>
 <script nonce="{{ csp_nonce }}">
+{% if correction_available %}
+(function() {
+ const box = document.getElementById('studio-correction-status');
+ if (!box) return;
+ let last = '';
+ async function checkCorrection() {
+   try {
+     const response = await fetch('/viewer/{{ job.id }}/correction-status', {credentials:'same-origin'});
+     if (!response.ok) return;
+     const state = (await response.json()).status || 'unknown';
+     box.textContent = ({queued:'Correzione in coda',started:'Correzione in corso',finished:'Correzione terminata',
+       failed:'Correzione fallita: puoi riprovare',not_requested:'Nessuna correzione richiesta'})[state] || 'Stato: '+state;
+     if (state==='finished' && last && last!=='finished') location.reload();
+     last=state;
+   } catch (_) { box.textContent='Stato LLM temporaneamente non disponibile'; }
+ }
+ checkCorrection(); setInterval(checkCorrection, 10000);
+})();
+{% endif %}
 window.viewerData = function(segmentCount) {
   return {
     search: '',
+    textSource: 'corrected',
+    readingMode: false,
     activeIndex: 0,
     shortcutsOpen: false,
     currentSegIdx: -1,
@@ -288,6 +341,15 @@ window.viewerData = function(segmentCount) {
       if (text) {
         window.whisperCopy(text);
       }
+    },
+    switchText(source) {
+      this.textSource = source;
+      document.querySelectorAll('.viewer-segment').forEach(function(row) {
+        if (row.dataset[source + 'Search'] !== undefined) row.dataset.text = row.dataset[source + 'Search'];
+        const copy = row.querySelector('button[data-copy-text]');
+        const key = 'copy' + source.charAt(0).toUpperCase() + source.slice(1);
+        if (copy && copy.dataset[key] !== undefined) copy.dataset.copyText = copy.dataset[key];
+      });
     },
     clearSearch() { this.search = ''; },
     initPlayer() {

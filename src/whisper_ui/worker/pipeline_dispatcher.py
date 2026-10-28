@@ -259,6 +259,7 @@ def enqueue_pipeline(
 
     initial_context: dict = {
         "language": job.language,
+        "whisper_keywords": job.whisper_keywords,
         "batch_size": settings.batch_size,
         "num_speakers": job.num_speakers,
         "audio_processing": job.audio_processing,
@@ -360,18 +361,14 @@ def enqueue_pipeline(
         assign_deps = [transcribe_job]
 
     assign_job = _enqueue(run_assign_speakers, depends_on=assign_deps, is_final=False)
-    postprocess_final = not llm_active
+    postprocess_final = True
     postprocess_job = _enqueue(
         run_postprocess,
         depends_on=assign_job,
         is_final=postprocess_final,
     )
 
-    if llm_active:
-        llm_job = _enqueue(run_llm_correction, depends_on=postprocess_job, is_final=True)
-        tail_id = llm_job.id
-    else:
-        tail_id = postprocess_job.id
+    tail_id = postprocess_job.id
 
     stage_summary = ",".join(s.description.split("(")[0].rsplit(".", 1)[-1] for s in enqueued)
     logger.info(
@@ -444,7 +441,10 @@ def _persist_completion(
                     "audio_analysis": context.get("audio_analysis", {}),
                 })
             except Exception:
-                logger.warning("NAS archive failed for completed job %s; local artifacts are intact", job.id, exc_info=True)
+                logger.warning(
+                    "NAS archive failed for completed job %s; local artifacts are intact",
+                    job.id, exc_info=True,
+                )
         except Exception as exc:
             # Persisting the finished transcript failed (e.g. disk full writing
             # the result file, or a DB error). Never leave the parent stuck in
@@ -566,6 +566,18 @@ def finalize_success(rq_job, connection, _result) -> None:
             return
 
         _persist_completion(runtime, job, context, ctx_store, transcript_result, meta_generation)
+        # The original transcript is now durable and visible. Schedule LLM
+        # correction separately, never as a dependency for completion.
+        if (
+            job.status == JobStatus.COMPLETED
+            and job.llm_correction_enabled
+            and runtime.settings.llm_correction_available
+        ):
+            try:
+                from whisper_ui.worker.standalone_correction import enqueue_correction
+                enqueue_correction(runtime.redis, job.id)
+            except Exception:
+                logger.exception("Could not enqueue optional standalone correction for %s", job.id)
 
 
 def finalize_failure(rq_job, connection, _exc_type, exc_value, _traceback) -> None:

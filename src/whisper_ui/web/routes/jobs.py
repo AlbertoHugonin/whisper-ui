@@ -428,6 +428,8 @@ async def re_transcribe_job(
         enable_diarization=enable_diarization and settings.diarization_available,
         convert_to_traditional=convert_to_traditional,
         llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
+        whisper_keywords=src.whisper_keywords,
+        llm_context_prompt=src.llm_context_prompt,
         audio_processing=audio_processing,
         audio_denoise=audio_denoise,
         audio_compression=audio_compression,

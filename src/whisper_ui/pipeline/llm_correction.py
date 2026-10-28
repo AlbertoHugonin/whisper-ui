@@ -136,6 +136,29 @@ class HttpxOllamaClient:
         self._client.close()
 
 
+class HttpxRouterClient:
+    """OpenAI-compatible client: the router owns GPU residency and FIFO queue."""
+
+    def __init__(self, base_url: str, timeout: float) -> None:
+        self._client = httpx.Client(base_url=base_url, timeout=timeout)
+
+    def chat_json(self, *, model: str, system: str, user: str,
+                  temperature: float, keep_alive: str, think: bool) -> str:
+        response = self._client.post("/v1/chat/completions", json={
+            "model": model, "stream": False,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "temperature": temperature,
+            "max_tokens": 2048,
+            "reasoning_effort": "none",
+        })
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"].get("content") or ""
+
+    def close(self) -> None:
+        self._client.close()
+
+
 @dataclass
 class _Chunk:
     edit_start: int
@@ -165,6 +188,8 @@ class LLMCorrectionStage:
         temperature: float,
         request_timeout: float,
         think: bool = False,
+        context_prompt: str = "",
+        backend: str = "ollama",
         client: OllamaClient | None = None,
     ) -> None:
         self._base_url = base_url
@@ -175,6 +200,8 @@ class LLMCorrectionStage:
         self._temperature = temperature
         self._request_timeout = request_timeout
         self._think = think
+        self._context_prompt = context_prompt.strip()[:4000]
+        self._backend = backend
         self._client = client
         self._owns_client = client is None
 
@@ -239,6 +266,8 @@ class LLMCorrectionStage:
                 done = i + 1
                 on_progress(done / total, LLM_CORRECTION_RUNNING.format(done=done, total=total))
 
+        context["llm_failed_chunks"] = len(failed_chunks)
+        context["llm_total_chunks"] = total
         if on_progress:
             if failed_chunks and len(failed_chunks) == total:
                 on_progress(1.0, LLM_CORRECTION_SKIPPED)
@@ -258,7 +287,8 @@ class LLMCorrectionStage:
 
     def _get_client(self) -> OllamaClient:
         if self._client is None:
-            self._client = HttpxOllamaClient(self._base_url, self._request_timeout)
+            client_type = HttpxRouterClient if self._backend == "openai-router" else HttpxOllamaClient
+            self._client = client_type(self._base_url, self._request_timeout)
         return self._client
 
     def _build_chunks(self, segments: list[Segment]) -> list[_Chunk]:
@@ -281,6 +311,11 @@ class LLMCorrectionStage:
 
     def _correct_chunk(self, client: OllamaClient, chunk: _Chunk, language: str) -> dict[int, str]:
         user_prompt = _build_user_prompt(chunk, language)
+        if self._context_prompt:
+            user_prompt = (
+                "Meeting context and technical vocabulary (not transcript content; never invent missing words):\n"
+                + self._context_prompt + "\n\n" + user_prompt
+            )
         raw_response = client.chat_json(
             model=self._model,
             system=_build_system_prompt(language),

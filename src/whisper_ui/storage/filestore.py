@@ -69,6 +69,27 @@ class FileStore:
         text_tmp.replace(text_dest)
         return dest
 
+    def save_corrected_result(self, job_id: str, result: TranscriptResult) -> Path:
+        """Save a separately addressable, never-in-place-overwritten corrected transcript."""
+        job_dir = self._output_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        dest = job_dir / "result.corrected.json"
+        tmp = job_dir / "result.corrected.json.tmp"
+        tmp.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(dest)
+        return dest
+
+    def load_corrected_result(self, job_id: str) -> TranscriptResult | None:
+        path = self.get_output_artifact(job_id, "result.corrected.json")
+        if path is None:
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return TranscriptResult.from_dict(payload) if isinstance(payload, dict) else None
+        except (ValueError, TypeError, OSError):
+            logger.warning("Invalid corrected transcript for %s", job_id, exc_info=True)
+            return None
+
     def save_audio_artifacts(self, job_id: str, original_path: str | None, processed_path: str | None) -> None:
         """Persist exact source + exact Whisper input alongside the transcript."""
         job_dir = self._output_dir / job_id

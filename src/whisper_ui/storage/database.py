@@ -41,6 +41,8 @@ _JOB_COLUMNS = [
     "enable_diarization",
     "convert_to_traditional",
     "llm_correction_enabled",
+    "whisper_keywords",
+    "llm_context_prompt",
     "audio_processing",
     "audio_denoise",
     "audio_compression",

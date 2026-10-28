@@ -66,6 +66,7 @@ class WhisperCppTranscribeStage:
         vad_speech_pad_ms: int = 400,
         vad_samples_overlap: float = 0.20,
         max_context: int = 0,
+        initial_prompt: str = "",
     ) -> None:
         # ``device`` is accepted for interface symmetry with TranscribeStage;
         # whisper.cpp selects the GPU itself (HIP_VISIBLE_DEVICES env), so it is
@@ -83,6 +84,7 @@ class WhisperCppTranscribeStage:
         self._vad_speech_pad_ms = vad_speech_pad_ms
         self._vad_samples_overlap = vad_samples_overlap
         self._max_context = max_context
+        self._initial_prompt = initial_prompt
 
     @property
     def name(self) -> str:
@@ -208,6 +210,8 @@ class WhisperCppTranscribeStage:
                     "-vp", str(self._vad_speech_pad_ms),
                     "-vo", str(self._vad_samples_overlap),
                 ]
+            if self._initial_prompt.strip():
+                cmd += ["--prompt", self._initial_prompt.strip()[:1500]]
             if self._max_context >= 0:
                 cmd += ["-mc", str(self._max_context)]
 

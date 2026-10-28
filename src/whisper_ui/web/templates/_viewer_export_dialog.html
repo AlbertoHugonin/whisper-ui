@@ -28,6 +28,18 @@
         </a>
         {% endfor %}
       </div>
+      {% if corrected_result %}
+      <div class="viewer-export-section-title">Versione corretta dall'LLM</div>
+      <div class="viewer-export-format-grid">
+        {% for fmt in export_formats %}
+        <a class="viewer-export-format" href="/viewer/{{ job.id }}/export/{{ fmt }}?version=corrected" download>
+          <span class="viewer-export-format-icon">{{ fmt|upper }}</span>
+          <span class="viewer-export-format-desc"><strong>{{ fmt|upper }} corretto</strong><small>Scarica la versione corretta</small></span>
+          {{ icon_download('w-4 h-4') }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
       <div class="viewer-export-section-title">Altre opzioni</div>
       <div class="viewer-export-utilities">
         {% if result.segments %}

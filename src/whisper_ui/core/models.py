@@ -70,6 +70,8 @@ class Job:
     enable_diarization: bool = True
     convert_to_traditional: bool = False
     llm_correction_enabled: bool = False
+    whisper_keywords: str = "Airdass"
+    llm_context_prompt: str = ""
     audio_processing: str = "auto"
     audio_denoise: str = "auto"
     audio_compression: str = "auto"

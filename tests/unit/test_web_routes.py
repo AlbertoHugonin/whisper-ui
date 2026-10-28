@@ -2260,3 +2260,65 @@ class TestFormatSizeHelper:
         from whisper_ui.web.routes.upload import _format_size
 
         assert _format_size(512 * 1024) == "512 KB"
+
+class TestStandaloneLLMCorrectionRoutes:
+    def test_completed_job_can_request_correction_without_retranscribing(self, client, app, db, filestore):
+        app.state.settings = app.state.settings.model_copy(update={
+            'ollama_base_url': 'http://192.168.0.150:18084',
+            'llm_api_mode': 'openai-router',
+        })
+        job = _create_completed_job(db, filestore)
+        with (
+            patch(
+                'whisper_ui.worker.standalone_correction.correction_status',
+                return_value={'status': 'not_requested'},
+            ),
+            patch(
+                'whisper_ui.worker.standalone_correction.enqueue_correction',
+                return_value={'status': 'queued'},
+            ) as enqueue,
+        ):
+            response = client.post(
+                f'/viewer/{job.id}/correct', data={'llm_context_prompt': 'Meeting Airdass, API tecniche.'},
+                follow_redirects=False,
+            )
+        assert response.status_code == 303
+        assert response.headers['location'] == f'/viewer/{job.id}'
+        assert db.get_job(job.id).llm_context_prompt == 'Meeting Airdass, API tecniche.'
+        enqueue.assert_called_once_with(app.state.redis, job.id)
+        assert db.get_job(job.id).status == JobStatus.COMPLETED
+
+    def test_correction_endpoint_is_unavailable_without_llm(self, client, db, filestore):
+        job = _create_completed_job(db, filestore)
+        resp = client.post(f'/viewer/{job.id}/correct', data={'llm_context_prompt': 'test'}, follow_redirects=False)
+        assert resp.status_code == 503
+        assert db.get_job(job.id).status == JobStatus.COMPLETED
+
+    def test_original_and_corrected_are_separate_readable_and_exportable(self, client, db, filestore, app):
+        app.state.settings = app.state.settings.model_copy(update={'ollama_base_url': 'http://192.168.0.150:18084'})
+        original = TranscriptResult(
+            segments=[Segment(0, 2, 'Airdas e la piattaforma.', 'S1'), Segment(2, 4, 'Allora iniziamo.', 'S1')],
+            language='it', duration=4,
+        )
+        corrected = TranscriptResult(
+            segments=[Segment(0, 2, 'Airdass e la piattaforma.', 'S1'), Segment(2, 4, 'Allora iniziamo.', 'S1')],
+            language='it', duration=4,
+        )
+        job = Job(filename='meeting.wav', status=JobStatus.COMPLETED, language='it')
+        job.result_path = str(filestore.save_result(job.id, original))
+        filestore.save_corrected_result(job.id, corrected)
+        db.insert_job(job)
+        page = client.get(f'/viewer/{job.id}')
+        assert page.status_code == 200
+        assert 'Whisper originale' in page.text
+        assert 'Paragrafi' in page.text
+        assert 'Airdass e la piattaforma' in page.text
+        assert 'Ricorreggi con LLM' in page.text
+        assert 'version=corrected' in page.text
+        raw = client.get(f'/viewer/{job.id}/export/txt')
+        fixed = client.get(f'/viewer/{job.id}/export/txt?version=corrected')
+        assert raw.status_code == 200 and fixed.status_code == 200
+        assert 'Airdas e la piattaforma' in raw.text
+        assert 'Airdass e la piattaforma' in fixed.text
+        assert 'meeting-corrected' in fixed.headers['content-disposition']
+        assert filestore.load_result(job.id).segments[0].text == 'Airdas e la piattaforma.'

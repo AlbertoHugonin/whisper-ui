@@ -327,6 +327,19 @@
       </div>
 
       <div class="fieldset">
+        <label for="whisper-keywords" class="fieldset-label">Parole chiave per Whisper</label>
+        <textarea id="whisper-keywords" name="whisper_keywords" rows="2" maxlength="1500"
+                  class="textarea textarea-bordered w-full" placeholder="Airdass, termini tecnici, prodotti, acronimi...">{{ rt.whisper_keywords if rt else 'Airdass' }}</textarea>
+        <p class="text-xs opacity-60">Termini e nomi da riconoscere, non istruzioni. Utilizzati durante la trascrizione.</p>
+      </div>
+      <div class="fieldset">
+        <label for="llm-context-prompt" class="fieldset-label">Contesto per correzione LLM</label>
+        <textarea id="llm-context-prompt" name="llm_context_prompt" rows="4" maxlength="4000"
+                  class="textarea textarea-bordered w-full"
+                  placeholder="Riunione di lavoro Airdass. Vocabolario: nomi di prodotti, clienti, acronimi. Non inventare contenuti.">{{ rt.llm_context_prompt if rt else '' }}</textarea>
+        <p class="text-xs opacity-60">Il modello lo usa per disambiguare termini. Non autorizza aggiunte o riscritture creative.</p>
+      </div>
+      <div class="fieldset">
         <label class="fieldset-label gap-3">
           <input type="checkbox" name="llm_correction_enabled" value="true"
                  class="toggle toggle-primary toggle-sm"

@@ -92,6 +92,7 @@ def _build_transcribe_stage(job: Job, runtime: WorkerRuntime, torch_device: str)
             vad_speech_pad_ms=runtime.settings.whispercpp_vad_speech_pad_ms,
             vad_samples_overlap=runtime.settings.whispercpp_vad_samples_overlap,
             max_context=runtime.settings.whispercpp_max_context,
+            initial_prompt=job.whisper_keywords,
         )
     return TranscribeStage(
         model_name=job.model_name,
@@ -528,6 +529,7 @@ def run_llm_correction(parent_job_id: str) -> str:
             temperature=settings.llm_temperature,
             request_timeout=float(settings.ollama_request_timeout),
             think=settings.ollama_think,
+            context_prompt=job.llm_context_prompt,
         )
 
     return _run_single_stage(
