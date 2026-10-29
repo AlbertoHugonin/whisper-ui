@@ -45,6 +45,8 @@ _JOB_COLUMNS = [
     "vad_threshold",
     "whisper_beam_size",
     "llm_context_prompt",
+    "summary_prompt",
+    "summary_enabled",
     "audio_processing",
     "audio_denoise",
     "audio_compression",
@@ -96,6 +98,7 @@ def _row_to_job(row: sqlite3.Row) -> Job:
     d["enable_diarization"] = bool(d.get("enable_diarization", 1))
     d["convert_to_traditional"] = bool(d.get("convert_to_traditional", 1))
     d["llm_correction_enabled"] = bool(d.get("llm_correction_enabled", 0))
+    d["summary_enabled"] = bool(d.get("summary_enabled", 0))
     return Job(**d)
 
 

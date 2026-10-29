@@ -2400,6 +2400,8 @@ class TestSavedTranscriptionPresets:
             'enable_diarization': 'true', 'llm_correction_enabled': 'true',
             'whisper_keywords': 'Airdass, API, Customer Success',
             'llm_context_prompt': 'Correggi i termini Airdass senza inventare nulla.',
+            'summary_prompt': 'Elenca decisioni e responsabili.',
+            'summary_enabled': 'true',
             'vad_threshold': '0.15', 'whisper_beam_size': '8', 'audio_processing': 'custom',
             'audio_denoise': 'medium', 'audio_compression': 'light',
             'audio_target_lufs': '-18', 'audio_max_gain_db': '12', 'audio_highpass_hz': '100',
@@ -2415,6 +2417,8 @@ class TestSavedTranscriptionPresets:
         blank = client.get('/presets/new')
         assert blank.status_code == 200
         assert 'name="llm_context_prompt"' in blank.text
+        assert 'name="summary_prompt"' in blank.text
+        assert 'name="summary_enabled"' in blank.text
         assert 'name="whisper_keywords"' in blank.text
         assert 'name="vad_threshold"' in blank.text
         assert 'name="audio_highpass_hz"' in blank.text
@@ -2435,6 +2439,8 @@ class TestSavedTranscriptionPresets:
         assert preset.settings['llm_correction_enabled'] is True
         assert preset.settings['whisper_keywords'] == 'Airdass, API, Customer Success'
         assert preset.settings['llm_context_prompt'].startswith('Correggi')
+        assert preset.settings['summary_prompt'].startswith('Elenca')
+        assert preset.settings['summary_enabled'] is True
         assert preset.settings['vad_threshold'] == .15
         assert preset.settings['audio_target_lufs'] == -18
         assert preset.settings['audio_denoise'] == 'medium'
@@ -2471,6 +2477,8 @@ class TestSavedTranscriptionPresets:
         assert job.llm_correction_enabled is True
         assert job.whisper_keywords == 'Airdass, API, Customer Success'
         assert job.llm_context_prompt.startswith('Correggi')
+        assert job.summary_prompt == 'Elenca decisioni e responsabili.'
+        assert job.summary_enabled is True
         assert job.vad_threshold == .15
         assert job.whisper_beam_size == 8
         assert job.audio_processing == 'custom'
@@ -2531,3 +2539,114 @@ class TestSavedTranscriptionPresets:
         assert '<script>alert(1)</script>' not in page.text
         assert '&lt;script&gt;' in page.text
         assert self._create(client, name='<SCRIPT>ALERT(1)</SCRIPT>').status_code == 200
+
+class TestReviewStudio:
+    def _make(self, db, filestore, *, source_job_id=None, text='Buongiorno Airdas'):
+        result = TranscriptResult(
+            segments=[Segment(1, 4, text, 'S1'), Segment(5, 7, 'Grazie a tutti.', 'S2')],
+            language='it', duration=8,
+        )
+        job = Job(filename='meeting.wav', status=JobStatus.COMPLETED, source_job_id=source_job_id)
+        job.result_path = str(filestore.save_result(job.id, result))
+        db.insert_job(job)
+        return job
+
+    def test_three_column_editor_and_families_render(self, client, db, filestore):
+        original = self._make(db, filestore)
+        save_upload(filestore, original.id, 'meeting.wav', b'fake audio')
+        original.filepath = str(filestore.get_upload_path(original.id, 'meeting.wav'))
+        db.update_job(original)
+        second = self._make(db, filestore, source_job_id=original.id, text='Buongiorno Airdass')
+        corrected = TranscriptResult(
+            segments=[Segment(1, 4, 'Buongiorno Airdass', 'S1'), Segment(5, 7, 'Grazie a tutti.', 'S2')],
+            language='it', duration=8,
+        )
+        filestore.save_corrected_result(second.id, corrected)
+        response = client.get(f'/studio/{second.id}')
+        assert response.status_code == 200
+        assert 'Studio di revisione' in response.text
+        assert 'Versione di confronto' in response.text
+        assert 'La mia versione' in response.text
+        assert 'Riassunto AI' in response.text
+        assert f'{original.id}~original' in response.text
+        assert f'{second.id}~corrected' in response.text
+        assert f'/viewer/{original.id}/waveform' in response.text
+        assert client.get(f'/viewer/{second.id}').status_code == 200
+        assert f'/studio/{second.id}' in client.get(f'/viewer/{second.id}').text
+
+    def test_version_endpoint_and_only_same_family(self, client, db, filestore):
+        original = self._make(db, filestore)
+        reprocessed = self._make(db, filestore, source_job_id=original.id)
+        foreign_recording = self._make(db, filestore)
+        got = client.get(f'/studio/{reprocessed.id}/version/{original.id}~original')
+        assert got.status_code == 200
+        assert got.json()['segments'][0]['text'] == 'Buongiorno Airdas'
+        denied = client.get(f'/studio/{reprocessed.id}/version/{foreign_recording.id}~original')
+        assert denied.status_code == 404
+
+    def test_custom_text_and_speaker_saved_separately_preserving_timing(self, client, db, filestore):
+        job = self._make(db, filestore)
+        source = f'{job.id}~original'
+        response = client.post(f'/studio/{job.id}/custom', json={
+            'source': source,
+            'segments': [
+                {'text': 'Buongiorno Airdass', 'speaker': 'Responsabile'},
+                {'text': 'Grazie a tutti.', 'speaker': 'S2'},
+            ],
+        })
+        assert response.status_code == 200
+        assert response.json()['version'] == f'{job.id}~custom'
+        original = filestore.load_result(job.id)
+        edited = filestore.load_custom_result(job.id)
+        assert original.segments[0].text == 'Buongiorno Airdas'
+        assert edited.segments[0].text == 'Buongiorno Airdass'
+        assert edited.segments[0].speaker == 'Responsabile'
+        assert (edited.segments[0].start, edited.segments[0].end) == (1, 4)
+        assert client.get(f'/studio/{job.id}/version/{job.id}~custom').status_code == 200
+        exported = client.get(f'/studio/{job.id}/custom-export?token={job.id}~custom&format_name=txt')
+        assert exported.status_code == 200
+        assert 'Airdass' in exported.text
+        assert 'personalizzata' in exported.headers['content-disposition']
+
+    def test_editor_rejects_invalid_sources_and_timing_changes(self, client, db, filestore):
+        job = self._make(db, filestore)
+        url = f'/studio/{job.id}/custom'
+        for data in (
+            {'source': f'{job.id}~original', 'segments': [{'text': 'Too short'}]},
+            {'source': f'{job.id}~original', 'segments': [
+                {'text': 'A', 'start': 999, 'speaker': 'S1'}, {'text': 456, 'speaker': 'S2'},
+            ]},
+            {'source': 'invalid', 'segments': [{'text': 'A'}, {'text': 'B'}]},
+        ):
+            assert client.post(url, json=data).status_code in (400, 422)
+        assert filestore.load_custom_result(job.id) is None
+
+    def test_studio_rejects_unauthorized_user(self, client, app, db, filestore):
+        from whisper_ui.storage import users_repo
+        bob = users_repo.create_user(db.conn, 'other-reviewer', 'password123', is_admin=False)
+        other_client = authed_test_client(app, bob)
+        job = self._make(db, filestore)
+        assert other_client.get(f'/studio/{job.id}').status_code == 404
+        assert other_client.get(f'/studio/{job.id}/version/{job.id}~original').status_code == 404
+        assert other_client.post(f'/studio/{job.id}/custom', json={
+            'source': f'{job.id}~original', 'segments': [
+                {'text': 'A', 'speaker': 'S1'}, {'text': 'B', 'speaker': 'S2'},
+            ],
+        }).status_code == 404
+
+    def test_summary_prompt_is_queued_without_changing_original(self, client, app, db, filestore):
+        job = self._make(db, filestore)
+        app.state.settings = app.state.settings.model_copy(update={
+            'ollama_base_url': 'http://router:18084',
+        })
+        with patch('whisper_ui.worker.standalone_summary.enqueue_summary', return_value={'status': 'queued'}) as enq:
+            response = client.post(f'/studio/{job.id}/summary', json={
+                'source': f'{job.id}~original', 'prompt': 'Riassumi decisioni e rischi.',
+            })
+        assert response.status_code == 200
+        enq.assert_called_once_with(app.state.redis, job.id, 'Riassumi decisioni e rischi.', 'original')
+        assert db.get_job(job.id).summary_prompt == 'Riassumi decisioni e rischi.'
+        assert filestore.load_result(job.id).segments[0].text == 'Buongiorno Airdas'
+        status = client.get(f'/studio/{job.id}/summary-status?source_job={job.id}')
+        assert status.status_code == 200
+        assert status.json()['summary'] is None

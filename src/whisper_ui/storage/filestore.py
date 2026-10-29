@@ -90,6 +90,44 @@ class FileStore:
             logger.warning("Invalid corrected transcript for %s", job_id, exc_info=True)
             return None
 
+    def save_custom_result(self, job_id: str, result: TranscriptResult) -> Path:
+        """Atomic user-edited copy; original and corrected sources never change."""
+        dest = self._output_dir / job_id / "result.custom.json"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        temp = dest.with_suffix('.json.tmp')
+        temp.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding='utf-8')
+        temp.replace(dest)
+        return dest
+
+    def load_custom_result(self, job_id: str) -> TranscriptResult | None:
+        path = self.get_output_artifact(job_id, 'result.custom.json')
+        if path is None:
+            return None
+        try:
+            obj = json.loads(path.read_text(encoding='utf-8'))
+            return TranscriptResult.from_dict(obj) if isinstance(obj, dict) else None
+        except (OSError, ValueError, TypeError):
+            logger.warning('Invalid custom transcript for %s', job_id, exc_info=True)
+            return None
+
+    def save_summary(self, job_id: str, summary: dict) -> Path:
+        dest = self._output_dir / job_id / 'summary.json'
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        temp = dest.with_suffix('.json.tmp')
+        temp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+        temp.replace(dest)
+        return dest
+
+    def load_summary(self, job_id: str) -> dict | None:
+        path = self.get_output_artifact(job_id, 'summary.json')
+        if path is None:
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding='utf-8'))
+            return payload if isinstance(payload, dict) else None
+        except (OSError, ValueError, TypeError):
+            return None
+
     def save_audio_artifacts(self, job_id: str, original_path: str | None, processed_path: str | None) -> None:
         """Persist exact source + exact Whisper input alongside the transcript."""
         job_dir = self._output_dir / job_id

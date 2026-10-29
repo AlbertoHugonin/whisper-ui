@@ -55,7 +55,7 @@
       </div>
     </div></section>
     <section class="card border border-base-300"><div class="card-body gap-4">
-      <h2 class="font-semibold">I due prompt</h2>
+      <h2 class="font-semibold">I tre prompt</h2>
       <label class="fieldset"><span class="fieldset-legend">Parole chiave e contesto iniziale per Whisper</span>
         <textarea class="textarea textarea-bordered w-full" rows="4" name="whisper_keywords" maxlength="1500" placeholder="Airdass, API, nomi di prodotti, acronimi...">{{ cfg.whisper_keywords }}</textarea>
         <span class="text-xs opacity-65">Suggerisce il vocabolario al riconoscimento vocale. Non scrivere istruzioni da eseguire.</span></label>
@@ -64,6 +64,10 @@
         <span class="text-xs opacity-65">Aiuta a correggere termini ambigui dopo che la trascrizione originale è già disponibile.</span></label>
       <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="llm_correction_enabled" type="checkbox" value="true" {% if cfg.llm_correction_enabled %}checked{% endif %}>
         Avvia la correzione LLM automaticamente dopo la trascrizione</label>
+      <label class="fieldset"><span class="fieldset-legend">Prompt personalizzato per il riassunto AI</span>
+        <textarea class="textarea textarea-bordered w-full" rows="6" name="summary_prompt" maxlength="4000" placeholder="Riassumi la riunione: decisioni, azioni, responsabili, scadenze e punti irrisolti. Non inventare informazioni.">{{ cfg.summary_prompt|default('') }}</textarea>
+        <span class="text-xs opacity-65">Il riassunto viene generato separatamente e puoi rigenerarlo dall'Editor.</span></label>
+      <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="summary_enabled" type="checkbox" value="true" {% if cfg.summary_enabled|default(false) %}checked{% endif %}> Genera automaticamente il riassunto dopo la trascrizione</label>
       <p class="text-xs opacity-65">La trascrizione originale non aspetta l'LLM e rimane sempre disponibile. La correzione usa la coda dedicata.</p>
     </div></section>
     <div class="flex flex-wrap gap-3 sticky bottom-0 bg-base-100/95 p-3 border-t border-base-300 z-10">

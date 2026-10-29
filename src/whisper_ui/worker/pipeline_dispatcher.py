@@ -578,6 +578,16 @@ def finalize_success(rq_job, connection, _result) -> None:
                 enqueue_correction(runtime.redis, job.id)
             except Exception:
                 logger.exception("Could not enqueue optional standalone correction for %s", job.id)
+        if (
+            job.status == JobStatus.COMPLETED
+            and job.summary_enabled
+            and runtime.settings.llm_correction_available
+        ):
+            try:
+                from whisper_ui.worker.standalone_summary import enqueue_summary
+                enqueue_summary(runtime.redis, job.id, job.summary_prompt)
+            except Exception:
+                logger.exception("Could not enqueue optional standalone summary for %s", job.id)
 
 
 def finalize_failure(rq_job, connection, _exc_type, exc_value, _traceback) -> None:

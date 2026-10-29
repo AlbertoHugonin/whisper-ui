@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-5" x-data="reviewStudio()">
+  <div class="flex flex-wrap gap-3 justify-between items-center">
+    <div>
+      <a class="link link-hover text-xs opacity-60" href="/viewer/{{ job.id }}">← Torna alla trascrizione</a>
+      <h1 class="text-2xl font-semibold mt-1">Studio di revisione</h1>
+      <p class="text-sm opacity-65">{{ job.filename }} · confronta le versioni e salva la tua correzione senza sovrascrivere Whisper.</p>
+    </div>
+    <a class="btn btn-outline btn-sm" href="/jobs">Tutti i lavori</a>
+  </div>
+  <section class="card bg-base-200 border border-base-300"><div class="card-body p-4 gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <strong>Audio · timeline</strong>
+      <div class="flex items-center gap-3 text-sm">
+        <label for="studio-zoom">Zoom</label>
+        <input id="studio-zoom" type="range" min="1" max="6" step="0.5" x-model.number="zoom" @input="drawWaveform()" class="range range-primary range-xs w-28">
+        <span class="font-mono text-xs" x-text="formatTime(currentTime)"></span>
+      </div>
+    </div>
+    {% if has_processed or has_original %}
+    <audio x-ref="audio" controls preload="metadata" class="w-full"
+           @timeupdate="currentTime=$el.currentTime" @loadedmetadata="audioDuration=$el.duration">
+      {% if has_processed %}<source src="/viewer/{{ audio_job_id }}/processed-audio" type="audio/wav">{% else %}<source src="/viewer/{{ audio_job_id }}/media">{% endif %}
+      Il browser non supporta la riproduzione audio.
+    </audio>
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100" x-ref="waveScroll">
+      <canvas x-ref="waveCanvas" height="82" class="block cursor-crosshair touch-pan-x" aria-label="Forma d'onda: premi per spostarti nell'audio"
+              @click="seekFromWave($event)" @keydown.enter="seekFromWave($event)" tabindex="0"></canvas>
+    </div>
+    <p class="text-xs opacity-60">Forma d'onda alleggerita (1.200 campioni in cache). Tocca o clicca per spostarti; usa zoom e scorrimento orizzontale.</p>
+    {% else %}<p class="text-sm opacity-70">Audio originale non più disponibile; puoi comunque confrontare e modificare le trascrizioni.</p>{% endif %}
+  </div></section>
+
+  <div role="alert" class="alert alert-error" x-show="error" x-cloak><span x-text="error"></span><button type="button" class="btn btn-ghost btn-xs" @click="error=''">Chiudi</button></div>
+
+  <section class="grid grid-cols-1 xl:grid-cols-3 gap-3" aria-label="Confronto ed editor di tre trascrizioni">
+    <div class="card border border-base-300 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+      <div class="flex justify-between items-center"><h2 class="font-semibold">A · Versione di confronto</h2>
+        <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('left')">Copia nell'editor</button></div>
+      <select class="select select-bordered select-sm w-full" aria-label="Versione A" x-model="leftVersion" @change="loadSide('left')">
+        <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
+      </select>
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione A">
+        <template x-for="(s, i) in leftSegments.slice(0, leftLimit)" :key="i">
+          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary" @click="seekTo(s.start)">
+            <div class="flex gap-2 text-xs text-primary font-mono"><span x-text="formatTime(s.start)"></span><span x-text="s.speaker||''"></span></div>
+            <p class="text-sm leading-relaxed whitespace-pre-wrap" x-text="s.text"></p>
+          </div>
+        </template>
+        <button type="button" x-show="leftSegments.length > leftLimit" class="btn btn-ghost btn-sm w-full" @click="leftLimit+=150">Mostra altre battute</button>
+      </div>
+    </div></div>
+    <div class="card border border-base-300 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+      <div class="flex justify-between items-center"><h2 class="font-semibold">B · Altra trascrizione</h2>
+        <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('right')">Copia nell'editor</button></div>
+      <select class="select select-bordered select-sm w-full" aria-label="Versione B" x-model="rightVersion" @change="loadSide('right')">
+        <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
+      </select>
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione B">
+        <template x-for="(s, i) in rightSegments.slice(0, rightLimit)" :key="i">
+          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary" @click="seekTo(s.start)">
+            <div class="flex gap-2 text-xs text-primary font-mono"><span x-text="formatTime(s.start)"></span><span x-text="s.speaker||''"></span></div>
+            <p class="text-sm leading-relaxed whitespace-pre-wrap" x-text="s.text"></p>
+          </div>
+        </template>
+        <button type="button" x-show="rightSegments.length > rightLimit" class="btn btn-ghost btn-sm w-full" @click="rightLimit+=150">Mostra altre battute</button>
+      </div>
+    </div></div>
+    <div class="card border-2 border-primary/40 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+      <h2 class="font-semibold">C · La mia versione</h2>
+      <p class="text-xs opacity-65">Copia A o B, poi modifica testo e speaker. I timestamp restano sincronizzati con l'audio.</p>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button type="button" class="btn btn-primary btn-sm" :disabled="saving||!draft.length" @click="saveCustom()" x-text="saving ? 'Salvataggio…' : 'Salva personalizzata'"></button>
+        <a x-show="savedVersion" :href="'/studio/{{ job.id }}/custom-export?token='+encodeURIComponent(savedVersion)" class="btn btn-outline btn-sm">Scarica TXT</a>
+      </div>
+      <p role="status" class="text-xs" x-text="saveStatus"></p>
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Editor trascrizione personalizzata">
+        <template x-for="(s, i) in draft.slice(0, draftLimit)" :key="i">
+          <div class="rounded-box border border-base-300 p-2 bg-base-200/30 space-y-2">
+            <div class="flex gap-2 justify-between items-center text-xs">
+              <button type="button" class="link link-primary font-mono" @click="seekTo(s.start)" x-text="formatTime(s.start)"></button>
+              <input aria-label="Parlante" class="input input-xs input-bordered w-28" x-model="s.speaker" maxlength="60" placeholder="Speaker">
+            </div>
+            <textarea aria-label="Testo modificabile della battuta" class="textarea textarea-bordered textarea-sm w-full leading-relaxed" rows="3" maxlength="12000" x-model="s.text"></textarea>
+          </div>
+        </template>
+        <button type="button" x-show="draft.length > draftLimit" class="btn btn-ghost btn-sm w-full" @click="draftLimit+=150">Modifica altre battute</button>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="card border border-base-300"><div class="card-body gap-3">
+    <div><h2 class="font-semibold text-lg">Riassunto AI della riunione</h2>
+      <p class="text-xs opacity-65">È un'operazione separata da Whisper, eseguita in coda al Model Router. Puoi cambiare il prompt e rigenerare il risultato.</p></div>
+    <label class="fieldset max-w-xl"><span class="fieldset-legend">Versione da riassumere</span>
+      <select class="select select-bordered w-full" x-model="summaryVersion" @change="fetchSummary()">
+        <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
+      </select></label>
+    <label class="fieldset"><span class="fieldset-legend">Prompt personalizzato per il riassunto</span>
+      <textarea x-model="summaryPrompt" maxlength="4000" rows="4" class="textarea textarea-bordered w-full" placeholder="Riassumi decisioni, attività, responsabili, scadenze e rischi. Non inventare dati."></textarea></label>
+    <div class="flex gap-2 items-center flex-wrap">
+      <button type="button" class="btn btn-primary btn-sm" @click="generateSummary()" {% if not llm_available %}disabled{% endif %}>Genera / Rigenera riassunto</button>
+      <button type="button" x-show="summaryText" class="btn btn-outline btn-sm" @click="navigator.clipboard.writeText(summaryText)">Copia</button>
+      <span role="status" class="text-xs opacity-65" x-text="summaryStatus"></span>
+    </div>
+    <div x-show="summaryText" class="bg-base-200 rounded-box p-4 whitespace-pre-wrap text-sm leading-relaxed" x-text="summaryText"></div>
+    {% if not llm_available %}<p class="text-sm text-warning">Model Router non configurato: il riassunto non è disponibile.</p>{% endif %}
+  </div></section>
+</div>
+<script nonce="{{ csp_nonce }}">
+function reviewStudio() {
+ return {
+  versions: {{ versions|tojson }}, leftVersion: {{ left_initial|tojson }}, rightVersion: {{ right_initial|tojson }},
+  leftSegments: [],rightSegments: [],draft: [],draftSource: '', savedVersion: '',
+  leftLimit:150,rightLimit:150,draftLimit:150,saving:false,saveStatus:'',error:'',
+  zoom:1,peaks:[],audioDuration:0,currentTime:0,
+  summaryVersion:{{ right_initial|tojson }},summaryPrompt:{{ summary_prompt|tojson }},
+  summaryText:'',summaryStatus:'',
+  async init() {
+   await Promise.all([this.loadSide('left'),this.loadSide('right')]);this.copyFrom('right');
+   {% if has_processed or has_original %}
+   try {const resp=await fetch('/viewer/{{ audio_job_id }}/waveform?source={{ 'processed' if has_processed else 'original' }}');
+     if(resp.ok) {this.peaks=(await resp.json()).peaks||[];this.$nextTick(()=>this.drawWaveform());}}
+   catch(_) { /* audio remains playable without waveform */ }
+   {% endif %}
+   await this.fetchSummary();
+  },
+  async loadSide(side) {
+   const token=side==='left'?this.leftVersion:this.rightVersion;
+   try {const resp=await fetch('/studio/{{ job.id }}/version/'+encodeURIComponent(token));
+     if(!resp.ok)throw Error('Versione non disponibile');const data=await resp.json();
+     if(side==='left') {this.leftSegments=data.segments;this.leftLimit=150;}
+     else {this.rightSegments=data.segments;this.rightLimit=150;}
+   }catch(e){this.error=e.message;}
+  },
+  copyFrom(side) {
+   const list=side==='left'?this.leftSegments:this.rightSegments;
+   if(!list.length)return;
+   if(this.draft.length&&this.saveStatus==='Modifiche non salvate') {
+     if(!confirm('Sostituire le modifiche non salvate?'))return;
+   }
+   this.draft=structuredClone(list);this.draftSource=side==='left'?this.leftVersion:this.rightVersion;
+   this.savedVersion='';this.saveStatus='Modifiche non salvate';this.draftLimit=150;
+  },
+  async saveCustom() {
+   this.saving=true;this.error='';
+   try {const resp=await fetch('/studio/{{ job.id }}/custom',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:this.draftSource,segments:this.draft.map(s=>({text:s.text,speaker:s.speaker||null}))})});
+    if(!resp.ok)throw Error('Salvataggio non riuscito ('+resp.status+')');
+    const result=await resp.json();this.savedVersion=result.version;this.saveStatus='Versione personalizzata salvata';
+    if(!this.versions.some(v=>v.id===result.version))this.versions.push({id:result.version,label:'Personalizzata · '+result.version.slice(0,8)});
+    this.summaryVersion=result.version;
+   }catch(e){this.error=e.message;}finally{this.saving=false;}
+  },
+  seekTo(t) {const a=this.$refs.audio;if(a){a.currentTime=t;this.currentTime=t;a.play().catch(()=>{});}},
+  formatTime(t){const n=Math.max(0,Math.floor(t||0));return String(Math.floor(n/3600)).padStart(2,'0')+':'+String(Math.floor(n%3600/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');},
+  drawWaveform() {
+   const canvas=this.$refs.waveCanvas;if(!canvas||!this.peaks.length)return;
+   const wrapper=this.$refs.waveScroll;const ratio=Math.min(2,window.devicePixelRatio||1);
+   const cssWidth=Math.max(300,wrapper.clientWidth*this.zoom);canvas.style.width=cssWidth+'px';canvas.style.height='82px';
+   canvas.width=Math.round(cssWidth*ratio);canvas.height=Math.round(82*ratio);
+   const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.clearRect(0,0,cssWidth,82);
+   ctx.fillStyle='#818cf8';const bar=cssWidth/this.peaks.length;
+   this.peaks.forEach((p,i)=>{const h=Math.max(1,p*75);ctx.fillRect(i*bar,(82-h)/2,Math.max(.65,bar*.8),h);});
+  },
+  seekFromWave(e) {const c=this.$refs.waveCanvas;const x=e.clientX-c.getBoundingClientRect().left;
+   if(e.type==='click'&&this.$refs.audio)this.seekTo(Math.min(1,Math.max(0,x/c.getBoundingClientRect().width))*this.$refs.audio.duration);},
+  async generateSummary(){
+   this.error='';this.summaryText='';this.summaryStatus='Invio in coda…';
+   try{const resp=await fetch('/studio/{{ job.id }}/summary',{method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({source:this.summaryVersion,prompt:this.summaryPrompt})});
+    if(!resp.ok)throw Error('Impossibile richiedere il riassunto ('+resp.status+')');
+    this.summaryStatus='Riassunto in coda';this.pollSummary();
+   }catch(e){this.error=e.message;this.summaryStatus='Errore';}
+  },
+  async fetchSummary(){
+   const job=this.summaryVersion.split('~')[0];
+   try{const resp=await fetch('/studio/{{ job.id }}/summary-status?source_job='+encodeURIComponent(job));
+    if(!resp.ok)return;const data=await resp.json();this.summaryText=(data.summary && data.summary.source===this.summaryVersion.split('~')[1])?data.summary.text:'';
+    this.summaryStatus=({queued:'In coda',started:'Elaborazione in corso',finished:'Completato',failed:'Errore: riprova',not_requested:'Non ancora generato'})[data.status]||data.status;
+   }catch(_){this.summaryStatus='Stato non disponibile';}
+  },
+  async pollSummary(){for(let n=0;n<450;n++){await new Promise(ok=>setTimeout(ok,7000));await this.fetchSummary();
+   if(this.summaryStatus==='Completato'||this.summaryStatus.startsWith('Errore'))break;}}
+ };
+}
+</script>
+{% endblock %}

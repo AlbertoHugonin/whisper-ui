@@ -23,6 +23,7 @@ def test_invalid_preset_settings_are_rejected():
         ('vad_threshold', .05), ('whisper_beam_size', 6), ('num_speakers', 999), ('audio_processing', 'infinite'),
         ('audio_target_lufs', -80), ('llm_context_prompt', 'X' * 4001),
         ('model_name', 'not-a-model'), ('language', 'not-a-language'),
+        ('summary_prompt', 'x' * 4001),
     ]:
         with pytest.raises(ValidationError):
             PresetSettings.model_validate({key: value})

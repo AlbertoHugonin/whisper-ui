@@ -436,6 +436,8 @@ async def re_transcribe_job(
         vad_threshold=vad_threshold,
         whisper_beam_size=whisper_beam_size,
         llm_context_prompt=src.llm_context_prompt,
+        summary_prompt=src.summary_prompt,
+        summary_enabled=src.summary_enabled,
         audio_processing=audio_processing,
         audio_denoise=audio_denoise,
         audio_compression=audio_compression,

@@ -23,6 +23,8 @@ class PresetSettings(BaseModel):
     vad_threshold: float = Field(default=0.25, ge=0.10, le=0.60)
     whisper_beam_size: Literal[5, 8] = 5
     llm_context_prompt: str = Field(default="", max_length=4000)
+    summary_prompt: str = Field(default="", max_length=4000)
+    summary_enabled: bool = False
     audio_processing: Literal["auto", "off", "custom"] = "auto"
     audio_denoise: Literal["auto", "off", "light", "medium"] = "auto"
     audio_compression: Literal["auto", "off", "light", "medium", "strong"] = "auto"

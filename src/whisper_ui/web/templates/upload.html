@@ -386,6 +386,15 @@
         <p class="text-xs opacity-60">Il modello lo usa per disambiguare termini. Non autorizza aggiunte o riscritture creative.</p>
       </div>
       <div class="fieldset">
+        <label for="summary-prompt" class="fieldset-label">Prompt per il riassunto AI</label>
+        <textarea id="summary-prompt" name="summary_prompt" rows="4" maxlength="4000" class="textarea textarea-bordered w-full"
+                  placeholder="Decisioni, azioni, responsabili, scadenze. Non inventare nulla.">{{ rt.summary_prompt if rt else '' }}</textarea>
+        <label class="label justify-start gap-2 mt-2"><input type="checkbox" name="summary_enabled" value="true" class="toggle toggle-primary toggle-sm"
+          x-model="summaryEnabled" {% if not llm_correction_available %}disabled{% endif %}>
+          Genera automaticamente il riassunto dopo Whisper</label>
+        <p class="text-xs opacity-60">Puoi comunque generare o rigenerare il riassunto dall'Editor, senza ritrascrivere.</p>
+      </div>
+      <div class="fieldset">
         <label class="fieldset-label gap-3">
           <input type="checkbox" name="llm_correction_enabled" value="true"
                  class="toggle toggle-primary toggle-sm"
@@ -437,6 +446,7 @@ function uploadForm() {
     diarization: {{ 'true' if (rt.enable_diarization if rt else diarization_default) else 'false' }},
     convertTraditional: {{ 'true' if (rt.convert_to_traditional if rt else true) else 'false' }},
     llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
+    summaryEnabled: {{ 'true' if (rt.summary_enabled if rt else false) else 'false' }},
     vadThreshold: {{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }},
     whisperBeamSize: {{ rt.whisper_beam_size if rt else 5 }},
     activePreset: null,

@@ -32,7 +32,9 @@
 
 {# Transcript display #}
 {% if result %}
-<header class="viewer-heading"><div><p class="viewer-eyebrow">STUDIO / TRASCRIZIONE</p><h1>{{ job.filename }}</h1></div><span class="viewer-heading-chip">{{ result.segments|length }} battute</span></header>
+<header class="viewer-heading"><div><p class="viewer-eyebrow">STUDIO / TRASCRIZIONE</p><h1>{{ job.filename }}</h1></div>
+  <div class="flex gap-2 items-center flex-wrap"><a class="btn btn-primary btn-sm" href="/studio/{{ job.id }}">Apri suite di editing e confronto</a>
+    <span class="viewer-heading-chip">{{ result.segments|length }} battute</span></div></header>
 
 {% if job.quality_warning %}
 {{ alert('warning', job.quality_warning, 'mb-4') }}

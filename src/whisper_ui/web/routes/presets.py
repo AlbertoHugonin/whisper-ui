@@ -80,7 +80,7 @@ async def _save(request: Request, db: DbDep, user: CurrentUserDep, settings: Set
     name = str(form.get('name', '')).strip()
     description = str(form.get('description', '')).strip()
     raw = {key: form[key] for key in PresetSettings.model_fields if key in form}
-    for key in ('enable_diarization', 'convert_to_traditional', 'llm_correction_enabled'):
+    for key in ('enable_diarization', 'convert_to_traditional', 'llm_correction_enabled', 'summary_enabled'):
         raw[key] = key in form
     try:
         if not (1 <= len(name) <= 70):

@@ -74,6 +74,8 @@ class Job:
     vad_threshold: float = 0.25  # Silero speech probability threshold; lower detects fainter speech
     whisper_beam_size: int = 5  # 5=standard; 8=experimental, comparative decode
     llm_context_prompt: str = ""
+    summary_prompt: str = ""
+    summary_enabled: bool = False
     audio_processing: str = "auto"
     audio_denoise: str = "auto"
     audio_compression: str = "auto"
