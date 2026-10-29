@@ -84,6 +84,7 @@
   <section class="mb-6" aria-label="{{ labels.UPLOAD_PRESET_SECTION }}">
     <div class="flex items-center justify-between mb-2">
       <h2 class="text-sm font-medium opacity-80">{{ labels.UPLOAD_PRESET_SECTION }}</h2>
+      <a href="/presets" class="btn btn-ghost btn-xs">Gestisci preset</a>
       <span class="text-xs opacity-60"
             x-show="activePreset === null && presetsTouched"
             x-cloak>{{ labels.UPLOAD_PRESET_CUSTOM }}</span>
@@ -130,6 +131,22 @@
         </div>
       </button>
     </div>
+    {% if saved_presets %}
+    <h3 class="text-xs font-semibold mt-4 mb-2 opacity-65">I tuoi preset</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {% for item in saved_presets %}
+      <button type="button" class="card bg-base-200 border border-line text-left hover:border-primary transition-colors"
+              :class="activePreset === '{{ item.id }}' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === '{{ item.id }}').toString()"
+              @click="applyPreset('{{ item.id }}')">
+        <span class="card-body p-3 gap-1"><strong class="text-sm break-words">{{ item.name }}</strong>
+          {% if item.description %}<span class="text-xs opacity-60 line-clamp-2">{{ item.description }}</span>{% endif %}
+        </span>
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <a class="link link-primary text-xs inline-block mt-3" href="/presets/new?source=meeting">+ Crea un preset a partire da Meeting</a>
   </section>
 
   {# Upload progress overlay #}
@@ -395,16 +412,12 @@
 
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
-const UPLOAD_PRESETS = {
-  meeting:   { language: 'auto', enable_diarization: true,  num_speakers: 0, convert_to_traditional: false, llm_correction_enabled: true  },
-  podcast:   { language: 'auto', enable_diarization: true,  num_speakers: 2, convert_to_traditional: false, llm_correction_enabled: true  },
-  interview: { language: 'auto', enable_diarization: true,  num_speakers: 2, convert_to_traditional: false, llm_correction_enabled: true  },
-  lecture:   { language: 'auto', enable_diarization: false, num_speakers: 0, convert_to_traditional: false, llm_correction_enabled: true  }
-};
+const UPLOAD_PRESETS = {{ preset_configs | tojson }};
 
 function uploadForm() {
   return {
     tab: '{{ initial_tab|default("files") }}',
+    initialPreset: {{ initial_preset | tojson }},
     retranscribing: {{ 'true' if rt else 'false' }},
     uploading: false,
     progress: 0,
@@ -442,6 +455,7 @@ function uploadForm() {
       // footer count and the disabled-but-still-populated input can't go
       // stale between tabs.
       this.$watch('tab', () => this.resetSelection());
+      if (this.initialPreset) this.$nextTick(() => this.applyPreset(this.initialPreset));
     },
     onProgress(event) {
       if (event.detail && event.detail.loaded !== undefined && event.detail.total) {

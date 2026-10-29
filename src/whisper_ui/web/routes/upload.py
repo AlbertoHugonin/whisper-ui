@@ -14,6 +14,7 @@ from markupsafe import escape
 from whisper_ui.core.constants import MAX_BATCH_SIZE
 from whisper_ui.core.languages import DEFAULT_WHISPER_MODEL, LANGUAGE_CHOICES, WHISPER_MODELS
 from whisper_ui.core.models import Job, JobStatus
+from whisper_ui.core.presets import BUILTIN_PRESETS
 from whisper_ui.core.url_validation import (
     GoogleDriveURLError,
     TwitterURLError,
@@ -29,6 +30,7 @@ from whisper_ui.core.url_validation import (
 )
 from whisper_ui.pipeline.audio_probe import get_audio_duration_seconds
 from whisper_ui.pipeline.preprocess import SUPPORTED_EXTENSIONS
+from whisper_ui.storage.presets import PresetRepository
 from whisper_ui.ui import labels as ui_labels
 from whisper_ui.web.auth import owner_filter
 from whisper_ui.web.deps import CurrentUserDep, DbDep, FileStoreDep, RedisDep, SettingsDep, templates
@@ -143,7 +145,8 @@ _UPLOAD_TABS = frozenset({"files", "folder", "url"})
 
 @router.get("/upload", response_class=HTMLResponse)
 async def upload_page(
-    request: Request, settings: SettingsDep, db: DbDep, user: CurrentUserDep, mode: str = "files", source_job: str = ""
+    request: Request, settings: SettingsDep, db: DbDep, user: CurrentUserDep,
+    mode: str = "files", source_job: str = "", preset: str = "",
 ):
     # `mode` is a UX hint from the dashboard quick-action cards
     # (/upload?mode=folder|url), not a security boundary — an unknown
@@ -159,6 +162,13 @@ async def upload_page(
                 re_source = candidate
         except Exception:
             re_source = None
+    saved_presets = PresetRepository(db.conn).list_for_owner(user.id)
+    preset_configs = {key: item["settings"] for key, item in BUILTIN_PRESETS.items()}
+    preset_configs.update({item.id: item.settings for item in saved_presets})
+    # If the caller provided a saved preset from another account, do not leak it.
+    if preset and preset not in preset_configs:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
     return templates.TemplateResponse(
         request=request,
         name="upload.html",
@@ -176,6 +186,9 @@ async def upload_page(
             "whisper_models": WHISPER_MODELS,
             "initial_tab": initial_tab,
             "retranscribe_source": re_source,
+            "saved_presets": saved_presets,
+            "preset_configs": preset_configs,
+            "initial_preset": preset,
         },
     )
 

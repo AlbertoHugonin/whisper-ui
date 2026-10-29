@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex flex-wrap justify-between gap-3 items-center mb-6">
+  <div><h1 class="text-2xl font-semibold">Preset di trascrizione</h1>
+    <p class="text-sm opacity-65 mt-1">Salva tutte le impostazioni, inclusi prompt, audio, VAD e correzione LLM. Ogni preset è privato.</p></div>
+  <a class="btn btn-primary" href="/presets/new">+ Nuovo preset da zero</a>
+</div>
+<section aria-label="Preset predefiniti" class="mb-8">
+  <h2 class="text-base font-semibold mb-3">Parti da un preset esistente</h2>
+  <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+    {% for key, item in builtins.items() %}
+    <div class="card border border-base-300 bg-base-200"><div class="card-body p-4 gap-2">
+      <h3 class="font-semibold">{{ item.name }}</h3><p class="text-sm opacity-65 flex-1">{{ item.description }}</p>
+      <a class="btn btn-outline btn-sm" href="/presets/new?source={{ key }}">Duplica e personalizza</a>
+    </div></div>
+    {% endfor %}
+  </div>
+</section>
+<section aria-label="Preset personali">
+  <h2 class="text-base font-semibold mb-3">I tuoi preset <span class="badge badge-ghost">{{ presets|length }}</span></h2>
+  {% if presets %}
+  <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+  {% for item in presets %}
+    <div class="card border border-base-300 bg-base-100"><div class="card-body p-4 gap-2">
+      <div><h3 class="font-semibold break-words">{{ item.name }}</h3>
+        {% if item.description %}<p class="text-sm opacity-65 mt-1 break-words">{{ item.description }}</p>{% endif %}</div>
+      <div class="text-xs opacity-65">{{ item.settings.language|upper }} · {{ item.settings.model_name }} · VAD {{ '%.2f'|format(item.settings.vad_threshold) }}{% if item.settings.llm_correction_enabled %} · Correzione LLM{% endif %}</div>
+      <div class="flex gap-2 flex-wrap mt-2">
+        <a class="btn btn-primary btn-sm" href="/upload?preset={{ item.id }}">Usa per trascrivere</a>
+        <a class="btn btn-outline btn-sm" href="/presets/{{ item.id }}/edit">Modifica</a>
+        <a class="btn btn-ghost btn-sm" href="/presets/new?source={{ item.id }}">Duplica</a>
+      </div>
+      <form action="/presets/{{ item.id }}/delete" method="post" class="mt-1" @submit="if (!confirm('Eliminare questo preset? Le trascrizioni precedenti resteranno intatte.')) $event.preventDefault()">
+        <button class="btn btn-ghost btn-xs text-error" type="submit">Elimina preset</button>
+      </form>
+    </div></div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <p class="rounded-box bg-base-200 p-5 text-sm opacity-70">Non hai ancora preset personali. Duplica “Meeting” oppure creane uno da zero.</p>
+  {% endif %}
+</section>
+{% endblock %}

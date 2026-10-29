@@ -45,6 +45,14 @@
         </a>
       </li>
       <li>
+        <a href="/presets"
+           :class="{ 'menu-active': $store.nav.activePage === 'presets' }"
+           title="Preset personali">
+          {{ icon_list("w-5 h-5 shrink-0") }}
+          <span class="sidebar-label sr-only lg:not-sr-only">Preset</span>
+        </a>
+      </li>
+      <li>
         <a href="/jobs"
            :class="{ 'menu-active': $store.nav.activePage === 'jobs' }"
            title="{{ labels.NAV_JOBS }}">

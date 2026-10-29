@@ -45,7 +45,7 @@ def test_build_worker_runtime_wires_shared_resources_and_closes_db():
 
         create_redis_mock.assert_called_once_with(fake_settings)
         db_ctor.assert_called_once_with(fake_settings.database_path)
-        fs_ctor.assert_called_once_with(fake_settings.upload_dir, fake_settings.output_dir)
+        fs_ctor.assert_called_once_with(fake_settings.upload_dir, fake_settings.output_dir, fake_settings.archive_dir)
         fake_db.close.assert_called_once()
 
 

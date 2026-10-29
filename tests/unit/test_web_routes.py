@@ -2364,3 +2364,144 @@ class TestStandaloneLLMCorrectionRoutes:
         assert 'Airdass e la piattaforma' in fixed.text
         assert 'meeting-corrected' in fixed.headers['content-disposition']
         assert filestore.load_result(job.id).segments[0].text == 'Airdas e la piattaforma.'
+
+class TestSavedTranscriptionPresets:
+    """Complete preset CRUD, cloning, isolation and upload integration."""
+
+    def _create(self, client, **overrides):
+        fields = {
+            'name': 'Meeting Airdass', 'description': 'Per i miei meeting',
+            'language': 'it', 'model_name': 'large-v3', 'num_speakers': '2',
+            'enable_diarization': 'true', 'llm_correction_enabled': 'true',
+            'whisper_keywords': 'Airdass, API, Customer Success',
+            'llm_context_prompt': 'Correggi i termini Airdass senza inventare nulla.',
+            'vad_threshold': '0.15', 'audio_processing': 'custom',
+            'audio_denoise': 'medium', 'audio_compression': 'light',
+            'audio_target_lufs': '-18', 'audio_max_gain_db': '12', 'audio_highpass_hz': '100',
+        }
+        fields.update(overrides)
+        return client.post('/presets', data=fields, follow_redirects=False)
+
+    def test_list_and_blank_and_meeting_clone_editor(self, client):
+        page = client.get('/presets')
+        assert page.status_code == 200
+        assert 'Nuovo preset da zero' in page.text
+        assert 'source=meeting' in page.text
+        blank = client.get('/presets/new')
+        assert blank.status_code == 200
+        assert 'name="llm_context_prompt"' in blank.text
+        assert 'name="whisper_keywords"' in blank.text
+        assert 'name="vad_threshold"' in blank.text
+        assert 'name="audio_highpass_hz"' in blank.text
+        meeting = client.get('/presets/new?source=meeting')
+        assert meeting.status_code == 200
+        assert 'name="enable_diarization"' in meeting.text
+        assert 'name="llm_correction_enabled"' in meeting.text
+        assert 'checked' in meeting.text
+
+    def test_save_complete_settings_and_upload_can_select_it(self, client, db, test_user):
+        from whisper_ui.storage.presets import PresetRepository
+        response = self._create(client)
+        assert response.status_code == 303
+        assert response.headers['location'] == '/presets'
+        preset = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
+        assert preset.settings['language'] == 'it'
+        assert preset.settings['enable_diarization'] is True
+        assert preset.settings['llm_correction_enabled'] is True
+        assert preset.settings['whisper_keywords'] == 'Airdass, API, Customer Success'
+        assert preset.settings['llm_context_prompt'].startswith('Correggi')
+        assert preset.settings['vad_threshold'] == .15
+        assert preset.settings['audio_target_lufs'] == -18
+        assert preset.settings['audio_denoise'] == 'medium'
+        uploaded = client.get(f'/upload?preset={preset.id}')
+        assert uploaded.status_code == 200
+        assert 'Meeting Airdass' in uploaded.text
+        assert f'"{preset.id}"' in uploaded.text
+        assert '"vad_threshold": 0.15' in uploaded.text
+        assert '"audio_denoise": "medium"' in uploaded.text
+        assert '"llm_context_prompt": "Correggi' in uploaded.text
+        assert f'/presets/{preset.id}/edit' in client.get('/presets').text
+
+    def test_preset_settings_are_snapshotted_in_real_upload_job(self, client, app, db, test_user):
+        from whisper_ui.storage.presets import PresetRepository
+        self._create(client)
+        config = PresetRepository(db.conn).list_for_owner(test_user.id)[0].settings
+        app.state.settings = app.state.settings.model_copy(update={
+            'ollama_base_url': 'http://ai-router:18084', 'hf_token': 'test-token-not-real',
+        })
+        # These are the complete controls populated by applyPreset() before
+        # the browser sends its regular POST. No special pipeline or model path.
+        form = {k: str(v) for k, v in config.items() if not isinstance(v, bool)}
+        form.update({k: 'true' for k, v in config.items() if isinstance(v, bool) and v})
+        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+            resp = client.post('/upload', data=form,
+                               files=[('files', ('meeting.wav', b'test audio', 'audio/wav'))],
+                               follow_redirects=False)
+        assert resp.status_code == 303
+        job = enqueue.call_args[0][0]
+        assert job.language == 'it'
+        assert job.model_name == 'large-v3'
+        assert job.num_speakers == 2
+        assert job.enable_diarization is True
+        assert job.llm_correction_enabled is True
+        assert job.whisper_keywords == 'Airdass, API, Customer Success'
+        assert job.llm_context_prompt.startswith('Correggi')
+        assert job.vad_threshold == .15
+        assert job.audio_processing == 'custom'
+        assert job.audio_denoise == 'medium'
+        assert job.audio_compression == 'light'
+        assert job.audio_target_lufs == -18
+        assert job.audio_max_gain_db == 12
+        assert job.audio_highpass_hz == 100
+        assert db.get_job(job.id).llm_context_prompt == job.llm_context_prompt
+        # Deleting the saved preset must not change settings stored in a job.
+        preset = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
+        PresetRepository(db.conn).delete(preset.id, test_user.id)
+        assert db.get_job(job.id).vad_threshold == .15
+
+    def test_clone_saved_preset_and_edit_without_mutating_original(self, client, db, test_user):
+        from whisper_ui.storage.presets import PresetRepository
+        self._create(client)
+        repo = PresetRepository(db.conn)
+        first = repo.list_for_owner(test_user.id)[0]
+        clone = client.get(f'/presets/new?source={first.id}')
+        assert clone.status_code == 200
+        assert 'Customer Success' in clone.text
+        assert 'Correggi i termini' in clone.text
+        response = self._create(client, name='Meeting duplicato', vad_threshold='0.35')
+        assert response.status_code == 303
+        latest = {p.name: p for p in repo.list_for_owner(test_user.id)}
+        assert latest['Meeting Airdass'].settings['vad_threshold'] == .15
+        assert latest['Meeting duplicato'].settings['vad_threshold'] == .35
+        updated = client.post(
+            f'/presets/{first.id}/edit',
+            data={'name': 'Airdass aggiornato', 'language': 'it', 'vad_threshold': '0.30'},
+            follow_redirects=False,
+        )
+        assert updated.status_code == 303
+        assert repo.get(first.id, test_user.id).name == 'Airdass aggiornato'
+        assert repo.get(first.id, test_user.id).settings['vad_threshold'] == .30
+        assert client.post(f'/presets/{first.id}/delete', follow_redirects=False).status_code == 303
+        assert repo.get(first.id, test_user.id) is None
+        assert len(repo.list_for_owner(test_user.id)) == 1
+
+    def test_owner_isolation_and_no_cross_user_preset_lookups(self, client, admin_client, db, test_user):
+        from whisper_ui.storage.presets import PresetRepository
+        self._create(client)
+        stored = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
+        assert admin_client.get(f'/presets/{stored.id}/edit').status_code == 404
+        assert admin_client.get(f'/presets/new?source={stored.id}').status_code == 404
+        assert admin_client.get(f'/upload?preset={stored.id}').status_code == 404
+        assert admin_client.post(f'/presets/{stored.id}/delete', follow_redirects=False).status_code == 404
+        assert PresetRepository(db.conn).get(stored.id, test_user.id) is not None
+
+    def test_validation_duplicates_and_prompt_escaping(self, client, db, test_user):
+        from whisper_ui.storage.presets import PresetRepository
+        assert self._create(client, vad_threshold='0.01').status_code == 200
+        assert PresetRepository(db.conn).list_for_owner(test_user.id) == []
+        assert self._create(client, name='').status_code == 200
+        assert self._create(client, name='<script>alert(1)</script>').status_code == 303
+        page = client.get('/presets')
+        assert '<script>alert(1)</script>' not in page.text
+        assert '&lt;script&gt;' in page.text
+        assert self._create(client, name='<SCRIPT>ALERT(1)</SCRIPT>').status_code == 200

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl">
+  <div class="mb-4"><a href="/presets" class="link link-hover text-sm opacity-60">← Torna ai preset</a></div>
+  <h1 class="text-2xl font-semibold">{{ 'Modifica preset' if preset else 'Crea preset personale' }}</h1>
+  <p class="text-sm opacity-65 mt-1 mb-6">Tutte le impostazioni verranno applicate ai nuovi lavori. Le trascrizioni già fatte non cambieranno.</p>
+  {% if error %}<div role="alert" class="alert alert-error mb-5">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/presets/' ~ preset.id ~ '/edit' if preset else '/presets' }}" class="space-y-7">
+    <section class="card bg-base-200 border border-base-300"><div class="card-body gap-4">
+      <h2 class="font-semibold">Identità del preset</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="fieldset"><span class="fieldset-legend">Nome del preset *</span>
+          <input class="input w-full" type="text" name="name" maxlength="70" required value="{{ form_name }}" placeholder="Meeting Airdass"></label>
+        <label class="fieldset"><span class="fieldset-legend">Descrizione (opzionale)</span>
+          <input class="input w-full" name="description" maxlength="300" value="{{ form_description }}" placeholder="Riunioni di lavoro e parole chiave"></label>
+      </div>
+    </div></section>
+    <section class="card border border-base-300"><div class="card-body gap-4">
+      <h2 class="font-semibold">Modello e lingua</h2>
+      <div class="grid md:grid-cols-3 gap-4">
+        <label class="fieldset"><span class="fieldset-legend">Lingua</span>
+          <select class="select w-full" name="language">{% for code in supported_languages %}<option value="{{ code }}" {% if cfg.language == code %}selected{% endif %}>{{ language_labels.get(code, code) }}</option>{% endfor %}</select></label>
+        <label class="fieldset"><span class="fieldset-legend">Modello Whisper</span>
+          <select class="select w-full" name="model_name">{% for model in whisper_models %}<option value="{{ model }}" {% if cfg.model_name == model %}selected{% endif %}>{{ model }}</option>{% endfor %}</select></label>
+        <label class="fieldset"><span class="fieldset-legend">Numero parlanti (0 = automatico)</span>
+          <input class="input w-full" type="number" name="num_speakers" min="0" max="20" value="{{ cfg.num_speakers }}"></label>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-5">
+        <label class="label justify-start gap-2"><input class="checkbox checkbox-primary" name="enable_diarization" type="checkbox" value="true" {% if cfg.enable_diarization %}checked{% endif %}> Distingui i parlanti (diarizzazione)</label>
+        <label class="label justify-start gap-2"><input class="checkbox checkbox-primary" name="convert_to_traditional" type="checkbox" value="true" {% if cfg.convert_to_traditional %}checked{% endif %}> Cinese tradizionale</label>
+      </div>
+      <p class="text-xs opacity-60">Se una funzione non è disponibile sul server al momento dell'invio, Whisper la disattiva senza bloccare la trascrizione.</p>
+    </div></section>
+    <section class="card border border-base-300"><div class="card-body gap-4">
+      <h2 class="font-semibold">Sensibilità VAD e ottimizzazione audio</h2>
+      <div class="fieldset" x-data="{vad: {{ cfg.vad_threshold | tojson }} }">
+        <label for="preset-vad" class="fieldset-legend">Sensibilità Silero VAD: <output id="preset-vad-value" x-text="Number(vad).toFixed(2)">{{ '%.2f'|format(cfg.vad_threshold|float) }}</output></label>
+        <input id="preset-vad" class="range range-primary w-full" type="range" name="vad_threshold" min="0.10" max="0.60" step="0.05" value="{{ cfg.vad_threshold }}" x-model.number="vad">
+        <div class="flex justify-between text-xs opacity-65"><span>0,10 · Voci deboli</span><span>0,25 · Bilanciato</span><span>0,60 · Più selettivo</span></div>
+      </div>
+      <div class="grid sm:grid-cols-3 gap-4">
+        <label class="fieldset"><span class="fieldset-legend">Elaborazione audio</span><select name="audio_processing" class="select w-full">{% for v, label in [('auto','Automatica'),('off','Solo conversione'),('custom','Personalizzata')] %}<option value="{{ v }}" {% if cfg.audio_processing == v %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="fieldset"><span class="fieldset-legend">Riduzione del rumore</span><select name="audio_denoise" class="select w-full">{% for v in ['auto','off','light','medium'] %}<option value="{{ v }}" {% if cfg.audio_denoise == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+        <label class="fieldset"><span class="fieldset-legend">Compressione della voce</span><select name="audio_compression" class="select w-full">{% for v in ['auto','off','light','medium','strong'] %}<option value="{{ v }}" {% if cfg.audio_compression == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+        <label class="fieldset"><span class="fieldset-legend">Volume obiettivo LUFS</span><input type="number" class="input w-full" name="audio_target_lufs" min="-24" max="-12" step="1" value="{{ cfg.audio_target_lufs }}"></label>
+        <label class="fieldset"><span class="fieldset-legend">Amplificazione massima dB</span><input type="number" class="input w-full" name="audio_max_gain_db" min="0" max="30" step="1" value="{{ cfg.audio_max_gain_db }}"></label>
+        <label class="fieldset"><span class="fieldset-legend">Filtro passa-alto Hz</span><input type="number" class="input w-full" name="audio_highpass_hz" min="0" max="180" step="10" value="{{ cfg.audio_highpass_hz }}"></label>
+      </div>
+    </div></section>
+    <section class="card border border-base-300"><div class="card-body gap-4">
+      <h2 class="font-semibold">I due prompt</h2>
+      <label class="fieldset"><span class="fieldset-legend">Parole chiave e contesto iniziale per Whisper</span>
+        <textarea class="textarea textarea-bordered w-full" rows="4" name="whisper_keywords" maxlength="1500" placeholder="Airdass, API, nomi di prodotti, acronimi...">{{ cfg.whisper_keywords }}</textarea>
+        <span class="text-xs opacity-65">Suggerisce il vocabolario al riconoscimento vocale. Non scrivere istruzioni da eseguire.</span></label>
+      <label class="fieldset"><span class="fieldset-legend">Contesto per la correzione LLM</span>
+        <textarea class="textarea textarea-bordered w-full" rows="6" name="llm_context_prompt" maxlength="4000" placeholder="Terminologia del meeting; non inventare né omettere contenuti...">{{ cfg.llm_context_prompt }}</textarea>
+        <span class="text-xs opacity-65">Aiuta a correggere termini ambigui dopo che la trascrizione originale è già disponibile.</span></label>
+      <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="llm_correction_enabled" type="checkbox" value="true" {% if cfg.llm_correction_enabled %}checked{% endif %}>
+        Avvia la correzione LLM automaticamente dopo la trascrizione</label>
+      <p class="text-xs opacity-65">La trascrizione originale non aspetta l'LLM e rimane sempre disponibile. La correzione usa la coda dedicata.</p>
+    </div></section>
+    <div class="flex flex-wrap gap-3 sticky bottom-0 bg-base-100/95 p-3 border-t border-base-300 z-10">
+      <button type="submit" class="btn btn-primary">{{ 'Salva modifiche' if preset else 'Crea preset' }}</button>
+      <a class="btn btn-ghost" href="/presets">Annulla</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

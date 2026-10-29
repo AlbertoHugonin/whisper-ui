@@ -246,8 +246,8 @@ def enqueue_pipeline(
 
     * ``job.source_url`` → prepend a download sub-job
     * ``job.enable_diarization`` → add a diarize branch parallel to transcribe
-    * ``job.llm_correction_enabled`` (AND ``settings.ollama_base_url``) → add
-      an llm_correction sub-job after postprocess
+    * ``job.llm_correction_enabled`` (AND ``settings.ollama_base_url``) →
+      schedule a standalone LLM correction after the original is completed
 
     Returns the id of the last sub-job in the chain, so callers can attach
     monitoring to the tail of the pipeline if they want to.

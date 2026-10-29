@@ -65,6 +65,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_active_admin ON users(is_active, is_admin);
+
+CREATE TABLE IF NOT EXISTS transcription_presets (
+    id TEXT PRIMARY KEY,
+    owner_id INTEGER NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE,
+    description TEXT NOT NULL DEFAULT '',
+    settings_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(owner_id) REFERENCES users(id),
+    UNIQUE(owner_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_presets_owner ON transcription_presets(owner_id);
 """
 
 _MIGRATIONS: list[str] = [
