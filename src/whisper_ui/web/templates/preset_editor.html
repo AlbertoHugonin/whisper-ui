@@ -25,6 +25,13 @@
         <label class="fieldset"><span class="fieldset-legend">Numero parlanti (0 = automatico)</span>
           <input class="input w-full" type="number" name="num_speakers" min="0" max="20" value="{{ cfg.num_speakers }}"></label>
       </div>
+      <label class="fieldset max-w-md"><span class="fieldset-legend">Decodifica Whisper</span>
+        <select name="whisper_beam_size" class="select w-full">
+          <option value="5" {% if cfg.whisper_beam_size|default(5) == 5 %}selected{% endif %}>Standard · Beam 5 (consigliato)</option>
+          <option value="8" {% if cfg.whisper_beam_size|default(5) == 8 %}selected{% endif %}>Approfondita · Beam 8 (sperimentale)</option>
+        </select>
+        <span class="text-xs opacity-60">Beam 8 può riconoscere meglio alcuni termini, ma talvolta omette parole. Il contesto rimane spento per ridurre le allucinazioni.</span>
+      </label>
       <div class="flex flex-col sm:flex-row gap-5">
         <label class="label justify-start gap-2"><input class="checkbox checkbox-primary" name="enable_diarization" type="checkbox" value="true" {% if cfg.enable_diarization %}checked{% endif %}> Distingui i parlanti (diarizzazione)</label>
         <label class="label justify-start gap-2"><input class="checkbox checkbox-primary" name="convert_to_traditional" type="checkbox" value="true" {% if cfg.convert_to_traditional %}checked{% endif %}> Cinese tradizionale</label>

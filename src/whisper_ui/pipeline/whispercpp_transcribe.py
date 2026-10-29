@@ -66,6 +66,7 @@ class WhisperCppTranscribeStage:
         vad_speech_pad_ms: int = 400,
         vad_samples_overlap: float = 0.20,
         max_context: int = 0,
+        beam_size: int = 5,
         initial_prompt: str = "",
     ) -> None:
         # ``device`` is accepted for interface symmetry with TranscribeStage;
@@ -84,6 +85,9 @@ class WhisperCppTranscribeStage:
         self._vad_speech_pad_ms = vad_speech_pad_ms
         self._vad_samples_overlap = vad_samples_overlap
         self._max_context = max_context
+        if not 1 <= beam_size <= 16:
+            raise ValueError("beam_size must be between 1 and 16")
+        self._beam_size = beam_size
         self._initial_prompt = initial_prompt
 
     @property
@@ -212,14 +216,16 @@ class WhisperCppTranscribeStage:
                 ]
             if self._initial_prompt.strip():
                 cmd += ["--prompt", self._initial_prompt.strip()[:1500]]
+            cmd += ["-bs", str(self._beam_size)]
             if self._max_context >= 0:
                 cmd += ["-mc", str(self._max_context)]
 
             logger.info(
-                "whisper-cli starting (vad=%s threshold=%.2f pad_ms=%d max_context=%d language=%s)",
+                "whisper-cli starting (vad=%s threshold=%.2f pad_ms=%d beam_size=%d max_context=%d language=%s)",
                 vad_model_path is not None,
                 self._vad_threshold,
                 self._vad_speech_pad_ms,
+                self._beam_size,
                 self._max_context,
                 language,
                 extra={
@@ -227,6 +233,7 @@ class WhisperCppTranscribeStage:
                     "vad": vad_model_path is not None,
                     "vad_threshold": self._vad_threshold if vad_model_path else None,
                     "vad_speech_pad_ms": self._vad_speech_pad_ms if vad_model_path else None,
+                    "beam_size": self._beam_size,
                     "max_context": self._max_context,
                     "language": language,
                 },

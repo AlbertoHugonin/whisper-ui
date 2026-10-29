@@ -713,7 +713,10 @@ class TestJobsRoutes:
         ):
             resp = client.post(
                 f"/jobs/{src.id}/re-transcribe",
-                data={"language": "en", "model_name": "medium", "enable_diarization": "true", "vad_threshold": "0.55"},
+                data={
+                    "language": "en", "model_name": "medium", "enable_diarization": "true",
+                    "vad_threshold": "0.55", "whisper_beam_size": "8",
+                },
             )
 
         assert resp.status_code == 204
@@ -725,6 +728,7 @@ class TestJobsRoutes:
         assert new_job.language == "en"
         assert new_job.model_name == "medium"
         assert new_job.vad_threshold == 0.55
+        assert new_job.whisper_beam_size == 8
         assert new_job.enable_diarization is True
         assert new_job.source_job_id == src.id
         assert new_job.status == JobStatus.QUEUED
@@ -1449,6 +1453,27 @@ class TestUploadPost:
         job = mock_enqueue.call_args[0][0]
         assert job.enable_diarization is True
         assert job.llm_correction_enabled is True
+
+    def test_whisper_beam8_is_saved_for_uploaded_audio(self, client, db):
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            resp = client.post(
+                "/upload", data={"language": "it", "whisper_beam_size": "8"},
+                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
+                follow_redirects=False,
+            )
+        assert resp.status_code == 303
+        job = enqueue.call_args[0][0]
+        assert job.whisper_beam_size == 8
+        assert db.get_job(job.id).whisper_beam_size == 8
+
+    def test_whisper_beam_rejects_unsupported_modes(self, client, db):
+        for value in ("0", "6", "7", "9", "abc"):
+            resp = client.post(
+                "/upload", data={"whisper_beam_size": value},
+                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
+            )
+            assert resp.status_code == 422, value
+        assert list_jobs(db) == []
 
     def test_upload_vad_slider_is_saved(self, client, db):
         with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
@@ -2375,7 +2400,7 @@ class TestSavedTranscriptionPresets:
             'enable_diarization': 'true', 'llm_correction_enabled': 'true',
             'whisper_keywords': 'Airdass, API, Customer Success',
             'llm_context_prompt': 'Correggi i termini Airdass senza inventare nulla.',
-            'vad_threshold': '0.15', 'audio_processing': 'custom',
+            'vad_threshold': '0.15', 'whisper_beam_size': '8', 'audio_processing': 'custom',
             'audio_denoise': 'medium', 'audio_compression': 'light',
             'audio_target_lufs': '-18', 'audio_max_gain_db': '12', 'audio_highpass_hz': '100',
         }
@@ -2447,6 +2472,7 @@ class TestSavedTranscriptionPresets:
         assert job.whisper_keywords == 'Airdass, API, Customer Success'
         assert job.llm_context_prompt.startswith('Correggi')
         assert job.vad_threshold == .15
+        assert job.whisper_beam_size == 8
         assert job.audio_processing == 'custom'
         assert job.audio_denoise == 'medium'
         assert job.audio_compression == 'light'

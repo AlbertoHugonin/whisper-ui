@@ -43,6 +43,7 @@ _JOB_COLUMNS = [
     "llm_correction_enabled",
     "whisper_keywords",
     "vad_threshold",
+    "whisper_beam_size",
     "llm_context_prompt",
     "audio_processing",
     "audio_denoise",

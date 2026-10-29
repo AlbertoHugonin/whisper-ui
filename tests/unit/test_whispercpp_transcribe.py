@@ -325,6 +325,7 @@ class TestBackendSelection:
         job = MagicMock()
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
+        job.whisper_beam_size = 5
         stage = _build_transcribe_stage(job, self._runtime("whispercpp"), "cuda")
         assert isinstance(stage, WhisperCppTranscribeStage)
 
@@ -332,6 +333,7 @@ class TestBackendSelection:
         job = MagicMock()
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
+        job.whisper_beam_size = 5
         runtime = self._runtime("whispercpp")
         runtime.settings.whispercpp_vad = False
         runtime.settings.whispercpp_max_context = -1
@@ -349,18 +351,22 @@ class TestBackendSelection:
         job = MagicMock()
         job.model_name = "large-v3"
         job.vad_threshold = 0.10
+        job.whisper_beam_size = 8
         stage = _build_transcribe_stage(job, self._runtime("whispercpp"), "cuda")
         assert stage._vad_threshold == 0.10
+        assert stage._beam_size == 8
         calls = []
         payload = {"result": {"language": "it"}, "transcription": []}
         with patch(f"{_MODULE}.subprocess.run", side_effect=_fake_cli_writer(payload, calls)):
             stage._run_whisper_cli("/m/model.bin", "/tmp/audio.wav", "it", "/m/vad.bin")
         assert calls and calls[0][calls[0].index("-vt") + 1] == "0.1"
+        assert calls[0][calls[0].index("-bs") + 1] == "8"
 
     def test_defaults_to_whisperx_backend(self):
         job = MagicMock()
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
+        job.whisper_beam_size = 5
         stage = _build_transcribe_stage(job, self._runtime("whisperx"), "cuda")
         assert isinstance(stage, TranscribeStage)
 

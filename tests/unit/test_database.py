@@ -23,6 +23,15 @@ def test_insert_and_get(db: JobDatabase):
     assert fetched.status == JobStatus.PENDING
 
 
+def test_beam_search_configuration_persists_per_job(db: JobDatabase):
+    job = Job(filename="meeting.wav", whisper_beam_size=8)
+    db.insert_job(job)
+    assert db.get_job(job.id).whisper_beam_size == 8
+    job.whisper_beam_size = 5
+    db.update_job(job)
+    assert db.get_job(job.id).whisper_beam_size == 5
+
+
 def test_vad_threshold_persists_per_job_and_can_be_updated(db: JobDatabase):
     job = Job(filename="meeting.wav", vad_threshold=0.10)
     db.insert_job(job)

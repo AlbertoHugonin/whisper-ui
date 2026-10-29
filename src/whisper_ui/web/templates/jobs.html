@@ -74,6 +74,15 @@
         </div>
 
         <div class="fieldset rounded-box border border-base-300 p-3">
+          <label for="retranscribe-beam-size" class="fieldset-label font-semibold">Decodifica Whisper</label>
+          <select id="retranscribe-beam-size" class="select select-bordered w-full" x-model.number="whisperBeamSize">
+            <option value="5">Standard · Beam 5</option>
+            <option value="8">Approfondita · Beam 8 (sperimentale)</option>
+          </select>
+          <p class="text-xs opacity-60">Confronta i risultati: Beam 8 non garantisce parole aggiuntive.</p>
+        </div>
+
+        <div class="fieldset rounded-box border border-base-300 p-3">
           <label for="retranscribe-vad-threshold" class="fieldset-label font-semibold">Sensibilità voce (Silero VAD): <span x-text="Number(vadThreshold).toFixed(2)"></span></label>
           <input id="retranscribe-vad-threshold" type="range" class="range range-primary range-sm w-full"
                  min="0.10" max="0.60" step="0.05" x-model.number="vadThreshold">
@@ -119,6 +128,7 @@ function retranscribeDialog() {
     traditional: false,
     llm: false,
     vadThreshold: 0.25,
+    whisperBeamSize: 5,
     submitting: false,
     show(detail) {
       this.jobId = detail.jobId;
@@ -129,6 +139,7 @@ function retranscribeDialog() {
       this.traditional = !!detail.traditional;
       this.llm = !!detail.llm && RT_OLLAMA_AVAILABLE;
       this.vadThreshold = Number(detail.vadThreshold ?? 0.25);
+      this.whisperBeamSize = Number(detail.whisperBeamSize ?? 5);
       this.submitting = false;
       this.$refs.rtDialog.showModal();
     },
@@ -146,6 +157,7 @@ function retranscribeDialog() {
       fd.set('model_name', this.modelName);
       fd.set('num_speakers', this.numSpeakers);
       fd.set('vad_threshold', Number(this.vadThreshold).toFixed(2));
+      fd.set('whisper_beam_size', String(this.whisperBeamSize));
       // Only send checkboxes that are on, matching HTML form semantics; the
       // route's Form(bool) defaults to False when the field is absent.
       if (this.diarization) fd.set('enable_diarization', 'true');

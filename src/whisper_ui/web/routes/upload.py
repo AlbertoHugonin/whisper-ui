@@ -7,14 +7,14 @@ from pathlib import Path, PurePosixPath
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from markupsafe import escape
 
 from whisper_ui.core.constants import MAX_BATCH_SIZE
 from whisper_ui.core.languages import DEFAULT_WHISPER_MODEL, LANGUAGE_CHOICES, WHISPER_MODELS
 from whisper_ui.core.models import Job, JobStatus
-from whisper_ui.core.presets import BUILTIN_PRESETS
+from whisper_ui.core.presets import BUILTIN_PRESETS, PresetSettings
 from whisper_ui.core.url_validation import (
     GoogleDriveURLError,
     TwitterURLError,
@@ -164,10 +164,11 @@ async def upload_page(
             re_source = None
     saved_presets = PresetRepository(db.conn).list_for_owner(user.id)
     preset_configs = {key: item["settings"] for key, item in BUILTIN_PRESETS.items()}
-    preset_configs.update({item.id: item.settings for item in saved_presets})
+    preset_configs.update(
+        {item.id: PresetSettings.model_validate(item.settings).model_dump() for item in saved_presets}
+    )
     # If the caller provided a saved preset from another account, do not leak it.
     if preset and preset not in preset_configs:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404)
     return templates.TemplateResponse(
         request=request,
@@ -217,6 +218,7 @@ async def upload_submit(
     llm_correction_enabled: Annotated[bool, Form()] = False,
     whisper_keywords: Annotated[str, Form()] = "Airdass",
     vad_threshold: Annotated[float, Form(ge=0.10, le=0.60)] = 0.25,
+    whisper_beam_size: Annotated[int, Form(ge=5, le=8)] = 5,
     llm_context_prompt: Annotated[str, Form()] = "",
     audio_processing: Annotated[str, Form()] = "auto",
     audio_denoise: Annotated[str, Form()] = "auto",
@@ -225,6 +227,8 @@ async def upload_submit(
     audio_max_gain_db: Annotated[float, Form()] = 18.0,
     audio_highpass_hz: Annotated[int, Form()] = 80,
 ):
+    if whisper_beam_size not in (5, 8):
+        raise HTTPException(status_code=422, detail="Beam size must be 5 or 8")
     htmx = _is_htmx(request)
 
     # Server-side validation of select inputs
@@ -301,6 +305,7 @@ async def upload_submit(
             llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
             whisper_keywords=whisper_keywords.strip()[:1500],
             vad_threshold=vad_threshold,
+            whisper_beam_size=whisper_beam_size,
             llm_context_prompt=llm_context_prompt.strip()[:4000],
             audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
             audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",
@@ -412,6 +417,7 @@ async def upload_url_submit(
     llm_correction_enabled: Annotated[bool, Form()] = False,
     whisper_keywords: Annotated[str, Form()] = "Airdass",
     vad_threshold: Annotated[float, Form(ge=0.10, le=0.60)] = 0.25,
+    whisper_beam_size: Annotated[int, Form(ge=5, le=8)] = 5,
     llm_context_prompt: Annotated[str, Form()] = "",
     audio_processing: Annotated[str, Form()] = "auto",
     audio_denoise: Annotated[str, Form()] = "auto",
@@ -420,6 +426,8 @@ async def upload_url_submit(
     audio_max_gain_db: Annotated[float, Form()] = 18.0,
     audio_highpass_hz: Annotated[int, Form()] = 80,
 ):
+    if whisper_beam_size not in (5, 8):
+        raise HTTPException(status_code=422, detail="Beam size must be 5 or 8")
     htmx = _is_htmx(request)
 
     option_error = validate_upload_options(language, model_name)
@@ -551,6 +559,7 @@ async def upload_url_submit(
             llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
             whisper_keywords=whisper_keywords.strip()[:1500],
             vad_threshold=vad_threshold,
+            whisper_beam_size=whisper_beam_size,
             llm_context_prompt=llm_context_prompt.strip()[:4000],
             audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
             audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",

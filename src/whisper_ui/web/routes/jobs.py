@@ -388,6 +388,7 @@ async def re_transcribe_job(
     convert_to_traditional: Annotated[bool, Form()] = False,
     llm_correction_enabled: Annotated[bool, Form()] = False,
     vad_threshold: Annotated[float, Form(ge=0.10, le=0.60)] = 0.25,
+    whisper_beam_size: Annotated[int, Form(ge=5, le=8)] = 5,
     audio_processing: Annotated[str, Form()] = "auto",
     audio_denoise: Annotated[str, Form()] = "auto",
     audio_compression: Annotated[str, Form()] = "auto",
@@ -408,6 +409,8 @@ async def re_transcribe_job(
     # only a COMPLETED job has a transcript worth preserving as a prior version.
     if src is None or src.status != JobStatus.COMPLETED:
         return Response(status_code=404)
+    if whisper_beam_size not in (5, 8):
+        raise HTTPException(status_code=422, detail="Beam size must be 5 or 8")
 
     # escape(): the label reflects the raw form value back in a text/html
     # response, same convention as upload.py's _htmx_error.
@@ -431,6 +434,7 @@ async def re_transcribe_job(
         llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
         whisper_keywords=src.whisper_keywords,
         vad_threshold=vad_threshold,
+        whisper_beam_size=whisper_beam_size,
         llm_context_prompt=src.llm_context_prompt,
         audio_processing=audio_processing,
         audio_denoise=audio_denoise,

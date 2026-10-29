@@ -87,6 +87,7 @@ def _build_transcribe_stage(job: Job, runtime: WorkerRuntime, torch_device: str)
             vad=runtime.settings.whispercpp_vad,
             vad_model=runtime.settings.whispercpp_vad_model,
             vad_threshold=job.vad_threshold,
+            beam_size=job.whisper_beam_size,
             vad_min_speech_ms=runtime.settings.whispercpp_vad_min_speech_ms,
             vad_min_silence_ms=runtime.settings.whispercpp_vad_min_silence_ms,
             vad_speech_pad_ms=runtime.settings.whispercpp_vad_speech_pad_ms,

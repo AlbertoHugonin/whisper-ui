@@ -344,6 +344,16 @@
       </div>
 
       <div class="fieldset rounded-box border border-base-300 p-4">
+        <label for="whisper-beam-size" class="fieldset-label font-semibold">Decodifica Whisper (beam search)</label>
+        <select id="whisper-beam-size" name="whisper_beam_size" class="select select-bordered w-full max-w-md"
+                x-model.number="whisperBeamSize">
+          <option value="5">Standard · Beam 5 (consigliato)</option>
+          <option value="8">Approfondita · Beam 8 (sperimentale)</option>
+        </select>
+        <p class="text-xs opacity-60">Beam 8 esplora più alternative, ma non recupera sempre più parole. Confronta con Ritrascrivi. Contesto automatico disattivato per evitare ripetizioni.</p>
+      </div>
+
+      <div class="fieldset rounded-box border border-base-300 p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <label for="vad-threshold" class="fieldset-label font-semibold">Sensibilità rilevamento voce (Silero VAD)</label>
           <output for="vad-threshold" class="badge badge-primary badge-outline font-mono" x-text="Number(vadThreshold).toFixed(2)">{{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }}</output>
@@ -428,6 +438,7 @@ function uploadForm() {
     convertTraditional: {{ 'true' if (rt.convert_to_traditional if rt else true) else 'false' }},
     llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
     vadThreshold: {{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }},
+    whisperBeamSize: {{ rt.whisper_beam_size if rt else 5 }},
     activePreset: null,
     presetsTouched: false,
     _applyingPreset: false,

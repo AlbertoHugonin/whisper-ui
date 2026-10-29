@@ -21,6 +21,7 @@ class PresetSettings(BaseModel):
     llm_correction_enabled: bool = False
     whisper_keywords: str = Field(default="Airdass", max_length=1500)
     vad_threshold: float = Field(default=0.25, ge=0.10, le=0.60)
+    whisper_beam_size: Literal[5, 8] = 5
     llm_context_prompt: str = Field(default="", max_length=4000)
     audio_processing: Literal["auto", "off", "custom"] = "auto"
     audio_denoise: Literal["auto", "off", "light", "medium"] = "auto"
@@ -30,6 +31,15 @@ class PresetSettings(BaseModel):
     audio_highpass_hz: int = Field(default=80, ge=0, le=180)
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("whisper_beam_size", mode="before")
+    @classmethod
+    def parse_beam_size(cls, value):
+        # HTML form values are strings; accept "5"/"8" without weakening
+        # the persisted Literal[5,8] invariant.
+        if isinstance(value, str) and value in {"5", "8"}:
+            return int(value)
+        return value
 
     @field_validator("language", "model_name")
     @classmethod
