@@ -7,6 +7,11 @@ const assert = require('node:assert/strict');
 const template = fs.readFileSync(path.join(__dirname, '../../src/whisper_ui/web/templates/studio.html'), 'utf8');
 assert.equal(template.includes('<canvas'), false, 'No waveform/canvas should load');
 assert.equal(template.includes('/waveform?'), false, 'No waveform API should be requested');
+assert.match(template, /<audio[^>]*class="hidden"[^>]*aria-hidden="true"/);
+assert.equal(/<audio[^>]*\scontrols(?:\s|>)/.test(template), false, 'Native audio controls must be hidden');
+assert.match(template, /@click="togglePlayback\(\)"/);
+assert.match(template, /@play="playing=true"/);
+assert.match(template, /@pause="playing=false"/);
 assert.match(template, /@timeupdate="onAudioTimeUpdate/);
 assert.match(template, /@seeked="onAudioTimeUpdate/);
 let script = template.split('<script nonce="{{ csp_nonce }}">')[1].split('</script>')[0];
@@ -34,11 +39,23 @@ function list(ref) {
  };
  return list;
 }
-const player = {currentTime:0,duration:3600,play:()=>Promise.resolve()};
+const player = {currentTime:0,duration:3600,paused:true,plays:0,pauses:0,
+ play(){this.paused=false;this.plays++;instance.playing=true;return Promise.resolve();},
+ pause(){this.paused=true;this.pauses++;instance.playing=false;}};
 instance.$refs = {audio:player,leftList:list('left'),rightList:list('right'),draftList:list('draft')};
 instance.$nextTick=(f)=>f();
 instance.onAudioMetadata(3600);
 assert.equal(instance.audioDuration,3600);
+assert.equal(instance.playing,false);
+instance.togglePlayback();
+assert.equal(player.plays,1);
+assert.equal(instance.playing,true);
+instance.togglePlayback();
+assert.equal(player.pauses,1);
+assert.equal(instance.playing,false);
+instance.seekTo(14, false);
+assert.equal(player.currentTime,14);
+assert.equal(player.plays,1,'Scrubbing the slider must not auto-play');
 assert.equal(instance.viewEnd(),3600);
 instance.zoomTimeline(1.8);
 assert.ok(instance.viewSpan()<3600);

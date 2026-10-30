@@ -15,16 +15,20 @@
       <span class="font-mono text-xs tabular-nums" x-text="formatTime(currentTime)+' / '+formatTime(audioDuration)"></span>
     </div>
     {% if has_processed or has_original %}
-    <audio x-ref="audio" controls preload="metadata" class="w-full"
+    <audio x-ref="audio" preload="metadata" class="hidden" aria-hidden="true"
            @timeupdate="onAudioTimeUpdate($el.currentTime)" @seeked="onAudioTimeUpdate($el.currentTime)"
-           @loadedmetadata="onAudioMetadata($el.duration)" @ended="onAudioTimeUpdate($el.duration)">
+           @loadedmetadata="onAudioMetadata($el.duration)" @play="playing=true" @pause="playing=false"
+           @ended="playing=false;onAudioTimeUpdate($el.duration)">
       {% if has_processed %}<source src="/viewer/{{ audio_job_id }}/processed-audio" type="audio/wav">{% else %}<source src="/viewer/{{ audio_job_id }}/media">{% endif %}
       Il browser non supporta la riproduzione audio.
     </audio>
     <div class="rounded-box border border-base-300 bg-base-100 p-3 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="text-xs opacity-70" aria-live="off" x-text="'Vista '+formatTime(viewStart)+' – '+formatTime(viewEnd())"></div>
-        <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Zoom e navigazione della timeline">
+        <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Riproduzione, zoom e navigazione della timeline">
+          <button type="button" class="btn btn-primary btn-sm min-w-24" :disabled="!audioDuration"
+                  :aria-label="playing ? 'Metti in pausa' : 'Riproduci audio'" :aria-pressed="playing.toString()"
+                  @click="togglePlayback()" x-text="playing ? '❚❚ Pausa' : '▶ Riproduci'">▶ Riproduci</button>
           <button type="button" class="btn btn-outline btn-xs" @click="zoomTimeline(1/1.8)" :disabled="zoom <= 1" aria-label="Riduci lo zoom">− Zoom</button>
           <button type="button" class="btn btn-outline btn-xs" @click="zoomTimeline(1.8)" :disabled="zoom >= 32" aria-label="Aumenta lo zoom">+ Zoom</button>
           <button type="button" class="btn btn-ghost btn-xs" @click="panTimeline(-.65)" aria-label="Scorri indietro nella registrazione">◀</button>
@@ -144,7 +148,7 @@ function reviewStudio() {
   versions: {{ versions|tojson }}, leftVersion: {{ left_initial|tojson }}, rightVersion: {{ right_initial|tojson }},
   leftSegments: [],rightSegments: [],draft: [],draftSource: '', savedVersion: '',
   leftLimit:150,rightLimit:150,draftLimit:150,saving:false,saveStatus:'',error:'',
-  zoom:1,viewStart:0,audioDuration:0,currentTime:0,followPlayback:true,
+  zoom:1,viewStart:0,audioDuration:0,currentTime:0,playing:false,followPlayback:true,
   leftActive:-1,rightActive:-1,draftActive:-1,
   summaryVersion:{{ right_initial|tojson }},summaryPrompt:{{ summary_prompt|tojson }},
   summaryText:'',summaryStatus:'',
@@ -200,6 +204,11 @@ function reviewStudio() {
    const bounded=Math.max(0,Math.min(t,this.audioDuration||a.duration||t));
    a.currentTime=bounded;this.onAudioTimeUpdate(bounded);
    if(autoplay)a.play().catch(()=>{});
+  },
+  togglePlayback(){
+   const audio=this.$refs.audio;if(!audio)return;
+   if(audio.paused){audio.play().catch(()=>{this.error='Impossibile riprodurre questo audio.';this.playing=false;});}
+   else audio.pause();
   },
   seekDelta(delta){this.seekTo((this.$refs.audio?.currentTime||0)+delta);},
   viewSpan(){return this.audioDuration?this.audioDuration/this.zoom:1;},
