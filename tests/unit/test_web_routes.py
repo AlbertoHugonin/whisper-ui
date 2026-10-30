@@ -2570,7 +2570,13 @@ class TestReviewStudio:
         assert 'Riassunto AI' in response.text
         assert f'{original.id}~original' in response.text
         assert f'{second.id}~corrected' in response.text
-        assert f'/viewer/{original.id}/waveform' in response.text
+        assert 'id="studio-timeline-seek"' in response.text
+        assert 'id="studio-timeline-overview"' in response.text
+        assert 'onAudioTimeUpdate' in response.text
+        assert 'Segui testo: attivo' in response.text
+        assert 'data-studio-index' in response.text
+        assert '<canvas' not in response.text
+        assert '/waveform?' not in response.text
         assert client.get(f'/viewer/{second.id}').status_code == 200
         assert f'/studio/{second.id}' in client.get(f'/viewer/{second.id}').text
 

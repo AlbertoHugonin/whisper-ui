@@ -10,25 +10,50 @@
     <a class="btn btn-outline btn-sm" href="/jobs">Tutti i lavori</a>
   </div>
   <section class="card bg-base-200 border border-base-300"><div class="card-body p-4 gap-3">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <strong>Audio · timeline</strong>
-      <div class="flex items-center gap-3 text-sm">
-        <label for="studio-zoom">Zoom</label>
-        <input id="studio-zoom" type="range" min="1" max="6" step="0.5" x-model.number="zoom" @input="drawWaveform()" class="range range-primary range-xs w-28">
-        <span class="font-mono text-xs" x-text="formatTime(currentTime)"></span>
-      </div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <strong>Audio · navigazione temporale</strong>
+      <span class="font-mono text-xs tabular-nums" x-text="formatTime(currentTime)+' / '+formatTime(audioDuration)"></span>
     </div>
     {% if has_processed or has_original %}
     <audio x-ref="audio" controls preload="metadata" class="w-full"
-           @timeupdate="currentTime=$el.currentTime" @loadedmetadata="audioDuration=$el.duration">
+           @timeupdate="onAudioTimeUpdate($el.currentTime)" @seeked="onAudioTimeUpdate($el.currentTime)"
+           @loadedmetadata="onAudioMetadata($el.duration)" @ended="onAudioTimeUpdate($el.duration)">
       {% if has_processed %}<source src="/viewer/{{ audio_job_id }}/processed-audio" type="audio/wav">{% else %}<source src="/viewer/{{ audio_job_id }}/media">{% endif %}
       Il browser non supporta la riproduzione audio.
     </audio>
-    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100" x-ref="waveScroll">
-      <canvas x-ref="waveCanvas" height="82" class="block cursor-crosshair touch-pan-x" aria-label="Forma d'onda: premi per spostarti nell'audio"
-              @click="seekFromWave($event)" @keydown.enter="seekFromWave($event)" tabindex="0"></canvas>
+    <div class="rounded-box border border-base-300 bg-base-100 p-3 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs opacity-70" aria-live="off" x-text="'Vista '+formatTime(viewStart)+' – '+formatTime(viewEnd())"></div>
+        <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Zoom e navigazione della timeline">
+          <button type="button" class="btn btn-outline btn-xs" @click="zoomTimeline(1/1.8)" :disabled="zoom <= 1" aria-label="Riduci lo zoom">− Zoom</button>
+          <button type="button" class="btn btn-outline btn-xs" @click="zoomTimeline(1.8)" :disabled="zoom >= 32" aria-label="Aumenta lo zoom">+ Zoom</button>
+          <button type="button" class="btn btn-ghost btn-xs" @click="panTimeline(-.65)" aria-label="Scorri indietro nella registrazione">◀</button>
+          <button type="button" class="btn btn-ghost btn-xs" @click="panTimeline(.65)" aria-label="Scorri avanti nella registrazione">▶</button>
+          <button type="button" class="btn btn-ghost btn-xs" @click="fitTimeline()">Tutto</button>
+        </div>
+      </div>
+      <label class="sr-only" for="studio-timeline-seek">Posizione di riproduzione nella finestra ingrandita</label>
+      <input id="studio-timeline-seek" type="range" class="range range-primary range-sm w-full"
+             :min="viewStart" :max="viewEnd()" step="0.1" :value="currentTime"
+             :disabled="!audioDuration" @input="seekTo(Number($event.target.value), false)"
+             aria-label="Sposta la riproduzione nella timeline ingrandita">
+      <div class="flex justify-between font-mono text-xs opacity-60"><span x-text="formatTime(viewStart)"></span><span x-text="formatTime(viewEnd())"></span></div>
+      <label class="block text-xs opacity-70" for="studio-timeline-overview">Panoramica intera registrazione (trascina per spostarti)</label>
+      <input id="studio-timeline-overview" type="range" class="range range-xs w-full"
+             min="0" :max="audioDuration || 1" step="0.1" :value="currentTime"
+             :disabled="!audioDuration" @input="seekTo(Number($event.target.value), false)"
+             aria-label="Sposta la riproduzione nell'intera registrazione">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs opacity-75">
+        <span>−5s e +5s per piccoli spostamenti · Zoom fino a 32×</span>
+        <button type="button" class="btn btn-xs" :class="followPlayback ? 'btn-primary' : 'btn-outline'"
+                :aria-pressed="followPlayback.toString()" @click="toggleFollow()"
+                x-text="followPlayback ? '↳ Segui testo: attivo' : '↳ Segui testo: spento'">↳ Segui testo</button>
+      </div>
     </div>
-    <p class="text-xs opacity-60">Forma d'onda alleggerita (1.200 campioni in cache). Tocca o clicca per spostarti; usa zoom e scorrimento orizzontale.</p>
+    <div class="flex gap-2">
+      <button type="button" class="btn btn-outline btn-sm" @click="seekDelta(-5)">−5s</button>
+      <button type="button" class="btn btn-outline btn-sm" @click="seekDelta(5)">+5s</button>
+    </div>
     {% else %}<p class="text-sm opacity-70">Audio originale non più disponibile; puoi comunque confrontare e modificare le trascrizioni.</p>{% endif %}
   </div></section>
 
@@ -41,9 +66,11 @@
       <select class="select select-bordered select-sm w-full" aria-label="Versione A" x-model="leftVersion" @change="loadSide('left')">
         <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
       </select>
-      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione A">
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione A" x-ref="leftList">
         <template x-for="(s, i) in leftSegments.slice(0, leftLimit)" :key="i">
-          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary" @click="seekTo(s.start)">
+          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary"
+               :class="{ 'border-primary bg-primary/10 ring-1 ring-primary': leftActive === i }"
+               :data-studio-index="i" @click="seekTo(s.start)">
             <div class="flex gap-2 text-xs text-primary font-mono"><span x-text="formatTime(s.start)"></span><span x-text="s.speaker||''"></span></div>
             <p class="text-sm leading-relaxed whitespace-pre-wrap" x-text="s.text"></p>
           </div>
@@ -57,9 +84,11 @@
       <select class="select select-bordered select-sm w-full" aria-label="Versione B" x-model="rightVersion" @change="loadSide('right')">
         <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
       </select>
-      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione B">
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Trascrizione B" x-ref="rightList">
         <template x-for="(s, i) in rightSegments.slice(0, rightLimit)" :key="i">
-          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary" @click="seekTo(s.start)">
+          <div class="rounded-box p-2 bg-base-200/60 border border-base-300 cursor-pointer hover:border-primary"
+               :class="{ 'border-primary bg-primary/10 ring-1 ring-primary': rightActive === i }"
+               :data-studio-index="i" @click="seekTo(s.start)">
             <div class="flex gap-2 text-xs text-primary font-mono"><span x-text="formatTime(s.start)"></span><span x-text="s.speaker||''"></span></div>
             <p class="text-sm leading-relaxed whitespace-pre-wrap" x-text="s.text"></p>
           </div>
@@ -75,9 +104,10 @@
         <a x-show="savedVersion" :href="'/studio/{{ job.id }}/custom-export?token='+encodeURIComponent(savedVersion)" class="btn btn-outline btn-sm">Scarica TXT</a>
       </div>
       <p role="status" class="text-xs" x-text="saveStatus"></p>
-      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Editor trascrizione personalizzata">
+      <div class="overflow-y-auto max-h-[65vh] min-h-64 space-y-2" aria-label="Editor trascrizione personalizzata" x-ref="draftList">
         <template x-for="(s, i) in draft.slice(0, draftLimit)" :key="i">
-          <div class="rounded-box border border-base-300 p-2 bg-base-200/30 space-y-2">
+          <div class="rounded-box border border-base-300 p-2 bg-base-200/30 space-y-2"
+               :class="{ 'border-primary bg-primary/10 ring-1 ring-primary': draftActive === i }" :data-studio-index="i">
             <div class="flex gap-2 justify-between items-center text-xs">
               <button type="button" class="link link-primary font-mono" @click="seekTo(s.start)" x-text="formatTime(s.start)"></button>
               <input aria-label="Parlante" class="input input-xs input-bordered w-28" x-model="s.speaker" maxlength="60" placeholder="Speaker">
@@ -114,24 +144,22 @@ function reviewStudio() {
   versions: {{ versions|tojson }}, leftVersion: {{ left_initial|tojson }}, rightVersion: {{ right_initial|tojson }},
   leftSegments: [],rightSegments: [],draft: [],draftSource: '', savedVersion: '',
   leftLimit:150,rightLimit:150,draftLimit:150,saving:false,saveStatus:'',error:'',
-  zoom:1,peaks:[],audioDuration:0,currentTime:0,
+  zoom:1,viewStart:0,audioDuration:0,currentTime:0,followPlayback:true,
+  leftActive:-1,rightActive:-1,draftActive:-1,
   summaryVersion:{{ right_initial|tojson }},summaryPrompt:{{ summary_prompt|tojson }},
   summaryText:'',summaryStatus:'',
   async init() {
    await Promise.all([this.loadSide('left'),this.loadSide('right')]);this.copyFrom('right');
-   {% if has_processed or has_original %}
-   try {const resp=await fetch('/viewer/{{ audio_job_id }}/waveform?source={{ 'processed' if has_processed else 'original' }}');
-     if(resp.ok) {this.peaks=(await resp.json()).peaks||[];this.$nextTick(()=>this.drawWaveform());}}
-   catch(_) { /* audio remains playable without waveform */ }
-   {% endif %}
+   this.syncTranscriptToAudio(true);
    await this.fetchSummary();
   },
   async loadSide(side) {
    const token=side==='left'?this.leftVersion:this.rightVersion;
    try {const resp=await fetch('/studio/{{ job.id }}/version/'+encodeURIComponent(token));
      if(!resp.ok)throw Error('Versione non disponibile');const data=await resp.json();
-     if(side==='left') {this.leftSegments=data.segments;this.leftLimit=150;}
-     else {this.rightSegments=data.segments;this.rightLimit=150;}
+     if(side==='left') {this.leftSegments=data.segments;this.leftLimit=150;this.leftActive=-1;}
+     else {this.rightSegments=data.segments;this.rightLimit=150;this.rightActive=-1;}
+     this.$nextTick(()=>this.syncTranscriptToAudio(true));
    }catch(e){this.error=e.message;}
   },
   copyFrom(side) {
@@ -141,7 +169,8 @@ function reviewStudio() {
      if(!confirm('Sostituire le modifiche non salvate?'))return;
    }
    this.draft=structuredClone(list);this.draftSource=side==='left'?this.leftVersion:this.rightVersion;
-   this.savedVersion='';this.saveStatus='Modifiche non salvate';this.draftLimit=150;
+   this.savedVersion='';this.saveStatus='Modifiche non salvate';this.draftLimit=150;this.draftActive=-1;
+   this.$nextTick(()=>this.syncTranscriptToAudio(true));
   },
   async saveCustom() {
    this.saving=true;this.error='';
@@ -153,19 +182,80 @@ function reviewStudio() {
     this.summaryVersion=result.version;
    }catch(e){this.error=e.message;}finally{this.saving=false;}
   },
-  seekTo(t) {const a=this.$refs.audio;if(a){a.currentTime=t;this.currentTime=t;a.play().catch(()=>{});}},
-  formatTime(t){const n=Math.max(0,Math.floor(t||0));return String(Math.floor(n/3600)).padStart(2,'0')+':'+String(Math.floor(n%3600/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');},
-  drawWaveform() {
-   const canvas=this.$refs.waveCanvas;if(!canvas||!this.peaks.length)return;
-   const wrapper=this.$refs.waveScroll;const ratio=Math.min(2,window.devicePixelRatio||1);
-   const cssWidth=Math.max(300,wrapper.clientWidth*this.zoom);canvas.style.width=cssWidth+'px';canvas.style.height='82px';
-   canvas.width=Math.round(cssWidth*ratio);canvas.height=Math.round(82*ratio);
-   const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.clearRect(0,0,cssWidth,82);
-   ctx.fillStyle='#818cf8';const bar=cssWidth/this.peaks.length;
-   this.peaks.forEach((p,i)=>{const h=Math.max(1,p*75);ctx.fillRect(i*bar,(82-h)/2,Math.max(.65,bar*.8),h);});
+  // Audio time is the single source of truth for both seek bars and all three panels.
+  onAudioMetadata(duration) {
+   this.audioDuration=Number.isFinite(duration)&&duration>0?duration:0;
+   this.viewStart=0;this.syncTranscriptToAudio(true);
   },
-  seekFromWave(e) {const c=this.$refs.waveCanvas;const x=e.clientX-c.getBoundingClientRect().left;
-   if(e.type==='click'&&this.$refs.audio)this.seekTo(Math.min(1,Math.max(0,x/c.getBoundingClientRect().width))*this.$refs.audio.duration);},
+  onAudioTimeUpdate(t) {
+   if(!Number.isFinite(t))return;
+   this.currentTime=Math.max(0,Math.min(t,this.audioDuration||t));
+   if(this.zoom>1 && this.audioDuration && (this.currentTime<this.viewStart || this.currentTime>this.viewEnd())) {
+    this.viewStart=this.clampViewStart(this.currentTime-this.viewSpan()/2);
+   }
+   this.syncTranscriptToAudio();
+  },
+  seekTo(t, autoplay=true) {
+   const a=this.$refs.audio;if(!a || !Number.isFinite(t))return;
+   const bounded=Math.max(0,Math.min(t,this.audioDuration||a.duration||t));
+   a.currentTime=bounded;this.onAudioTimeUpdate(bounded);
+   if(autoplay)a.play().catch(()=>{});
+  },
+  seekDelta(delta){this.seekTo((this.$refs.audio?.currentTime||0)+delta);},
+  viewSpan(){return this.audioDuration?this.audioDuration/this.zoom:1;},
+  viewEnd(){return Math.min(this.audioDuration||1,this.viewStart+this.viewSpan());},
+  clampViewStart(t){return Math.max(0,Math.min(t,Math.max(0,this.audioDuration-this.viewSpan())));},
+  zoomTimeline(factor){
+   if(!this.audioDuration)return;
+   const center=this.currentTime>=this.viewStart&&this.currentTime<=this.viewEnd()
+     ?this.currentTime:this.viewStart+this.viewSpan()/2;
+   this.zoom=Math.max(1,Math.min(32,this.zoom*factor));
+   this.viewStart=this.clampViewStart(center-this.viewSpan()/2);
+  },
+  panTimeline(direction){this.viewStart=this.clampViewStart(this.viewStart+this.viewSpan()*direction);},
+  fitTimeline(){this.zoom=1;this.viewStart=0;},
+  toggleFollow(){
+   this.followPlayback=!this.followPlayback;
+   if(this.followPlayback)this.syncTranscriptToAudio(true);
+  },
+  // Binary search allows even long meeting transcripts to follow audio cheaply.
+  activeAt(segments, t){
+   if(!segments.length || t<Number(segments[0].start))return -1;
+   let low=0,high=segments.length;
+   while(low<high){const mid=(low+high)>>1;
+    if(Number(segments[mid].start)<=t)low=mid+1;else high=mid;}
+   const i=low-1;
+   // Do not highlight the previous speaker in a long gap between turns.
+   return t<=Number(segments[i].end)+0.25?i:-1;
+  },
+  syncTranscriptToAudio(force=false){
+   for(const [side,segments,activeKey,limitKey,ref] of [
+    ['left',this.leftSegments,'leftActive','leftLimit','leftList'],
+    ['right',this.rightSegments,'rightActive','rightLimit','rightList'],
+    ['draft',this.draft,'draftActive','draftLimit','draftList'],
+   ]){
+    const i=this.activeAt(segments,this.currentTime);
+    if(i===this[activeKey]&&!force)continue;
+    this[activeKey]=i;
+    if(!this.followPlayback||i<0)continue;
+    if(i>=this[limitKey])this[limitKey]=Math.ceil((i+1)/150)*150;
+    this.$nextTick(()=>this.scrollToActive(ref,i));
+   }
+  },
+  scrollToActive(ref,i){
+   if(!this.followPlayback || i<0)return;
+   const container=this.$refs[ref];if(!container)return;
+   // Never move the editor while someone is actively correcting a word.
+   if(ref==='draftList'&&container.contains(document.activeElement)&&
+      ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+   const item=container.querySelector('[data-studio-index="'+i+'"]');
+   if(!item)return;
+   const itemTop=item.getBoundingClientRect().top-container.getBoundingClientRect().top+container.scrollTop;
+   const desired=Math.max(0,itemTop-(container.clientHeight-item.offsetHeight)/2);
+   if(Math.abs(container.scrollTop-desired)>Math.max(32,item.offsetHeight/2))
+    container.scrollTo({top:desired,behavior:'smooth'});
+  },
+  formatTime(t){const n=Math.max(0,Math.floor(t||0));return String(Math.floor(n/3600)).padStart(2,'0')+':'+String(Math.floor(n%3600/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');},
   async generateSummary(){
    this.error='';this.summaryText='';this.summaryStatus='Invio in coda…';
    try{const resp=await fetch('/studio/{{ job.id }}/summary',{method:'POST',headers:{'Content-Type':'application/json'},
