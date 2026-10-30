@@ -83,7 +83,9 @@
         </div>
 
         <div class="fieldset rounded-box border border-base-300 p-3 space-y-2">
-          <label class="fieldset-label font-semibold" for="rt-vad-enabled">Silero VAD</label>
+          <div class="flex items-center gap-2"><label class="fieldset-label font-semibold" for="rt-vad-enabled">Silero VAD</label><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
+          class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
+          aria-label="Apri guida e consigli VAD">i</button></div>
           <select id="rt-vad-enabled" class="select select-bordered w-full" x-model="vadEnabled">
             <option value="true">Attivo (consigliato)</option>
             <option value="false">Disattivato · prova sperimentale, rischio allucinazioni</option>

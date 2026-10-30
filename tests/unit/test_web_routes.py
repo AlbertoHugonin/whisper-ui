@@ -2716,3 +2716,37 @@ class TestReviewStudio:
         status = client.get(f'/studio/{job.id}/summary-status?source_job={job.id}')
         assert status.status_code == 200
         assert status.json()['summary'] is None
+
+class TestVADHelpDialog:
+    """A single globally accessible explainer for all three VAD forms."""
+
+    def test_vad_help_is_available_in_upload_preset_editor_and_retranscribe(self, client):
+        for url in ('/upload', '/presets/new', '/jobs'):
+            response = client.get(url)
+            assert response.status_code == 200, url
+            html = response.text
+            assert html.count('id="vad-help-dialog"') == 1, url
+            assert 'data-vad-help' in html, url
+            assert 'aria-controls="vad-help-dialog"' in html
+            assert 'aria-haspopup="dialog"' in html
+            assert 'aria-labelledby="vad-help-title"' in html
+            assert 'aria-describedby="vad-help-description"' in html
+            assert 'method="dialog"' in html
+            assert 'dialog.showModal()' in html
+            assert 'event.target.closest(\'[data-vad-help]\')' in html
+
+    def test_vad_help_explains_all_settings_and_real_world_tuning(self, client):
+        page = client.get('/upload')
+        assert page.status_code == 200
+        for text in (
+            'Come regolare Silero VAD', 'Attiva / disattiva VAD',
+            'Soglia di sensibilità', 'Parlato minimo', 'Pausa per separare',
+            'Margine audio', 'Sovrapposizione', 'standard 0,25',
+            'standard 100 ms', 'standard 300 ms', 'standard 400 ms',
+            'standard 0,20 s', '0,15', '800 ms', '0,50 s',
+            'parole tagliate', 'allineamento WhisperX', 'voci gravi',
+            'rischio di testo inventato', 'Suite di editing',
+        ):
+            assert text.lower() in page.text.lower(), text
+        assert 'type="button" data-vad-help' in page.text
+        assert 'Chiudi guida VAD' in page.text

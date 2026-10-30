@@ -354,7 +354,9 @@
       </div>
 
       <div class="fieldset rounded-box border border-base-300 p-4 space-y-3">
-        <h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3>
+        <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
+          class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
+          aria-label="Apri guida e consigli VAD">i</button></div>
         <label class="fieldset"><span class="fieldset-label">Rilevamento voce</span>
           <select name="vad_enabled" class="select select-bordered w-full max-w-md" x-model="vadEnabled">
             <option value="true">Attivo · consigliato</option>

@@ -39,7 +39,9 @@
       <p class="text-xs opacity-60">Se una funzione non è disponibile sul server al momento dell'invio, Whisper la disattiva senza bloccare la trascrizione.</p>
     </div></section>
     <section class="card border border-base-300"><div class="card-body gap-4">
-      <h2 class="font-semibold">Sensibilità VAD e ottimizzazione audio</h2>
+      <div class="flex items-center gap-2"><h2 class="font-semibold">Sensibilità VAD e ottimizzazione audio</h2><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
+          class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
+          aria-label="Apri guida e consigli VAD">i</button></div>
       <label class="fieldset"><span class="fieldset-legend">Silero VAD</span>
         <select name="vad_enabled" class="select w-full max-w-md">
           <option value="true" {% if cfg.vad_enabled|default(true) %}selected{% endif %}>Attivo (consigliato)</option>

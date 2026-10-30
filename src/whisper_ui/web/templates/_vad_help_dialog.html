@@ -1,0 +1,83 @@
+{# Shared VAD explainer. One accessible native dialog for all screens, including
+   the nested re-transcribe dialog. Event delegation survives htmx replacements. #}
+<dialog id="vad-help-dialog" class="modal" aria-labelledby="vad-help-title" aria-describedby="vad-help-description">
+  <div class="modal-box w-11/12 max-w-4xl max-h-[85vh] overflow-y-auto p-5 sm:p-7">
+    <div class="flex justify-between items-start gap-3">
+      <div>
+        <p class="text-xs uppercase tracking-wide font-semibold text-primary">Guida alle impostazioni</p>
+        <h2 id="vad-help-title" class="text-xl sm:text-2xl font-semibold mt-1">Come regolare Silero VAD</h2>
+      </div>
+      <form method="dialog"><button class="btn btn-circle btn-ghost btn-sm" aria-label="Chiudi guida VAD" type="submit">✕</button></form>
+    </div>
+
+    <p id="vad-help-description" class="text-sm mt-3 leading-relaxed">
+      <strong>VAD</strong> (Voice Activity Detection) serve a individuare i tratti di audio in cui è probabile che qualcuno parli.
+      Whisper trascrive i tratti selezionati. Se una parola rimane fuori, può essere persa; tuttavia una parola mancante
+      può dipendere anche dal riconoscimento Whisper, non necessariamente dal VAD.
+    </p>
+
+    <div class="alert mt-4 text-sm" role="note">
+      <span><strong>Configurazione standard:</strong> VAD attivo · sensibilità 0,25 · parlato minimo 100 ms · pausa minima 300 ms · margine 400 ms · sovrapposizione 0,20 s. È il punto di partenza consigliato.</span>
+    </div>
+
+    <h3 class="font-semibold mt-6 mb-3">Cosa fa ogni controllo</h3>
+    <div class="space-y-3 text-sm">
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">1. Attiva / disattiva VAD</h4>
+        <p class="mt-1">Con VAD attivo il sistema cerca la voce e scarta le regioni considerate silenzio. Disattivandolo, Whisper elabora anche le pause: utile come <strong>prova di confronto</strong>, ma aumenta il rischio di testo inventato durante i silenzi.</p>
+      </div>
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">2. Soglia di sensibilità · standard 0,25</h4>
+        <p class="mt-1"><strong>Più bassa</strong> (es. 0,10–0,15): riconosce più facilmente voce debole e parole brevi, ma può includere rumori. <strong>Più alta</strong> (es. 0,40–0,60): è più selettiva, ma può perdere sillabe o interventi a basso volume.</p>
+      </div>
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">3. Parlato minimo · standard 100 ms</h4>
+        <p class="mt-1">Durata minima perché un frammento venga considerato parlato. Se perdi interiezioni molto brevi, prova 50–80 ms. Troppo basso può far interpretare colpi e rumori come voce.</p>
+      </div>
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">4. Pausa per separare · standard 300 ms</h4>
+        <p class="mt-1">Quanto deve durare una pausa prima di dividere il parlato in blocchi. Aumentando a 500–600 ms si mantengono unite frasi con piccole esitazioni; valori troppo alti possono includere più silenzi nello stesso blocco.</p>
+      </div>
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">5. Margine audio · standard 400 ms</h4>
+        <p class="mt-1">Audio conservato prima e dopo ciascun blocco individuato. Se Whisper perde l'inizio o la fine di una frase, prova 600–800 ms. Margini eccessivi possono includere rumore o creare ripetizioni vicino ai confini.</p>
+      </div>
+      <div class="rounded-box bg-base-200 p-3">
+        <h4 class="font-semibold">6. Sovrapposizione · standard 0,20 s</h4>
+        <p class="mt-1">Conserva una piccola porzione di audio in comune tra parti vicine. Una prova a 0,50 s può aiutare le parole ai confini, ma può anche duplicarle nella trascrizione.</p>
+      </div>
+    </div>
+
+    <h3 class="font-semibold mt-6 mb-3">Quali valori provare?</h3>
+    <div class="overflow-x-auto rounded-box border border-base-300">
+      <table class="table table-sm w-full text-sm">
+        <thead><tr><th>Obiettivo</th><th>Impostazioni da provare</th><th>Attenzione</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Bilanciato</strong></td><td>VAD acceso, soglia 0,25, pausa 300 ms, margine 400 ms, sovrapposizione 0,20 s</td><td>Punto di partenza</td></tr>
+          <tr><td><strong>Parole tagliate ai confini</strong></td><td>Soglia 0,15, margine 800 ms, sovrapposizione 0,50 s; altri valori standard</td><td>Verifica eventuali ripetizioni</td></tr>
+          <tr><td><strong>Parole isolate o interventi brevissimi</strong></td><td>Parlato minimo 50–80 ms; eventualmente pausa 500 ms</td><td>Può introdurre falsi positivi</td></tr>
+          <tr><td><strong>Controllo senza filtri VAD</strong></td><td>VAD spento, preferibilmente su un estratto breve</td><td>Possibili allucinazioni nei silenzi</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-5 space-y-2 text-sm">
+      <p><strong>Metodo consigliato:</strong> ritrascrivi lo stesso audio modificando pochi valori alla volta, poi confronta le versioni nella Suite di editing. Conta soprattutto le parole <em>corrette</em>, non solo quante ne sono state prodotte.</p>
+      <p><strong>Timestamp e voci gravi:</strong> i tempi delle battute vengono anche dall'allineamento WhisperX: se una parola non si illumina, non significa necessariamente che il VAD l'abbia scartata. Per le voci gravi influiscono anche microfono, rumore, compressione e filtro passa-alto; il VAD da solo non corregge questi aspetti.</p>
+      <p class="opacity-65">Le modifiche si applicano alle nuove trascrizioni o ritrascrizioni: non cambiano i lavori già completati.</p>
+    </div>
+    <form method="dialog" class="modal-action"><button type="submit" class="btn btn-primary">Ho capito</button></form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button type="submit" aria-label="Chiudi guida VAD">Chiudi</button></form>
+</dialog>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  document.addEventListener('click', function(event) {
+    const button = event.target.closest('[data-vad-help]');
+    if (!button) return;
+    event.preventDefault();
+    const dialog = document.getElementById('vad-help-dialog');
+    if (dialog && !dialog.open) dialog.showModal();
+  });
+})();
+</script>
