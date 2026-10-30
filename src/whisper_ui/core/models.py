@@ -72,6 +72,11 @@ class Job:
     llm_correction_enabled: bool = False
     whisper_keywords: str = "Airdass"
     vad_threshold: float = 0.25  # Silero speech probability threshold; lower detects fainter speech
+    vad_enabled: bool = True
+    vad_min_speech_ms: int = 100
+    vad_min_silence_ms: int = 300
+    vad_speech_pad_ms: int = 400
+    vad_samples_overlap: float = 0.20
     whisper_beam_size: int = 5  # 5=standard; 8=experimental, comparative decode
     llm_context_prompt: str = ""
     summary_prompt: str = ""

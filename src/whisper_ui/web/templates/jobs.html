@@ -82,6 +82,20 @@
           <p class="text-xs opacity-60">Confronta i risultati: Beam 8 non garantisce parole aggiuntive.</p>
         </div>
 
+        <div class="fieldset rounded-box border border-base-300 p-3 space-y-2">
+          <label class="fieldset-label font-semibold" for="rt-vad-enabled">Silero VAD</label>
+          <select id="rt-vad-enabled" class="select select-bordered w-full" x-model="vadEnabled">
+            <option value="true">Attivo (consigliato)</option>
+            <option value="false">Disattivato · prova sperimentale, rischio allucinazioni</option>
+          </select>
+          <div class="grid grid-cols-2 gap-2" :class="vadEnabled==='false' ? 'opacity-50' : ''">
+            <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span><input type="number" min="0" max="5000" step="10" class="input input-bordered w-full" x-model.number="vadMinSpeechMs"></label>
+            <label class="fieldset"><span class="fieldset-label">Pausa per separare (ms)</span><input type="number" min="0" max="10000" step="10" class="input input-bordered w-full" x-model.number="vadMinSilenceMs"></label>
+            <label class="fieldset"><span class="fieldset-label">Margine (ms)</span><input type="number" min="0" max="5000" step="50" class="input input-bordered w-full" x-model.number="vadSpeechPadMs"></label>
+            <label class="fieldset"><span class="fieldset-label">Sovrapposizione (s)</span><input type="number" min="0" max="1" step="0.05" class="input input-bordered w-full" x-model.number="vadSamplesOverlap"></label>
+          </div>
+        </div>
+
         <div class="fieldset rounded-box border border-base-300 p-3">
           <label for="retranscribe-vad-threshold" class="fieldset-label font-semibold">Sensibilità voce (Silero VAD): <span x-text="Number(vadThreshold).toFixed(2)"></span></label>
           <input id="retranscribe-vad-threshold" type="range" class="range range-primary range-sm w-full"
@@ -128,6 +142,11 @@ function retranscribeDialog() {
     traditional: false,
     llm: false,
     vadThreshold: 0.25,
+    vadEnabled: 'true',
+    vadMinSpeechMs: 100,
+    vadMinSilenceMs: 300,
+    vadSpeechPadMs: 400,
+    vadSamplesOverlap: 0.20,
     whisperBeamSize: 5,
     submitting: false,
     show(detail) {
@@ -139,6 +158,11 @@ function retranscribeDialog() {
       this.traditional = !!detail.traditional;
       this.llm = !!detail.llm && RT_OLLAMA_AVAILABLE;
       this.vadThreshold = Number(detail.vadThreshold ?? 0.25);
+      this.vadEnabled = String(detail.vadEnabled ?? true);
+      this.vadMinSpeechMs = Number(detail.vadMinSpeechMs ?? 100);
+      this.vadMinSilenceMs = Number(detail.vadMinSilenceMs ?? 300);
+      this.vadSpeechPadMs = Number(detail.vadSpeechPadMs ?? 400);
+      this.vadSamplesOverlap = Number(detail.vadSamplesOverlap ?? 0.20);
       this.whisperBeamSize = Number(detail.whisperBeamSize ?? 5);
       this.submitting = false;
       this.$refs.rtDialog.showModal();
@@ -157,6 +181,11 @@ function retranscribeDialog() {
       fd.set('model_name', this.modelName);
       fd.set('num_speakers', this.numSpeakers);
       fd.set('vad_threshold', Number(this.vadThreshold).toFixed(2));
+      fd.set('vad_enabled', this.vadEnabled);
+      fd.set('vad_min_speech_ms', String(this.vadMinSpeechMs));
+      fd.set('vad_min_silence_ms', String(this.vadMinSilenceMs));
+      fd.set('vad_speech_pad_ms', String(this.vadSpeechPadMs));
+      fd.set('vad_samples_overlap', String(this.vadSamplesOverlap));
       fd.set('whisper_beam_size', String(this.whisperBeamSize));
       // Only send checkboxes that are on, matching HTML form semantics; the
       // route's Form(bool) defaults to False when the field is absent.

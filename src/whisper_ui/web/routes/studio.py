@@ -84,8 +84,12 @@ async def studio_page(
         ):
             if loader(job.id) is not None:
                 versions.append({
-                    'id': f'{job.id}~{kind}', 'label': f'{job.filename} · {label} '
-                    f'(beam {job.whisper_beam_size}, VAD {job.vad_threshold:.2f})',
+                    'id': f'{job.id}~{kind}', 'label': f'{job.filename} · {label} ' +
+                    (f'(beam {job.whisper_beam_size}, VAD {job.vad_threshold:.2f} · '
+                     f'pausa {job.vad_min_silence_ms} ms · '
+                     f'margine {job.vad_speech_pad_ms} ms · '
+                     f'overlap {job.vad_samples_overlap:.2f} s)'
+                     if job.vad_enabled else f'(beam {job.whisper_beam_size}, VAD spento)'),
                 })
     if not versions:
         raise HTTPException(status_code=404, detail='No transcripts found')

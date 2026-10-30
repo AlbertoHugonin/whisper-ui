@@ -326,6 +326,11 @@ class TestBackendSelection:
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
         job.whisper_beam_size = 5
+        job.vad_enabled = True
+        job.vad_min_speech_ms = 100
+        job.vad_min_silence_ms = 300
+        job.vad_speech_pad_ms = 400
+        job.vad_samples_overlap = 0.20
         stage = _build_transcribe_stage(job, self._runtime("whispercpp"), "cuda")
         assert isinstance(stage, WhisperCppTranscribeStage)
 
@@ -334,6 +339,11 @@ class TestBackendSelection:
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
         job.whisper_beam_size = 5
+        job.vad_enabled = True
+        job.vad_min_speech_ms = 100
+        job.vad_min_silence_ms = 300
+        job.vad_speech_pad_ms = 400
+        job.vad_samples_overlap = 0.20
         runtime = self._runtime("whispercpp")
         runtime.settings.whispercpp_vad = False
         runtime.settings.whispercpp_max_context = -1
@@ -352,21 +362,59 @@ class TestBackendSelection:
         job.model_name = "large-v3"
         job.vad_threshold = 0.10
         job.whisper_beam_size = 8
+        job.vad_enabled = True
+        job.vad_min_speech_ms = 80
+        job.vad_min_silence_ms = 600
+        job.vad_speech_pad_ms = 800
+        job.vad_samples_overlap = 0.50
         stage = _build_transcribe_stage(job, self._runtime("whispercpp"), "cuda")
         assert stage._vad_threshold == 0.10
         assert stage._beam_size == 8
+        assert stage._vad_min_speech_ms == 80
+        assert stage._vad_min_silence_ms == 600
+        assert stage._vad_speech_pad_ms == 800
+        assert stage._vad_samples_overlap == .50
         calls = []
         payload = {"result": {"language": "it"}, "transcription": []}
         with patch(f"{_MODULE}.subprocess.run", side_effect=_fake_cli_writer(payload, calls)):
             stage._run_whisper_cli("/m/model.bin", "/tmp/audio.wav", "it", "/m/vad.bin")
         assert calls and calls[0][calls[0].index("-vt") + 1] == "0.1"
         assert calls[0][calls[0].index("-bs") + 1] == "8"
+        assert calls[0][calls[0].index("-vspd") + 1] == "80"
+        assert calls[0][calls[0].index("-vsd") + 1] == "600"
+        assert calls[0][calls[0].index("-vp") + 1] == "800"
+        assert calls[0][calls[0].index("-vo") + 1] == "0.5"
+
+    def test_job_can_disable_vad_independently_of_server_default(self):
+        job = MagicMock()
+        job.model_name = "large-v3"
+        job.vad_threshold = 0.15
+        job.whisper_beam_size = 5
+        job.vad_enabled = False
+        job.vad_min_speech_ms = 100
+        job.vad_min_silence_ms = 300
+        job.vad_speech_pad_ms = 400
+        job.vad_samples_overlap = 0.2
+        stage = _build_transcribe_stage(job, self._runtime("whispercpp"), "cuda")
+        assert stage._vad is False
+        calls = []
+        with patch(f"{_MODULE}.subprocess.run", side_effect=_fake_cli_writer(
+            {"result": {"language": "it"}, "transcription": []}, calls,
+        )):
+            stage._run_whisper_cli("/m/model.bin", "/tmp/audio.wav", "it", None)
+        for flag in ("--vad", "-vm", "-vt", "-vspd", "-vsd", "-vp", "-vo"):
+            assert flag not in calls[0]
 
     def test_defaults_to_whisperx_backend(self):
         job = MagicMock()
         job.model_name = "large-v3"
         job.vad_threshold = 0.25
         job.whisper_beam_size = 5
+        job.vad_enabled = True
+        job.vad_min_speech_ms = 100
+        job.vad_min_silence_ms = 300
+        job.vad_speech_pad_ms = 400
+        job.vad_samples_overlap = 0.20
         stage = _build_transcribe_stage(job, self._runtime("whisperx"), "cuda")
         assert isinstance(stage, TranscribeStage)
 

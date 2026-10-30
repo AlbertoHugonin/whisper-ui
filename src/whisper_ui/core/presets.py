@@ -21,6 +21,11 @@ class PresetSettings(BaseModel):
     llm_correction_enabled: bool = False
     whisper_keywords: str = Field(default="Airdass", max_length=1500)
     vad_threshold: float = Field(default=0.25, ge=0.10, le=0.60)
+    vad_enabled: bool = True
+    vad_min_speech_ms: int = Field(default=100, ge=0, le=5000)
+    vad_min_silence_ms: int = Field(default=300, ge=0, le=10000)
+    vad_speech_pad_ms: int = Field(default=400, ge=0, le=5000)
+    vad_samples_overlap: float = Field(default=0.20, ge=0, le=1.0)
     whisper_beam_size: Literal[5, 8] = 5
     llm_context_prompt: str = Field(default="", max_length=4000)
     summary_prompt: str = Field(default="", max_length=4000)

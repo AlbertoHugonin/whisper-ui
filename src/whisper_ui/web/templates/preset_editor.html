@@ -40,11 +40,23 @@
     </div></section>
     <section class="card border border-base-300"><div class="card-body gap-4">
       <h2 class="font-semibold">Sensibilità VAD e ottimizzazione audio</h2>
+      <label class="fieldset"><span class="fieldset-legend">Silero VAD</span>
+        <select name="vad_enabled" class="select w-full max-w-md">
+          <option value="true" {% if cfg.vad_enabled|default(true) %}selected{% endif %}>Attivo (consigliato)</option>
+          <option value="false" {% if not cfg.vad_enabled|default(true) %}selected{% endif %}>Spento · solo prove, rischio allucinazioni</option>
+        </select></label>
       <div class="fieldset" x-data="{vad: {{ cfg.vad_threshold | tojson }} }">
         <label for="preset-vad" class="fieldset-legend">Sensibilità Silero VAD: <output id="preset-vad-value" x-text="Number(vad).toFixed(2)">{{ '%.2f'|format(cfg.vad_threshold|float) }}</output></label>
         <input id="preset-vad" class="range range-primary w-full" type="range" name="vad_threshold" min="0.10" max="0.60" step="0.05" value="{{ cfg.vad_threshold }}" x-model.number="vad">
         <div class="flex justify-between text-xs opacity-65"><span>0,10 · Voci deboli</span><span>0,25 · Bilanciato</span><span>0,60 · Più selettivo</span></div>
       </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <label class="fieldset"><span class="fieldset-legend">Parlato minimo (ms)</span><input type="number" name="vad_min_speech_ms" class="input w-full" min="0" max="5000" step="10" value="{{ cfg.vad_min_speech_ms|default(100) }}"></label>
+        <label class="fieldset"><span class="fieldset-legend">Pausa per separare (ms)</span><input type="number" name="vad_min_silence_ms" class="input w-full" min="0" max="10000" step="10" value="{{ cfg.vad_min_silence_ms|default(300) }}"></label>
+        <label class="fieldset"><span class="fieldset-legend">Margine audio (ms)</span><input type="number" name="vad_speech_pad_ms" class="input w-full" min="0" max="5000" step="50" value="{{ cfg.vad_speech_pad_ms|default(400) }}"></label>
+        <label class="fieldset"><span class="fieldset-legend">Sovrapposizione (secondi)</span><input type="number" name="vad_samples_overlap" class="input w-full" min="0" max="1" step="0.05" value="{{ cfg.vad_samples_overlap|default(0.20) }}"></label>
+      </div>
+      <p class="text-xs opacity-65">Prova di confronto: margine 800 ms e sovrapposizione 0,50 s; poi confronta con VAD spento soltanto su estratti brevi. Il VAD spento può generare testo nei silenzi.</p>
       <div class="grid sm:grid-cols-3 gap-4">
         <label class="fieldset"><span class="fieldset-legend">Elaborazione audio</span><select name="audio_processing" class="select w-full">{% for v, label in [('auto','Automatica'),('off','Solo conversione'),('custom','Personalizzata')] %}<option value="{{ v }}" {% if cfg.audio_processing == v %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
         <label class="fieldset"><span class="fieldset-legend">Riduzione del rumore</span><select name="audio_denoise" class="select w-full">{% for v in ['auto','off','light','medium'] %}<option value="{{ v }}" {% if cfg.audio_denoise == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>

@@ -32,6 +32,22 @@ def test_beam_search_configuration_persists_per_job(db: JobDatabase):
     assert db.get_job(job.id).whisper_beam_size == 5
 
 
+def test_vad_boundary_settings_are_independent_job_snapshots(db: JobDatabase):
+    job = Job(filename="meeting.wav", vad_enabled=False, vad_threshold=.15,
+              vad_min_speech_ms=80, vad_min_silence_ms=600,
+              vad_speech_pad_ms=800, vad_samples_overlap=.5)
+    db.insert_job(job)
+    got = db.get_job(job.id)
+    assert (got.vad_enabled, got.vad_threshold, got.vad_min_speech_ms,
+            got.vad_min_silence_ms, got.vad_speech_pad_ms,
+            got.vad_samples_overlap) == (False, .15, 80, 600, 800, .5)
+    got.vad_enabled = True
+    got.vad_speech_pad_ms = 400
+    db.update_job(got)
+    assert db.get_job(job.id).vad_enabled is True
+    assert db.get_job(job.id).vad_speech_pad_ms == 400
+
+
 def test_vad_threshold_persists_per_job_and_can_be_updated(db: JobDatabase):
     job = Job(filename="meeting.wav", vad_threshold=0.10)
     db.insert_job(job)

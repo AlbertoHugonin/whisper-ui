@@ -353,6 +353,26 @@
         <p class="text-xs opacity-60">Beam 8 esplora più alternative, ma non recupera sempre più parole. Confronta con Ritrascrivi. Contesto automatico disattivato per evitare ripetizioni.</p>
       </div>
 
+      <div class="fieldset rounded-box border border-base-300 p-4 space-y-3">
+        <h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3>
+        <label class="fieldset"><span class="fieldset-label">Rilevamento voce</span>
+          <select name="vad_enabled" class="select select-bordered w-full max-w-md" x-model="vadEnabled">
+            <option value="true">Attivo · consigliato</option>
+            <option value="false">Disattivato · solo prove, rischio frasi inventate nei silenzi</option>
+          </select></label>
+        <p class="text-xs opacity-65">Il VAD individua i tratti parlati prima di Whisper; disattivalo solo per confronti su audio con poche pause.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="vadEnabled === 'false' ? 'opacity-50' : ''">
+          <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
+            <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
+          <label class="fieldset"><span class="fieldset-label">Pausa per dividere (ms)</span>
+            <input type="number" name="vad_min_silence_ms" class="input input-bordered w-full" min="0" max="10000" step="10" value="{{ rt.vad_min_silence_ms if rt else 300 }}"><span class="text-xs opacity-60">300 ms standard · valori più alti tengono unite più parole</span></label>
+          <label class="fieldset"><span class="fieldset-label">Margine audio (ms)</span>
+            <input type="number" name="vad_speech_pad_ms" class="input input-bordered w-full" min="0" max="5000" step="50" value="{{ rt.vad_speech_pad_ms if rt else 400 }}"><span class="text-xs opacity-60">400 ms standard · prova 800 ms ai confini</span></label>
+          <label class="fieldset"><span class="fieldset-label">Sovrapposizione (secondi)</span>
+            <input type="number" name="vad_samples_overlap" class="input input-bordered w-full" min="0" max="1.00" step="0.05" value="{{ rt.vad_samples_overlap if rt else 0.20 }}"><span class="text-xs opacity-60">0,20 s standard · prova 0,50 s ai confini</span></label>
+        </div>
+      </div>
+
       <div class="fieldset rounded-box border border-base-300 p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <label for="vad-threshold" class="fieldset-label font-semibold">Sensibilità rilevamento voce (Silero VAD)</label>
@@ -448,6 +468,7 @@ function uploadForm() {
     llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
     summaryEnabled: {{ 'true' if (rt.summary_enabled if rt else false) else 'false' }},
     vadThreshold: {{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }},
+    vadEnabled: {{ (('true' if rt.vad_enabled else 'false') if rt else 'true')|tojson }},
     whisperBeamSize: {{ rt.whisper_beam_size if rt else 5 }},
     activePreset: null,
     presetsTouched: false,

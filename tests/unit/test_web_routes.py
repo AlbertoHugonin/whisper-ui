@@ -716,6 +716,9 @@ class TestJobsRoutes:
                 data={
                     "language": "en", "model_name": "medium", "enable_diarization": "true",
                     "vad_threshold": "0.55", "whisper_beam_size": "8",
+                    "vad_enabled": "false", "vad_min_speech_ms": "50",
+                    "vad_min_silence_ms": "500", "vad_speech_pad_ms": "800",
+                    "vad_samples_overlap": "0.50",
                 },
             )
 
@@ -728,6 +731,11 @@ class TestJobsRoutes:
         assert new_job.language == "en"
         assert new_job.model_name == "medium"
         assert new_job.vad_threshold == 0.55
+        assert new_job.vad_enabled is False
+        assert new_job.vad_min_speech_ms == 50
+        assert new_job.vad_min_silence_ms == 500
+        assert new_job.vad_speech_pad_ms == 800
+        assert new_job.vad_samples_overlap == .50
         assert new_job.whisper_beam_size == 8
         assert new_job.enable_diarization is True
         assert new_job.source_job_id == src.id
@@ -1473,6 +1481,41 @@ class TestUploadPost:
                 files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
             )
             assert resp.status_code == 422, value
+        assert list_jobs(db) == []
+
+    def test_upload_all_vad_settings_persist_and_are_not_global(self, client, db):
+        controls = {
+            'vad_enabled': 'false', 'vad_threshold': '0.15',
+            'vad_min_speech_ms': '80', 'vad_min_silence_ms': '600',
+            'vad_speech_pad_ms': '800', 'vad_samples_overlap': '0.50',
+        }
+        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+            resp = client.post('/upload', data=controls,
+                               files=[('files', ('meeting.wav', b'test audio', 'audio/wav'))],
+                               follow_redirects=False)
+        assert resp.status_code == 303
+        job = enqueue.call_args[0][0]
+        assert (job.vad_enabled, job.vad_threshold, job.vad_min_speech_ms,
+                job.vad_min_silence_ms, job.vad_speech_pad_ms,
+                job.vad_samples_overlap) == (False, .15, 80, 600, 800, .5)
+        assert db.get_job(job.id).vad_enabled is False
+        assert db.get_job(job.id).vad_speech_pad_ms == 800
+        page = client.get('/upload')
+        assert page.status_code == 200
+        for field in controls:
+            assert f'name="{field}"' in page.text
+        assert 'Sovrapposizione' in page.text
+        assert 'Disattivato' in page.text
+
+    def test_upload_invalid_vad_boundary_settings_rejected(self, client, db):
+        for field, value in (
+            ('vad_min_speech_ms', '-1'), ('vad_min_silence_ms', '10001'),
+            ('vad_speech_pad_ms', '5001'), ('vad_samples_overlap', '1.01'),
+            ('vad_samples_overlap', '-0.1'), ('vad_enabled', 'unknown'),
+        ):
+            response = client.post('/upload', data={field: value},
+                files=[('files', ('test.wav', b'raw', 'audio/wav'))])
+            assert response.status_code == 422, (field, value)
         assert list_jobs(db) == []
 
     def test_upload_vad_slider_is_saved(self, client, db):
@@ -2402,7 +2445,10 @@ class TestSavedTranscriptionPresets:
             'llm_context_prompt': 'Correggi i termini Airdass senza inventare nulla.',
             'summary_prompt': 'Elenca decisioni e responsabili.',
             'summary_enabled': 'true',
-            'vad_threshold': '0.15', 'whisper_beam_size': '8', 'audio_processing': 'custom',
+            'vad_threshold': '0.15', 'vad_enabled': 'false',
+            'vad_min_speech_ms': '80', 'vad_min_silence_ms': '600',
+            'vad_speech_pad_ms': '800', 'vad_samples_overlap': '0.50',
+            'whisper_beam_size': '8', 'audio_processing': 'custom',
             'audio_denoise': 'medium', 'audio_compression': 'light',
             'audio_target_lufs': '-18', 'audio_max_gain_db': '12', 'audio_highpass_hz': '100',
         }
@@ -2421,6 +2467,11 @@ class TestSavedTranscriptionPresets:
         assert 'name="summary_enabled"' in blank.text
         assert 'name="whisper_keywords"' in blank.text
         assert 'name="vad_threshold"' in blank.text
+        for name in (
+            'vad_enabled', 'vad_min_speech_ms', 'vad_min_silence_ms',
+            'vad_speech_pad_ms', 'vad_samples_overlap',
+        ):
+            assert f'name="{name}"' in blank.text
         assert 'name="audio_highpass_hz"' in blank.text
         meeting = client.get('/presets/new?source=meeting')
         assert meeting.status_code == 200
@@ -2442,6 +2493,9 @@ class TestSavedTranscriptionPresets:
         assert preset.settings['summary_prompt'].startswith('Elenca')
         assert preset.settings['summary_enabled'] is True
         assert preset.settings['vad_threshold'] == .15
+        assert preset.settings['vad_enabled'] is False
+        assert preset.settings['vad_speech_pad_ms'] == 800
+        assert preset.settings['vad_samples_overlap'] == .50
         assert preset.settings['audio_target_lufs'] == -18
         assert preset.settings['audio_denoise'] == 'medium'
         uploaded = client.get(f'/upload?preset={preset.id}')
@@ -2464,6 +2518,7 @@ class TestSavedTranscriptionPresets:
         # the browser sends its regular POST. No special pipeline or model path.
         form = {k: str(v) for k, v in config.items() if not isinstance(v, bool)}
         form.update({k: 'true' for k, v in config.items() if isinstance(v, bool) and v})
+        form['vad_enabled'] = 'true' if config['vad_enabled'] else 'false'
         with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
             resp = client.post('/upload', data=form,
                                files=[('files', ('meeting.wav', b'test audio', 'audio/wav'))],
@@ -2480,6 +2535,11 @@ class TestSavedTranscriptionPresets:
         assert job.summary_prompt == 'Elenca decisioni e responsabili.'
         assert job.summary_enabled is True
         assert job.vad_threshold == .15
+        assert job.vad_enabled is False
+        assert job.vad_min_speech_ms == 80
+        assert job.vad_min_silence_ms == 600
+        assert job.vad_speech_pad_ms == 800
+        assert job.vad_samples_overlap == .50
         assert job.whisper_beam_size == 8
         assert job.audio_processing == 'custom'
         assert job.audio_denoise == 'medium'
