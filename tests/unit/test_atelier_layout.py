@@ -28,6 +28,7 @@ def test_phone_safe_areas_and_accessibility():
     assert ':focus-visible' in CSS
     assert '@media(max-width:700px)' in CSS
     assert '@media(max-width:390px)' in CSS
+    assert 'body.atelier-body:has(#page-content.viewer-page-fit){height:auto!important' in CSS
 
 
 def test_preserved_fragments_and_secondary_maintenance_gate():

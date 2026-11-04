@@ -125,6 +125,8 @@ body.atelier-body ::selection{background:var(--color-primary);color:var(--color-
   .atelier-page .viewer-workspace .viewer-controls-fixed{padding:7px}
   .atelier-page .jobs-scroll-panel{max-height:none;overflow:visible}.atelier-page .sticky.top-0{top:60px;margin-inline:-17px;padding-inline:17px}
   .atelier-page .table{min-width:580px}.atelier-page .admin-table-scroll{overflow-x:auto;max-width:100%}
+  /* Old viewer locks html/body; mobile must be able to scroll past the fixed controls. */
+  html:has(#page-content.viewer-page-fit),body.atelier-body:has(#page-content.viewer-page-fit){height:auto!important;max-height:none!important;overflow-y:auto!important;overflow-x:clip!important}
   #page-content.viewer-page-fit.atelier-page{height:auto!important;max-height:none!important;min-height:calc(100dvh - 60px)!important;overflow:visible!important;padding-top:13px!important}.atelier-main:has(#page-content.viewer-page-fit){height:auto!important;min-height:0!important;overflow:visible!important}.atelier-page .viewer-workspace:has(.viewer-transcript-frame){height:auto;overflow:visible!important}.atelier-page .viewer-transcript-frame{height:auto!important;min-height:310px;max-height:none}.atelier-page .viewer-transcript-list{height:48dvh!important;min-height:300px!important;overflow-y:auto!important}
 }
 @media(max-width:390px){.atelier-topbar{padding:0 13px}.atelier-mobile-logo{font-size:21px}#page-content.app-page-shell.atelier-page{padding-inline:13px!important}.atelier-home-hero{padding-inline:20px}.atelier-stat{padding-inline:9px}.atelier-stat strong{font-size:26px}.atelier-page .viewer-transport-buttons{flex-wrap:wrap}}
