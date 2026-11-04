@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import shutil
 import uuid
 from pathlib import Path, PurePosixPath
 from typing import Annotated
@@ -29,6 +31,7 @@ from whisper_ui.core.url_validation import (
     validate_youtube_url,
 )
 from whisper_ui.pipeline.audio_probe import get_audio_duration_seconds
+from whisper_ui.pipeline.merge_audio import MANIFEST_NAME
 from whisper_ui.pipeline.preprocess import SUPPORTED_EXTENSIONS
 from whisper_ui.storage.presets import PresetRepository
 from whisper_ui.ui import labels as ui_labels
@@ -210,6 +213,8 @@ async def upload_submit(
     settings: SettingsDep,
     user: CurrentUserDep,
     files: Annotated[list[UploadFile] | None, File()] = None,
+    merge_mode: Annotated[str, Form()] = "separate",
+    merge_order: Annotated[str, Form()] = "",
     language: Annotated[str, Form()] = "auto",
     model_name: Annotated[str, Form()] = DEFAULT_WHISPER_MODEL,
     num_speakers: Annotated[int, Form()] = 0,
@@ -236,6 +241,8 @@ async def upload_submit(
 ):
     if whisper_beam_size not in (5, 8):
         raise HTTPException(status_code=422, detail="Beam size must be 5 or 8")
+    if merge_mode not in ("separate", "merge"):
+        raise HTTPException(status_code=422, detail="Unsupported file merge mode")
     htmx = _is_htmx(request)
 
     # Server-side validation of select inputs
@@ -261,6 +268,110 @@ async def upload_submit(
     if len(valid_files) > MAX_BATCH_SIZE:
         msg = ui_labels.UPLOAD_BATCH_EXCEEDS_LIMIT.format(limit=MAX_BATCH_SIZE, count=len(valid_files))
         return _error_redirect_or_fragment(request, f"/upload?error=too_many&count={len(valid_files)}", msg)
+
+    def _new_upload_job(display_name: str, group_id: str | None) -> Job:
+        return Job(
+            filename=display_name,
+            language=language,
+            model_name=model_name,
+            num_speakers=clamp_num_speakers(num_speakers) or None,
+            # Clamp opt-in flags to what this deployment can actually run so the
+            # persisted flag is honest and no no-op stage is enqueued.
+            enable_diarization=enable_diarization and settings.diarization_available,
+            convert_to_traditional=convert_to_traditional,
+            llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
+            whisper_keywords=whisper_keywords.strip()[:1500],
+            vad_threshold=vad_threshold,
+            vad_enabled=vad_enabled,
+            vad_min_speech_ms=vad_min_speech_ms,
+            vad_min_silence_ms=vad_min_silence_ms,
+            vad_speech_pad_ms=vad_speech_pad_ms,
+            vad_samples_overlap=vad_samples_overlap,
+            whisper_beam_size=whisper_beam_size,
+            llm_context_prompt=llm_context_prompt.strip()[:4000],
+            summary_prompt=summary_prompt.strip()[:4000],
+            summary_enabled=summary_enabled and settings.llm_correction_available,
+            audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
+            audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",
+            audio_compression=(
+                audio_compression if audio_compression in {"off", "auto", "light", "medium", "strong"} else "auto"
+            ),
+            audio_target_lufs=max(-24.0, min(-12.0, audio_target_lufs)),
+            audio_max_gain_db=max(0.0, min(30.0, audio_max_gain_db)),
+            audio_highpass_hz=max(0, min(180, audio_highpass_hz)),
+            batch_id=group_id,
+            owner_id=user.id,
+        )
+
+    if merge_mode == "merge":
+        # A single joined job is all-or-nothing: do not quietly drop an
+        # invalid file and shift the subsequent recording timestamps.
+        if len(valid_files) != len([f for f in files or [] if f.filename]) or len(valid_files) < 2:
+            return _error_redirect_or_fragment(
+                request, "/upload?error=merge_invalid",
+                "Per unire i file scegli almeno due audio supportati e rimuovi quelli non validi.",
+            )
+        if merge_order.strip():
+            try:
+                indices = [int(value) for value in merge_order.split(",")]
+            except ValueError:
+                raise HTTPException(status_code=422, detail="Invalid audio part order") from None
+            if sorted(indices) != list(range(len(valid_files))):
+                raise HTTPException(status_code=422, detail="Invalid or repeated audio part order")
+            valid_files = [valid_files[i] for i in indices]
+        job = _new_upload_job("registrazione-unita.wav", None)
+        upload_dir = filestore.prepare_upload_dir(job.id)
+        manifest_parts = []
+        total_bytes = 0
+        try:
+            for idx, item in enumerate(valid_files, 1):
+                source_name = PurePosixPath(item.filename or "").name
+                head = await item.read(_MAGIC_SNIFF_BYTES)
+                await item.seek(0)
+                if _is_disallowed_upload(head):
+                    raise ValueError(f"File non audio: {source_name}")
+                filename = f"part-{idx:04d}{PurePosixPath(source_name).suffix.lower()}"
+                dest = upload_dir / filename
+                # Bound the *aggregate*, not just each part, to protect disk.
+                allowed = await _stream_to_file(item, dest, max(0, settings.max_upload_size - total_bytes))
+                if not allowed:
+                    raise ValueError(
+                        f"Il totale dei file supera il limite di {_format_size(settings.max_upload_size)}"
+                    )
+                total_bytes += dest.stat().st_size
+                manifest_parts.append({"filename": filename, "original_name": source_name})
+            # The manifest itself is also a record of the exact join order.
+            manifest = upload_dir / MANIFEST_NAME
+            temp_manifest = upload_dir / f".{MANIFEST_NAME}.tmp"
+            temp_manifest.write_text(
+                json.dumps({"version": 1, "parts": manifest_parts}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            temp_manifest.replace(manifest)
+        except (OSError, ValueError) as error:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            return _error_redirect_or_fragment(
+                request, "/upload?error=merge_invalid", str(error),
+            )
+        except BaseException:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            raise
+        job.filepath = str(upload_dir / job.filename)
+        # The audio is produced asynchronously by the IO worker; preprocess
+        # probes its true length and adjusts the GPU stage timeout afterwards.
+        job.duration = None
+        job.status = JobStatus.QUEUED
+        db.insert_job(job)
+        try:
+            await asyncio.to_thread(enqueue_pipeline, job, redis=redis, settings=settings, filestore=filestore)
+            message, category = _build_upload_toast(1)
+        except Exception:
+            mark_enqueue_failed(job, db)
+            message, category = _build_upload_toast(0, failed=1)
+        set_flash(request, message, category)
+        if htmx:
+            return Response(status_code=204, headers={"HX-Redirect": "/jobs"})
+        return RedirectResponse("/jobs", status_code=303)
 
     batch_id = uuid.uuid4().hex if len(valid_files) > 1 else None
     submitted_count = 0
@@ -300,38 +411,7 @@ async def upload_submit(
                 first_skip = (f"/upload?error=invalid_content&name={quote(display_name)}", msg)
             continue
 
-        job = Job(
-            filename=display_name,
-            language=language,
-            model_name=model_name,
-            num_speakers=clamp_num_speakers(num_speakers) or None,
-            # Clamp opt-in flags to what this deployment can actually run so the
-            # persisted flag is honest and no no-op stage is enqueued.
-            enable_diarization=enable_diarization and settings.diarization_available,
-            convert_to_traditional=convert_to_traditional,
-            llm_correction_enabled=llm_correction_enabled and settings.llm_correction_available,
-            whisper_keywords=whisper_keywords.strip()[:1500],
-            vad_threshold=vad_threshold,
-            vad_enabled=vad_enabled,
-            vad_min_speech_ms=vad_min_speech_ms,
-            vad_min_silence_ms=vad_min_silence_ms,
-            vad_speech_pad_ms=vad_speech_pad_ms,
-            vad_samples_overlap=vad_samples_overlap,
-            whisper_beam_size=whisper_beam_size,
-            llm_context_prompt=llm_context_prompt.strip()[:4000],
-            summary_prompt=summary_prompt.strip()[:4000],
-            summary_enabled=summary_enabled and settings.llm_correction_available,
-            audio_processing=audio_processing if audio_processing in {"off", "auto", "custom"} else "auto",
-            audio_denoise=audio_denoise if audio_denoise in {"off", "auto", "light", "medium"} else "auto",
-            audio_compression=(
-                audio_compression if audio_compression in {"off", "auto", "light", "medium", "strong"} else "auto"
-            ),
-            audio_target_lufs=max(-24.0, min(-12.0, audio_target_lufs)),
-            audio_max_gain_db=max(0.0, min(30.0, audio_max_gain_db)),
-            audio_highpass_hz=max(0, min(180, audio_highpass_hz)),
-            batch_id=batch_id,
-            owner_id=user.id,
-        )
+        job = _new_upload_job(display_name, batch_id)
 
         dest = filestore.prepare_upload_path(job.id, display_name)
         try:

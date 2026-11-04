@@ -2393,10 +2393,53 @@ class TestStandaloneLLMCorrectionRoutes:
                 follow_redirects=False,
             )
         assert response.status_code == 303
-        assert response.headers['location'] == f'/viewer/{job.id}'
+        assert response.headers['location'] == f'/viewer/{job.id}?correction=queued'
         assert db.get_job(job.id).llm_context_prompt == 'Meeting Airdass, API tecniche.'
         enqueue.assert_called_once_with(app.state.redis, job.id)
         assert db.get_job(job.id).status == JobStatus.COMPLETED
+
+    def test_recorrection_when_already_queued_reports_waiting_without_duplicate(self, client, app, db, filestore):
+        app.state.settings = app.state.settings.model_copy(update={
+            'ollama_base_url': 'http://192.168.0.150:18084',
+        })
+        job = _create_completed_job(db, filestore)
+        previous_prompt = job.llm_context_prompt
+        with (
+            patch('whisper_ui.worker.standalone_correction.correction_status', return_value={'status': 'queued'}),
+            patch('whisper_ui.worker.standalone_correction.enqueue_correction') as enqueue,
+        ):
+            response = client.post(f'/viewer/{job.id}/correct',
+                                   data={'llm_context_prompt': 'Change prompt'}, follow_redirects=False)
+            page = client.get(response.headers['location'])
+        assert response.status_code == 303
+        assert 'correction=already-active' in response.headers['location']
+        assert page.status_code == 200
+        assert 'già una correzione LLM in coda' in page.text
+        assert '· in coda' in page.text
+        assert 'Correzione LLM separata' in page.text
+        assert db.get_job(job.id).llm_context_prompt == previous_prompt
+        enqueue.assert_not_called()
+
+    def test_existing_correction_can_be_rerun_after_finished(self, client, app, db, filestore):
+        app.state.settings = app.state.settings.model_copy(update={
+            'ollama_base_url': 'http://192.168.0.150:18084',
+        })
+        job = _create_completed_job(db, filestore)
+        filestore.save_corrected_result(job.id, filestore.load_result(job.id))
+        with (
+            patch('whisper_ui.worker.standalone_correction.correction_status',
+                  return_value={'status': 'finished'}),
+            patch('whisper_ui.worker.standalone_correction.enqueue_correction',
+                  return_value={'status': 'queued'}) as enqueue,
+        ):
+            response = client.post(f'/viewer/{job.id}/correct',
+                                   data={'llm_context_prompt': 'New correction'}, follow_redirects=False)
+            page = client.get(response.headers['location'])
+        assert response.status_code == 303
+        assert 'correction=queued' in response.headers['location']
+        assert 'Correzione richiesta e inserita nella coda LLM' in page.text
+        assert db.get_job(job.id).llm_context_prompt == 'New correction'
+        enqueue.assert_called_once()
 
     def test_correction_endpoint_is_unavailable_without_llm(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
@@ -2750,3 +2793,182 @@ class TestVADHelpDialog:
             assert text.lower() in page.text.lower(), text
         assert 'type="button" data-vad-help' in page.text
         assert 'Chiudi guida VAD' in page.text
+
+class TestJoinedAudioUploads:
+    """Merge mode is explicitly opt-in and produces exactly one auditable job."""
+
+    def test_upload_ordered_files_yields_one_job_and_manifest(self, client, db, filestore):
+        import json
+        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+            response = client.post('/upload', data={
+                'merge_mode': 'merge', 'merge_order': '2,0,1', 'language': 'it',
+                'vad_threshold': '0.15', 'vad_speech_pad_ms': '800',
+            }, files=[
+                ('files', ('one.mp3', b'FILE_ONE', 'audio/mpeg')),
+                ('files', ('two.wav', b'FILE_TWO', 'audio/wav')),
+                ('files', ('three.m4a', b'FILE_THREE', 'audio/mp4')),
+            ], follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers['location'] == '/jobs'
+        assert len(list_jobs(db)) == 1
+        job = enqueue.call_args.args[0]
+        assert job.filename == 'registrazione-unita.wav'
+        assert job.duration is None
+        assert job.vad_threshold == .15
+        assert job.vad_speech_pad_ms == 800
+        assert not filestore.get_upload_path(job.id, job.filename).exists()
+        manifest = json.loads(filestore.get_upload_path(job.id, 'merge-manifest.json').read_text())
+        assert [x['original_name'] for x in manifest['parts']] == ['three.m4a', 'one.mp3', 'two.wav']
+        assert [x['filename'] for x in manifest['parts']] == ['part-0001.m4a', 'part-0002.mp3', 'part-0003.wav']
+        assert [filestore.get_upload_path(job.id, x['filename']).read_bytes() for x in manifest['parts']] == [
+            b'FILE_THREE', b'FILE_ONE', b'FILE_TWO',
+        ]
+
+    def test_invalid_merge_order_rejects_before_any_job(self, client, db):
+        for order in ('0,0', '2,0', '-1,0', 'abc,0', '0,1,2'):
+            with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+                response = client.post('/upload', data={'merge_mode': 'merge', 'merge_order': order}, files=[
+                    ('files', ('a.mp3', b'FILE_A', 'audio/mpeg')),
+                    ('files', ('b.mp3', b'FILE_B', 'audio/mpeg')),
+                ])
+            assert response.status_code == 422, order
+            enqueue.assert_not_called()
+        assert list_jobs(db) == []
+
+    def test_merge_rejects_any_unsupported_or_nonmedia_part_atomically(self, client, db, filestore):
+        for bad_filename, bad_bytes in [('wrong.pdf', b'doc'), ('disguised.mp3', b'%PDF bad')]:
+            with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+                response = client.post('/upload', data={'merge_mode': 'merge'}, files=[
+                    ('files', ('valid.mp3', b'FILE_A', 'audio/mpeg')),
+                    ('files', (bad_filename, bad_bytes, 'application/octet-stream')),
+                ], follow_redirects=False)
+            assert response.status_code == 303
+            assert 'error=merge_invalid' in response.headers['location']
+            enqueue.assert_not_called()
+        assert list_jobs(db) == []
+        assert not list(filestore._upload_dir.glob('*/merge-manifest.json'))
+
+    def test_merge_checks_total_upload_size_and_cleans_parts(self, client, app, db, filestore):
+        app.state.settings = app.state.settings.model_copy(update={'max_upload_size': 15})
+        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+            response = client.post('/upload', data={'merge_mode': 'merge'}, files=[
+                ('files', ('first.mp3', b'1234567890', 'audio/mpeg')),
+                ('files', ('second.wav', b'1234567890', 'audio/wav')),
+            ], follow_redirects=False)
+        assert response.status_code == 303
+        assert 'error=merge_invalid' in response.headers['location']
+        assert list_jobs(db) == []
+        enqueue.assert_not_called()
+        assert not list(filestore._upload_dir.glob('*/part-*'))
+
+    def test_separate_mode_remains_the_default_for_batches(self, client, db):
+        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
+            response = client.post('/upload', files=[
+                ('files', ('part1.mp3', b'FILE_ONE', 'audio/mpeg')),
+                ('files', ('part2.wav', b'FILE_TWO', 'audio/wav')),
+            ], follow_redirects=False)
+        assert response.status_code == 303
+        assert len(list_jobs(db)) == 2
+        assert enqueue.call_count == 2
+
+    def test_upload_merge_ui_exposes_order_buttons_and_separate_default(self, client):
+        response = client.get('/upload')
+        assert response.status_code == 200
+        assert 'name="merge_mode"' in response.text
+        assert 'value="separate"' in response.text
+        assert 'value="merge"' in response.text
+        assert 'name="merge_order"' in response.text
+        assert 'moveFile(idx, -1)' in response.text
+        assert 'moveFile(idx, 1)' in response.text
+        assert 'syncFileOrder()' in response.text
+        assert 'Unisci in una sola registrazione' in response.text
+
+class TestPosthocTranscriptJoin:
+    """Only owned, finished jobs can be joined; order and variants are frozen."""
+
+    def _completed(self, db, filestore, text='Ciao', *, owner_id=None, has_audio=True):
+        job = Job(filename=f'{text}.wav', status=JobStatus.COMPLETED, owner_id=owner_id, duration=4)
+        filestore.save_result(job.id, TranscriptResult([Segment(.1, 1, text, 'S1')], 'it', 4))
+        if has_audio:
+            (filestore._output_dir / job.id / 'processed.wav').write_bytes(b'RIFF' + b'\0'*80)
+        db.insert_job(job)
+        return job
+
+    def test_options_return_owned_jobs_and_transcript_variants(self, client, db, filestore):
+        first=self._completed(db,filestore,'Prima')
+        second=self._completed(db,filestore,'Seconda',has_audio=False)
+        filestore.save_corrected_result(second.id,TranscriptResult([Segment(0,1,'Corretto')], 'it', 4))
+        filestore.save_custom_result(second.id,TranscriptResult([Segment(0,1,'Manuale')], 'it', 4))
+        resp=client.get('/jobs/merge/options',params={'job_ids':f'{second.id},{first.id}'})
+        assert resp.status_code==200
+        jobs=resp.json()['jobs']
+        assert [j['id'] for j in jobs]==[second.id,first.id]
+        assert [v['value'] for v in jobs[0]['versions']]==['original','corrected','custom']
+        assert jobs[0]['has_audio'] is False
+        assert jobs[1]['has_audio'] is True
+        page=client.get('/jobs')
+        assert 'Unisci trascrizioni' in page.text
+        assert 'mergeCompletedJobsDialog()' in page.text
+        assert 'Crea trascrizione unita' in page.text
+
+    def test_join_creates_new_job_manifest_and_enqueues_io_not_gpu(self,client,db,filestore):
+        first=self._completed(db,filestore,'Prima')
+        second=self._completed(db,filestore,'Seconda')
+        with patch('whisper_ui.web.routes.merge_jobs.enqueue_join') as enqueue:
+            resp=client.post('/jobs/merge',data={
+                'job_ids':f'{second.id},{first.id}',
+                'versions':'original,original','title':'Riunione completa',
+            })
+        assert resp.status_code==202,resp.text
+        jid=resp.json()['job_id']
+        job=db.get_job(jid)
+        assert job.status==JobStatus.QUEUED
+        assert job.filename=='Riunione completa.wav'
+        assert job.owner_id==first.owner_id
+        assert job.duration is None
+        import json
+
+        manifest=json.loads(filestore.get_upload_path(jid,'joined-sources.json').read_text())
+        assert manifest['sources']==[
+            {'job_id':second.id,'transcript':'original'},
+            {'job_id':first.id,'transcript':'original'},
+        ]
+        enqueue.assert_called_once_with(client.app.state.redis,jid)
+        assert db.get_job(first.id).status==JobStatus.COMPLETED
+        assert db.get_job(second.id).status==JobStatus.COMPLETED
+
+    @pytest.mark.parametrize('kind',('duplicate','single','invalid-version','overlong-title'))
+    def test_bad_join_request_rejected_without_creating_job(self,client,db,filestore,kind):
+        a=self._completed(db,filestore,'Prima')
+        b=self._completed(db,filestore,'Seconda')
+        data={'job_ids':f'{a.id},{b.id}','versions':'original,original','title':'Unione'}
+        if kind=='duplicate':
+            data['job_ids']=f'{a.id},{a.id}'
+        if kind=='single':
+            data['job_ids']=a.id
+        if kind=='invalid-version':
+            data['versions']='custom,original'
+        if kind=='overlong-title':
+            data['title']='X'*120
+        resp=client.post('/jobs/merge',data=data)
+        assert resp.status_code==422
+        assert len(list_jobs(db))==2
+
+    def test_other_user_source_not_mergeable(self,client,db,filestore,test_user):
+        first=self._completed(db,filestore,'Prima')
+        outside=self._completed(db,filestore,'Seconda',owner_id=test_user.id+42)
+        assert client.get('/jobs/merge/options',params={
+            'job_ids':f'{first.id},{outside.id}'
+        }).status_code==404
+        assert client.post('/jobs/merge',data={
+            'job_ids':f'{first.id},{outside.id}'
+        }).status_code==404
+        assert len(list_jobs(db))==2
+
+    def test_failed_job_not_selectable(self,client,db,filestore):
+        first=self._completed(db,filestore,'Prima')
+        failed=Job(filename='failed.wav',status=JobStatus.FAILED)
+        db.insert_job(failed)
+        assert client.post('/jobs/merge',data={
+            'job_ids':f'{first.id},{failed.id}'
+        }).status_code==404

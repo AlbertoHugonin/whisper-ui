@@ -76,7 +76,7 @@ async def viewer_redirect():
 @router.get("/viewer/{job_id}", response_class=HTMLResponse)
 async def viewer_page(
     request: Request, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep,
-    job_id: str, settings: SettingsDep,
+    job_id: str, settings: SettingsDep, redis: RedisDep,
 ):
     validate_hex_id(job_id, "job_id")
 
@@ -141,6 +141,11 @@ async def viewer_page(
         except (OSError, json.JSONDecodeError):
             analysis = None
 
+    correction_state = {"status": "not_requested"}
+    if job and settings.llm_correction_available:
+        from whisper_ui.worker.standalone_correction import correction_status
+        correction_state = correction_status(redis, job_id)
+
     return templates.TemplateResponse(
         request=request,
         name="viewer.html",
@@ -150,6 +155,7 @@ async def viewer_page(
             "result": result,
             "corrected_result": corrected_result,
             "correction_available": settings.llm_correction_available,
+            "correction_state": correction_state,
             "reading_paragraphs": reading_paragraphs,
             "error": error,
             "speaker_colors": speaker_colors,
@@ -174,11 +180,16 @@ async def request_correction(job_id: str, db: DbDep, redis: RedisDep, settings: 
     if not settings.llm_correction_available:
         raise HTTPException(status_code=503, detail="LLM correction unavailable")
     from whisper_ui.worker.standalone_correction import correction_status, enqueue_correction
-    if correction_status(redis, job_id)["status"] not in {"queued", "started", "deferred", "scheduled"}:
-        job.llm_context_prompt = llm_context_prompt.strip()[:4000]
-        db.update_job(job)
-        enqueue_correction(redis, job_id)
-    return RedirectResponse(f"/viewer/{job_id}", status_code=303)
+    status = correction_status(redis, job_id)
+    if status["status"] in {"queued", "started", "deferred", "scheduled"}:
+        # Never insert a duplicate LLM task: the first request is waiting.
+        # The redirect now makes this explicit rather than silently reloading.
+        return RedirectResponse(f"/viewer/{job_id}?correction=already-active", status_code=303)
+    job.llm_context_prompt = llm_context_prompt.strip()[:4000]
+    db.update_job(job)
+    result = enqueue_correction(redis, job_id)
+    state = "queued" if result["status"] == "queued" else "already-active"
+    return RedirectResponse(f"/viewer/{job_id}?correction={state}", status_code=303)
 
 
 @router.get("/viewer/{job_id}/correction-status")

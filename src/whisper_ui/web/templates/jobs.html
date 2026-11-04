@@ -21,6 +21,48 @@
 {# Bulk action bar + confirm/batch-download dialogs + jobSelection store. #}
 {% include "_job_interactions.html" %}
 
+{# Post-hoc merge: pick completed jobs from any filter/page, choose source
+   transcript variants, and rearrange the exact order before submission. #}
+<div x-data="mergeCompletedJobsDialog()" @open-merge-jobs.window="show()">
+  <dialog x-ref="joinDialog" class="modal" aria-labelledby="join-title">
+    <div class="modal-box w-11/12 max-w-3xl space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="join-title" class="text-xl font-bold">Unisci trascrizioni già completate</h2>
+        <button class="btn btn-ghost btn-circle btn-sm" @click="close()" aria-label="Chiudi">✕</button>
+      </div>
+      <p class="text-sm opacity-70">Scegli l'ordine dei lavori. Verrà creato un <strong>nuovo job</strong>
+        con i testi concatenati e timestamp continui, senza ritrascrivere e senza modificare gli originali.
+        Se tutti gli audio sono ancora disponibili, unirò anche le registrazioni; altrimenti unirò solo il testo.</p>
+      <label class="fieldset"><span class="fieldset-legend">Nome della nuova registrazione</span>
+        <input type="text" class="input input-bordered w-full" maxlength="100" x-model="title" placeholder="Unione riunioni"></label>
+      <p class="text-error text-sm" role="alert" x-show="error" x-text="error"></p>
+      <p class="text-xs opacity-60" x-show="loading">Lettura delle versioni disponibili…</p>
+      <div class="space-y-2 max-h-[47vh] overflow-y-auto">
+        <template x-for="(item, i) in items" :key="item.id">
+          <div class="rounded-box p-3 border border-base-300 bg-base-200/60 flex flex-wrap items-center gap-2">
+            <span class="badge badge-outline badge-sm" x-text="i + 1"></span>
+            <div class="flex-1 min-w-32">
+              <p class="font-semibold text-sm truncate" x-text="item.filename" :title="item.filename"></p>
+              <p class="text-xs opacity-60" x-text="item.has_audio ? 'Audio disponibile' : 'Solo trascrizione: audio non più disponibile'"></p>
+            </div>
+            <select class="select select-bordered select-sm max-w-40" :aria-label="'Versione di '+item.filename" x-model="item.selectedVersion">
+              <template x-for="v in item.versions" :key="v.value"><option :value="v.value" x-text="v.label"></option></template>
+            </select>
+            <button type="button" class="btn btn-outline btn-xs" @click="move(i,-1)" :disabled="i===0" :aria-label="'Sposta prima '+item.filename">↑</button>
+            <button type="button" class="btn btn-outline btn-xs" @click="move(i,1)" :disabled="i===items.length-1" :aria-label="'Sposta dopo '+item.filename">↓</button>
+          </div>
+        </template>
+      </div>
+      <div class="modal-action">
+        <button class="btn btn-ghost" type="button" @click="close()">Annulla</button>
+        <button class="btn btn-primary" type="button" @click="submit()"
+                :disabled="loading || saving || items.length<2" x-text="saving ? 'Creazione…' : 'Crea trascrizione unita'"></button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button aria-label="Chiudi">Chiudi</button></form>
+  </dialog>
+</div>
+
 {# Re-transcribe dialog — re-run a completed job's audio with new parameters,
    creating a new version while preserving the original transcript. The fields
    mirror the upload form's options but pre-fill from the source job. #}
@@ -133,6 +175,53 @@
 // (the backend clamps too; this keeps the UI honest).
 const RT_HF_AVAILABLE = {{ 'true' if diarization_available else 'false' }};
 const RT_OLLAMA_AVAILABLE = {{ 'true' if llm_correction_available else 'false' }};
+
+function mergeCompletedJobsDialog() {
+  return {
+    items: [], loading: false, saving: false, error: '', title: 'Trascrizione unita',
+    async show() {
+      this.error=''; this.items=[]; this.loading=true; this.saving=false;
+      this.title='Trascrizione unita';
+      this.$refs.joinDialog.showModal();
+      const selected=Array.from(Alpine.store('jobSelection').items.entries())
+        .filter(([,status])=>status==='completed').map(([id])=>id);
+      if(selected.length<2 || selected.length>20) {
+        this.error='Seleziona da 2 a 20 lavori completati';this.loading=false;return;
+      }
+      try {
+        const response=await fetch('/jobs/merge/options?job_ids='+encodeURIComponent(selected.join(',')),
+          {credentials:'same-origin'});
+        if(response.redirected){window.location.href=response.url;return;}
+        if(!response.ok) throw Error('Impossibile leggere le trascrizioni selezionate ('+response.status+')');
+        const data=await response.json();
+        this.items=data.jobs.map(job=>({...job,selectedVersion:'original'}));
+      }catch(e){this.error=e.message;}finally{this.loading=false;}
+    },
+    move(i,direction) {
+      const next=i+direction;
+      if(next<0||next>=this.items.length)return;
+      const copy=this.items.slice();[copy[i],copy[next]]=[copy[next],copy[i]];this.items=copy;
+    },
+    close(){this.$refs.joinDialog.close();},
+    async submit(){
+      if(this.saving||this.items.length<2)return;
+      this.saving=true;this.error='';
+      const fd=new FormData();
+      fd.set('job_ids',this.items.map(job=>job.id).join(','));
+      fd.set('versions',this.items.map(job=>job.selectedVersion).join(','));
+      fd.set('title',this.title);
+      try {
+        const response=await fetch('/jobs/merge',{method:'POST',body:fd,credentials:'same-origin'});
+        if(response.redirected){window.location.href=response.url;return;}
+        if(!response.ok){const err=await response.json().catch(()=>({}));
+          throw Error(err.detail||'Impossibile creare la trascrizione unita ('+response.status+')');}
+        const result=await response.json();
+        Alpine.store('jobSelection').clear();
+        window.location.href=result.redirect||'/jobs';
+      }catch(e){this.error=e.message;}finally{this.saving=false;}
+    },
+  };
+}
 
 function retranscribeDialog() {
   return {

@@ -23,6 +23,14 @@
                 @click="$store.jobSelection.bulkAction('export')">
           {{ labels.JOBS_BULK_EXPORT }}
         </button>
+        {% if active_page == 'jobs' %}
+        <button class="btn btn-sm btn-primary"
+                :disabled="!$store.jobSelection.canMerge"
+                title="Seleziona almeno due trascrizioni completate"
+                @click="$dispatch('open-merge-jobs')">
+          Unisci trascrizioni
+        </button>
+        {% endif %}
         <button class="btn btn-sm btn-ghost text-error"
                 @click="$store.jobSelection.bulkAction('delete', '{{ labels.JOBS_BULK_CONFIRM_DELETE }}', '{{ labels.JOBS_BULK_DELETE }}')">
           {{ labels.JOBS_BULK_DELETE }}
@@ -92,6 +100,10 @@ function registerJobSelectionStore() {
     get hasCompleted() {
       for (const status of this.items.values()) if (status === 'completed') return true;
       return false;
+    },
+    get canMerge() {
+      if (this.items.size < 2 || this.items.size > 20) return false;
+      return Array.from(this.items.values()).every(status => status === 'completed');
     },
     get hasFailed() {
       for (const status of this.items.values()) if (status === 'failed') return true;

@@ -82,13 +82,19 @@
 {% endif %}
 
 {% if correction_available %}
-<details class="border border-base-300 rounded-box p-3 mb-3" {% if not corrected_result %}open{% endif %}>
-  <summary class="font-semibold cursor-pointer">Correzione LLM separata {% if corrected_result %}· disponibile{% endif %}</summary>
+<details class="border border-base-300 rounded-box p-3 mb-3" {% if not corrected_result or correction_state.status in ('queued','started','deferred','scheduled') or request.query_params.get('correction') %}open{% endif %}>
+  <summary class="font-semibold cursor-pointer">Correzione LLM separata {% if corrected_result %}· disponibile{% endif %}{% if correction_state.status in ('queued','started','deferred','scheduled') %} · {{ 'in corso' if correction_state.status == 'started' else 'in coda' }}{% endif %}</summary>
+  {% if request.query_params.get('correction') == 'already-active' %}
+  <div role="alert" class="alert alert-info text-sm my-2">C'è già una correzione LLM in coda o in elaborazione. Non ne ho creata un'altra: attendi il completamento o controlla lo stato qui sotto.</div>
+  {% elif request.query_params.get('correction') == 'queued' %}
+  <div role="status" class="alert alert-success text-sm my-2">Correzione richiesta e inserita nella coda LLM. Il testo Whisper originale rimane disponibile.</div>
+  {% endif %}
   <p class="text-xs opacity-70 my-2">Il risultato Whisper rimane disponibile. La correzione viene eseguita in coda senza ritrascrivere l'audio.</p>
   <form method="post" action="/viewer/{{ job.id }}/correct" class="flex flex-col gap-2">
     <label for="studio-llm-context" class="text-xs font-semibold">Contesto e terminologia LLM</label>
     <textarea id="studio-llm-context" name="llm_context_prompt" maxlength="4000" rows="3" class="textarea textarea-bordered w-full" placeholder="Meeting Airdass, nomi, acronimi...">{{ job.llm_context_prompt }}</textarea>
-    <button type="submit" class="btn btn-primary btn-sm self-start">{{ 'Ricorreggi con LLM' if corrected_result else 'Correggi con LLM' }}</button>
+    <button type="submit" class="btn btn-primary btn-sm self-start"
+            {% if correction_state.status in ('queued','started','deferred','scheduled') %}disabled{% endif %}>{{ 'Ricorreggi con LLM' if corrected_result else 'Correggi con LLM' }}</button>
   </form>
   <p id="studio-correction-status" class="text-xs opacity-70 mt-2" role="status">Controllo stato correzione…</p>
 </details>
@@ -298,9 +304,14 @@
    try {
      const response = await fetch('/viewer/{{ job.id }}/correction-status', {credentials:'same-origin'});
      if (!response.ok) return;
-     const state = (await response.json()).status || 'unknown';
+     const data = await response.json();
+     const state = data.status || 'unknown';
+     const button = document.querySelector('form[action="/viewer/{{ job.id }}/correct"] button[type="submit"]');
+     if (button) button.disabled = ['queued','started','deferred','scheduled'].includes(state);
      box.textContent = ({queued:'Correzione in coda',started:'Correzione in corso',finished:'Correzione terminata',
-       failed:'Correzione fallita: puoi riprovare',not_requested:'Nessuna correzione richiesta'})[state] || 'Stato: '+state;
+       failed:'Correzione fallita: puoi riprovare',not_requested:'Nessuna correzione richiesta',
+      deferred:'Correzione in attesa',scheduled:'Correzione programmata',
+      unknown:'Stato LLM incerto: controlla la coda'})[state] || 'Stato: '+state;
      if (state==='finished' && last && last!=='finished') location.reload();
      last=state;
    } catch (_) { box.textContent='Stato LLM temporaneamente non disponibile'; }

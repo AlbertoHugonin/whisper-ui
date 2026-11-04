@@ -29,6 +29,7 @@ from whisper_ui.pipeline.align import AlignStage
 from whisper_ui.pipeline.assign_speakers import AssignSpeakersStage
 from whisper_ui.pipeline.diarize import DiarizeStage
 from whisper_ui.pipeline.download import DownloadStage
+from whisper_ui.pipeline.merge_audio import AudioMergeStage
 from whisper_ui.pipeline.postprocess import PostprocessStage
 from whisper_ui.pipeline.preprocess import PreprocessStage
 from whisper_ui.pipeline.progress_bands import (
@@ -397,6 +398,16 @@ def run_download(parent_job_id: str) -> str:
         ),
         output_keys=("input_path", "video_title"),
         pre_context_update=_seed_download_context,
+    )
+
+
+def run_merge_audio(parent_job_id: str) -> str:
+    """Merge ordered uploads on the IO worker before normal preprocessing."""
+    return _run_single_stage(
+        parent_job_id,
+        stage_name="merge_audio",
+        build_stage=lambda job, runtime: AudioMergeStage(),
+        output_keys=("input_path",),
     )
 
 

@@ -316,6 +316,7 @@ def create_app() -> FastAPI:
         auth_routes,
         dashboard,
         jobs,
+        merge_jobs,
         metrics,
         presets,
         shared,
@@ -329,6 +330,7 @@ def create_app() -> FastAPI:
     application.include_router(upload.router)
     application.include_router(presets.router)
     application.include_router(jobs.router)
+    application.include_router(merge_jobs.router)
     application.include_router(viewer.router)
     application.include_router(studio.router)
     application.include_router(shared.router)

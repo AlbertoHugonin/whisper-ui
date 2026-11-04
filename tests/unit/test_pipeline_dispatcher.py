@@ -105,6 +105,30 @@ def test_file_upload_dag_includes_preprocess_through_postprocess(tmp_path):
     }
 
 
+def test_ordered_audio_merge_dag_runs_merge_before_preprocess(tmp_path):
+    from whisper_ui.pipeline.merge_audio import MANIFEST_NAME
+
+    redis = fakeredis.FakeRedis()
+    settings = _build_settings(ollama='')
+    filestore = _build_filestore(tmp_path)
+    manifest = tmp_path / 'uploads' / MANIFEST_NAME
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"version":1,"parts":[]}')
+    filestore.get_upload_path.return_value = manifest
+    job = Job(id='job-merged', filename='registrazione-unita.wav',
+              filepath=str(manifest.parent / 'registrazione-unita.wav'), status=JobStatus.QUEUED)
+
+    enqueue_pipeline(job, redis=redis, settings=settings, filestore=filestore)
+    subs = _by_stage(_load_subjobs(redis, job.id))
+    assert 'run_merge_audio' in subs
+    assert subs['run_merge_audio'].origin == WORKER_QUEUE_IO
+    assert set(subs['run_preprocess'].dependency_ids) == {subs['run_merge_audio'].id}
+    assert set(subs['run_transcribe_align'].dependency_ids) == {subs['run_preprocess'].id}
+    ctx = PipelineContextStore(redis, job.id).load()
+    assert ctx['merge_manifest_path'] == str(manifest)
+    assert ctx['input_path'] == job.filepath
+
+
 def test_url_upload_dag_prepends_download(tmp_path):
     redis = fakeredis.FakeRedis()
     settings = _build_settings(ollama="")

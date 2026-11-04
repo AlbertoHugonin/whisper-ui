@@ -20,6 +20,7 @@ intermediate 16 kHz WAV.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rq import Callback, Queue
@@ -51,6 +52,7 @@ from whisper_ui.worker.stage_tasks import (
     run_diarize,
     run_download,
     run_llm_correction,
+    run_merge_audio,
     run_postprocess,
     run_preprocess,
     run_transcribe_align,
@@ -65,6 +67,7 @@ from whisper_ui.worker.timeout import calculate_job_timeout
 # whisper_ui.core.constants for the rationale.
 _STAGE_QUEUES = {
     run_download.__name__: WORKER_QUEUE_IO,
+    run_merge_audio.__name__: WORKER_QUEUE_IO,
     run_preprocess.__name__: WORKER_QUEUE_IO,
     run_llm_correction.__name__: WORKER_QUEUE_LLM,
     run_transcribe_align.__name__: WORKER_QUEUE_GPU,
@@ -275,6 +278,11 @@ def enqueue_pipeline(
         initial_context["input_path"] = ""
     else:
         initial_context["input_path"] = job.filepath or ""
+        if job.filepath:
+            from whisper_ui.pipeline.merge_audio import MANIFEST_NAME
+            merge_manifest = filestore.get_upload_path(job.id, MANIFEST_NAME)
+            if isinstance(merge_manifest, Path) and merge_manifest.is_file():
+                initial_context["merge_manifest_path"] = str(merge_manifest)
 
     # Bump the generation counter *before* initializing the context so any
     # stale writer from the previous attempt sees the new value and drops
@@ -345,6 +353,9 @@ def enqueue_pipeline(
     if job.source_url:
         download_job = _enqueue(run_download, is_final=False)
         preprocess_job = _enqueue(run_preprocess, depends_on=download_job, is_final=False)
+    elif "merge_manifest_path" in initial_context:
+        merge_job = _enqueue(run_merge_audio, is_final=False)
+        preprocess_job = _enqueue(run_preprocess, depends_on=merge_job, is_final=False)
     else:
         preprocess_job = _enqueue(run_preprocess, is_final=False)
 

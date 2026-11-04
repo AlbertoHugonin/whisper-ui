@@ -48,6 +48,8 @@
   {{ labels.UPLOAD_URL_PLAYLIST_UNAVAILABLE }}
   {% elif error == 'playlist_fetch_failed' %}
   {{ labels.UPLOAD_URL_PLAYLIST_FETCH_FAILED }}
+  {% elif error == 'merge_invalid' %}
+  Impossibile unire i file: verifica che siano almeno due registrazioni valide e che il totale rientri nel limite di caricamento.
   {% elif error == 'no_url' %}
   {{ labels.UPLOAD_URL_NO_INPUT }}
   {% elif error == 'too_many_urls' %}
@@ -206,20 +208,6 @@
              @change="updateFileList($event)"
              class="hidden">
     </div>
-    {# File preview list #}
-    <template x-if="selectedFiles.length > 0">
-      <div class="mt-4 space-y-2">
-        <template x-for="(file, idx) in selectedFiles" :key="idx">
-          <div class="flex items-center gap-3 px-3 py-2 bg-base-200 rounded-box text-sm">
-            <span class="flex-1 truncate" x-text="file.name"></span>
-            <span class="text-xs opacity-50" x-text="formatSize(file.size)"></span>
-            <button type="button" class="btn btn-ghost btn-xs" @click="removeFile(idx)">
-              {{ icon_x("w-3 h-3") }}
-            </button>
-          </div>
-        </template>
-      </div>
-    </template>
   </div>
 
   {# Folder tab #}
@@ -243,6 +231,49 @@
               class="textarea w-full"></textarea>
     <p class="text-xs opacity-40 mt-2">{{ labels.UPLOAD_URL_DISCLAIMER }}</p>
   </div>
+
+  {# Merge controls apply to both selected files and folders. User-defined order
+     is the real multipart upload order, not merely a visual preview. #}
+  <section x-show="tab === 'files' || tab === 'folder'" class="mt-4 space-y-3" aria-label="Modalità di caricamento multi-file">
+    <label class="fieldset"><span class="fieldset-legend font-semibold">Come elaborare più registrazioni</span>
+      <select id="merge-mode" name="merge_mode" x-model="mergeMode" class="select select-bordered w-full max-w-xl"
+              :disabled="tab === 'url'">
+        <option value="separate">Trascrivi ogni file separatamente (standard)</option>
+        <option value="merge">Unisci in una sola registrazione e trascrivi una volta</option>
+      </select>
+    </label>
+    <input type="hidden" name="merge_order" :disabled="tab === 'url'"
+           :value="selectedFiles.map((_, idx) => idx).join(',')">
+    <p class="text-xs opacity-65" x-show="mergeMode === 'merge'">
+      Verrà creato <strong>un unico lavoro</strong> con audio e timeline continui. L'ordine visualizzato qui sotto
+      è quello effettivo dell'unione, senza pause aggiunte. È necessario selezionare almeno due file validi;
+      il totale deve rientrare nel limite massimo dell'upload.
+    </p>
+    <template x-if="selectedFiles.length > 0">
+      <div class="space-y-2">
+        <div class="flex justify-between items-center gap-2 text-sm">
+          <strong x-text="mergeMode === 'merge' ? 'Ordine delle registrazioni' : 'File selezionati'"></strong>
+          <span class="opacity-60 text-xs" x-text="selectedFiles.length + ' file' "></span>
+        </div>
+        <template x-for="(file, idx) in selectedFiles" :key="file.name + idx">
+          <div class="flex items-center gap-2 px-3 py-2 bg-base-200 border border-base-300 rounded-box text-sm">
+            <span class="badge badge-outline badge-sm tabular-nums" x-text="idx + 1" x-show="mergeMode === 'merge'"></span>
+            <span class="flex-1 truncate" x-text="file.name" :title="file.name"></span>
+            <span class="text-xs opacity-50 shrink-0" x-text="formatSize(file.size)"></span>
+            <div class="flex gap-1" x-show="mergeMode === 'merge'">
+              <button type="button" class="btn btn-ghost btn-xs" :disabled="idx === 0"
+                      @click="moveFile(idx, -1)" :aria-label="'Sposta ' + file.name + ' prima'" title="Sposta prima">↑</button>
+              <button type="button" class="btn btn-ghost btn-xs" :disabled="idx === selectedFiles.length - 1"
+                      @click="moveFile(idx, 1)" :aria-label="'Sposta ' + file.name + ' dopo'" title="Sposta dopo">↓</button>
+            </div>
+            <button type="button" class="btn btn-ghost btn-xs" @click="removeFile(idx)" :aria-label="'Rimuovi ' + file.name">
+              {{ icon_x("w-3 h-3") }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </template>
+  </section>
 
   {% endif %}
 
@@ -463,6 +494,7 @@ function uploadForm() {
     uploading: false,
     progress: 0,
     selectedFiles: [],
+    mergeMode: 'separate',
     urlText: '',
     advancedOpen: false,
     diarization: {{ 'true' if (rt.enable_diarization if rt else diarization_default) else 'false' }},
@@ -490,6 +522,8 @@ function uploadForm() {
         return '{{ labels.UPLOAD_SUBMIT_STATUS_URLS }}'.replace('{count}', lines.length);
       }
       if (this.selectedFiles && this.selectedFiles.length) {
+        if (this.mergeMode === 'merge' && this.selectedFiles.length >= 2)
+          return this.selectedFiles.length + ' file → una sola registrazione';
         return '{{ labels.UPLOAD_SUBMIT_STATUS_FILES }}'.replace('{count}', this.selectedFiles.length);
       }
       return '{{ labels.UPLOAD_SUBMIT_STATUS_EMPTY }}';
@@ -519,12 +553,24 @@ function uploadForm() {
       if (this.$refs.fileInput) this.$refs.fileInput.value = '';
       if (this.$refs.folderInput) this.$refs.folderInput.value = '';
     },
+    syncFileOrder() {
+      const input = this.tab === 'folder' ? this.$refs.folderInput : this.$refs.fileInput;
+      if (!input) return;
+      const dt = new DataTransfer();
+      this.selectedFiles.forEach(file => dt.items.add(file));
+      input.files = dt.files;
+    },
+    moveFile(index, direction) {
+      const next = index + direction;
+      if (next < 0 || next >= this.selectedFiles.length) return;
+      const updated = this.selectedFiles.slice();
+      [updated[index], updated[next]] = [updated[next], updated[index]];
+      this.selectedFiles = updated;
+      this.syncFileOrder();
+    },
     removeFile(idx) {
       this.selectedFiles.splice(idx, 1);
-      // Rebuild the FileList on the input via DataTransfer
-      const dt = new DataTransfer();
-      this.selectedFiles.forEach(f => dt.items.add(f));
-      this.$refs.fileInput.files = dt.files;
+      this.syncFileOrder();
     },
     formatSize(bytes) {
       if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 ** 3)).toFixed(1) + ' GB';
