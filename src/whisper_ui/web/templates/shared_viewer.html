@@ -4,12 +4,13 @@
       :data-theme="theme">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{ labels.VIEWER_SHARED_TITLE.format(name=job.filename) }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=wide-layout1">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
   <script nonce="{{ csp_nonce }}">
   window.sharedViewerData = function(segmentCount) {
     return {
@@ -103,7 +104,7 @@
           integrity="sha384-X9kJyAubVxnP0hcA+AMMs21U445qsnqhnUF8EBlEpP3a42Kh/JwWjlv2ZcvGfphb"
           crossorigin="anonymous"></script>
 </head>
-<body class="min-h-screen bg-base-100 text-base-content leading-relaxed">
+<body class="atelier-body min-h-screen bg-base-100 text-base-content leading-relaxed">
   <div class="app-page-shell shared-page-shell mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-8 2xl:px-12 py-6 sm:py-8">
 
     <div class="flex items-center gap-2 mb-2">

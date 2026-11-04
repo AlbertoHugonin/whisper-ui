@@ -9,12 +9,14 @@
       :data-theme="theme">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Whisper UI{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>{% block title %}Atelier · Whisper{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=export-dialog1">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
@@ -85,30 +87,61 @@
   });
   </script>
 </head>
-<body class="min-h-screen bg-base-100 text-base-content leading-relaxed" hx-ext="morph">
-  {# Page loading bar #}
+<body class="atelier-body min-h-screen bg-base-100 text-base-content" hx-ext="morph">
   <div id="page-loader"></div>
-
-  {# App shell: sidebar + main content. sidebar-collapsed (set by the sidebar
-     toggle, desktop only) narrows the full sidebar to the icon rail; the CSS
-     overrides for it sit above the lg: width utilities by selector specificity. #}
-  <div class="flex min-h-screen" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    {# Sidebar — hidden on mobile, icon rail on tablet, full on desktop #}
-    <aside class="app-aside hidden md:flex md:w-14 lg:w-60 flex-col fixed inset-y-0 left-0 z-40 border-r border-line bg-base-200">
-      {% include "_sidebar.html" %}
-    </aside>
-
-    {# Main content area #}
-    <main class="main-content min-w-0 flex-1 md:ml-14 lg:ml-60 pb-16 md:pb-0">
-      <div id="page-content" class="app-page-shell mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-8 2xl:px-12 py-6 sm:py-8">
-        {% block content %}{% endblock %}
-        {% block scripts %}{% endblock %}
+  <div class="atelier-app">
+    <aside class="atelier-sidebar" aria-label="Navigazione principale">
+      <a class="atelier-brand" href="/" aria-label="Atelier, pagina iniziale">
+        <span class="atelier-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="atelier-brand-name">atelier<span class="atelier-brand-dot">.</span><small>WHISPER WORKSPACE</small></span>
+      </a>
+      <div class="atelier-side-caption">WORKSPACE</div>
+      <nav class="atelier-navigation" aria-label="Sezioni">
+        <a href="/" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='dashboard'}"><span class="atelier-nav-symbol" aria-hidden="true">◫</span><span>Panoramica</span></a>
+        <a href="/upload" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='upload'}"><span class="atelier-nav-symbol" aria-hidden="true">↥</span><span>Nuova trascrizione</span></a>
+        <a href="/jobs" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='jobs'}"><span class="atelier-nav-symbol" aria-hidden="true">▤</span><span>Le mie trascrizioni</span></a>
+        <a href="/presets" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='presets'}"><span class="atelier-nav-symbol" aria-hidden="true">⚙</span><span>Preset e impostazioni</span></a>
+      </nav>
+      {% if request.state and request.state.user and request.state.user.is_admin %}
+      <div class="atelier-side-caption atelier-caption-spaced">AMMINISTRAZIONE</div>
+      <nav class="atelier-navigation" aria-label="Amministrazione">
+        <a class="atelier-nav-item" href="/admin/users" :class="{'is-active':$store.nav.activePage==='admin_users'}"><span class="atelier-nav-symbol" aria-hidden="true">♙</span><span>Utenti</span></a>
+        <a class="atelier-nav-item" href="/admin/jobs" :class="{'is-active':$store.nav.activePage==='admin_jobs'}"><span class="atelier-nav-symbol" aria-hidden="true">▦</span><span>Tutti i lavori</span></a>
+      </nav>
+      {% endif %}
+      <div class="atelier-side-spacer"></div>
+      <div class="atelier-side-foot">
+        <div class="atelier-powered"><span class="atelier-online-indicator"></span> Powered by Whisper <span class="atelier-powered-version">/ STUDIO</span></div>
+        {% if request.state and request.state.user %}
+        <div class="atelier-profile"><span class="atelier-avatar">{{ request.state.user.username[:1]|upper }}</span><span class="atelier-profile-text"><b>{{ request.state.user.username }}</b><small>{{ 'Amministratore' if request.state.user.is_admin else 'Workspace personale' }}</small></span>
+          <form method="post" action="/logout"><button class="atelier-logout" type="submit" title="Esci" aria-label="Esci dall'account">↗</button></form></div>
+        {% endif %}
       </div>
-    </main>
+    </aside>
+    <div class="atelier-main-column">
+      <header class="atelier-topbar">
+        <div class="atelier-mobile-logo"><span class="atelier-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span> atelier<span class="atelier-brand-dot">.</span></div>
+        <div class="atelier-topbar-context"><span class="atelier-topbar-kicker">IL TUO WORKSPACE</span><strong x-text="({dashboard:'Panoramica',upload:'Nuova trascrizione',jobs:'Le mie trascrizioni',presets:'Preset',admin_users:'Utenti',admin_jobs:'Gestione lavori'})[$store.nav.activePage] || 'Whisper Studio'">Whisper Studio</strong></div>
+        <div class="atelier-topbar-actions">
+          <span class="atelier-topbar-state"><span class="atelier-online-indicator"></span> Workspace attivo</span>
+          <button class="atelier-icon-button" type="button" :aria-label="theme === 'whisper-light' ? 'Attiva tema scuro' : 'Attiva tema chiaro'" :title="theme === 'whisper-light' ? 'Tema scuro' : 'Tema chiaro'" @click="theme = theme === 'whisper-light' ? 'whisper-dark' : 'whisper-light'" x-text="theme === 'whisper-light' ? '☾' : '☼'">☼</button>
+          <a class="atelier-topbar-create" href="/upload"><span aria-hidden="true">＋</span> <span>Nuovo lavoro</span></a>
+        </div>
+      </header>
+      <main class="main-content atelier-main" id="main">
+        <div id="page-content" class="app-page-shell atelier-page">
+          {% block content %}{% endblock %}
+          {% block scripts %}{% endblock %}
+        </div>
+      </main>
+    </div>
   </div>
-
-  {# Bottom navigation — mobile only #}
-  {% include "_bottom_nav.html" %}
+  <nav class="atelier-mobile-nav" aria-label="Navigazione mobile">
+    <a href="/" :class="{'is-active':$store.nav.activePage==='dashboard'}"><span aria-hidden="true">◫</span><small>Home</small></a>
+    <a href="/jobs" :class="{'is-active':$store.nav.activePage==='jobs'}"><span aria-hidden="true">▤</span><small>Lavori</small></a>
+    <a href="/upload" class="atelier-mobile-create" :class="{'is-active':$store.nav.activePage==='upload'}"><span aria-hidden="true">＋</span><small>Crea</small></a>
+    <a href="/presets" :class="{'is-active':$store.nav.activePage==='presets'}"><span aria-hidden="true">⚙</span><small>Preset</small></a>
+  </nav>
 
   {# Toast notifications #}
   {% include "_toast.html" %}
@@ -165,6 +198,7 @@
       if (nav) {
         if (path === '/') nav.activePage = 'dashboard';
         else if (path.startsWith('/upload')) nav.activePage = 'upload';
+        else if (path.startsWith('/presets')) nav.activePage = 'presets';
         else if (path.startsWith('/presets')) nav.activePage = 'presets';
         else if (path.startsWith('/admin/users')) nav.activePage = 'admin_users';
         else if (path.startsWith('/admin/jobs')) nav.activePage = 'admin_jobs';

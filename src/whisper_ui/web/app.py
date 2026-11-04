@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -234,8 +235,11 @@ async def lifespan(app: FastAPI):
             except Exception:
                 logger.exception("Upload retention sweep failed")
 
-    tasks = [asyncio.create_task(_stale_job_checker())]
-    if settings.upload_retention_days > 0:
+    # The Atelier frontend shares the production job database and queue.
+    # Only the primary hub should run recovery/retention maintenance loops.
+    atelier_ui_only = os.environ.get('WHISPER_SECONDARY_FRONTEND', '').lower() == 'true'
+    tasks = [] if atelier_ui_only else [asyncio.create_task(_stale_job_checker())]
+    if not atelier_ui_only and settings.upload_retention_days > 0:
         tasks.append(asyncio.create_task(_upload_retention_sweep()))
         logger.info("Upload retention enabled: %d day(s)", settings.upload_retention_days)
 
