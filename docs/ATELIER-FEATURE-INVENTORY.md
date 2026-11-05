@@ -60,3 +60,21 @@ unit checks, 3 new visual contract checks and all 3 client JS tests passed.
 Apple Safari hardware or authenticated end-to-end job processing. The public
 login, CSS, Authentik gate, existing worker API restrictions, and old hub health
 must be smoke tested again after upgrading only the Atelier container.
+
+## Interaction repair and lean QA (2026-11-05)
+
+- Fixed a malformed duplicate Upload layout section (duplicate presets, progress
+  overlay and mislocated event attributes) and restored a single source panel.
+- The submission bar now stays in the normal document flow so it cannot cover
+  editable fields or intercept taps; file inputs are not hit-test targets.
+  Explicit labeled file/folder buttons are the only picker activators.
+- Upgraded Atelier stylesheet asset version to `at2-r2` to invalidate cached CSS.
+- Simplified Atelier-specific unit tests from three modules (11 assertions/tests)
+  into one three-test fast smoke module. Existing cross-cutting JS regressions
+  remain; broad screenshot sweeps are not a default requirement.
+- Executed a targeted Chromium interaction check with real Alpine/HTMX loaded
+  over 12 screens at 1440×900 PC and 430×932 iPhone, 24 page checks total.
+  Confirmed clickable controls, no document horizontal overflow and no browser
+  runtime errors. Verified 6 non-picker interactions and 2 intended
+  file/folder picker activations on each viewport. Screens and test data were
+  synthetic; no production files or jobs were created.

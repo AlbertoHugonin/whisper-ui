@@ -175,3 +175,10 @@ body.at2-auth-body{background:var(--atelier-side);overflow-x:hidden}.at2-auth-la
  .at2-editor-stack .fieldset{width:100%}
  .at2-editor-stack .input,.at2-editor-stack .select,.at2-editor-stack .textarea{width:100%}
 }
+/* Keep the action in the normal document flow. Sticky upload bars were
+   intercepting clicks on long forms at desktop and phone breakpoints. */
+.at2-upload-submit{position:relative;bottom:auto;z-index:auto;margin-top:2px}
+@media(max-width:700px){.at2-upload-submit{position:relative;bottom:auto;z-index:auto}}
+/* The picker is triggered only by an explicit, accessible control. */
+.at2-upload-source input[type="file"]{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;opacity:0!important;overflow:hidden!important;pointer-events:none!important;clip-path:inset(50%)!important}
+.at2-upload-source label[for="upload-files"],.at2-upload-source label[for="upload-folder"]{cursor:pointer;position:relative;isolation:isolate;z-index:1}
