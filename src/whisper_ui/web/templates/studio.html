@@ -152,7 +152,8 @@ function reviewStudio() {
   zoom:1,viewStart:0,audioDuration:0,currentTime:0,playing:false,followPlayback:true,
   leftActive:-1,rightActive:-1,draftActive:-1,
   summaryVersion:{{ right_initial|tojson }},summaryPrompt:{{ summary_prompt|tojson }},
-  summaryText:'',summaryStatus:'',
+  summaryText:'',summaryStatus:'',_studioGone:false,
+  destroy(){this._studioGone=true;},
   async init() {
    await Promise.all([this.loadSide('left'),this.loadSide('right')]);this.copyFrom('right');
    this.syncTranscriptToAudio(true);
@@ -281,7 +282,7 @@ function reviewStudio() {
     this.summaryStatus=({queued:'In coda',started:'Elaborazione in corso',finished:'Completato',failed:'Errore: riprova',not_requested:'Non ancora generato'})[data.status]||data.status;
    }catch(_){this.summaryStatus='Stato non disponibile';}
   },
-  async pollSummary(){for(let n=0;n<450;n++){await new Promise(ok=>setTimeout(ok,7000));await this.fetchSummary();
+  async pollSummary(){for(let n=0;n<450&&!this._studioGone;n++){await new Promise(ok=>setTimeout(ok,7000));if(this._studioGone)return;await this.fetchSummary();
    if(this.summaryStatus==='Completato'||this.summaryStatus.startsWith('Errore'))break;}}
  };
 }

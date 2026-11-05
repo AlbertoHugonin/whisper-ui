@@ -47,3 +47,24 @@ def test_key_actions_survive():
         for control in controls:
             assert control in html, (name, control)
     assert 'WHISPER_SECONDARY_FRONTEND' in (ROOT / 'app.py').read_text()
+
+
+def test_spa_router_and_desktop_phone_layout_contract():
+    router = (ROOT / 'static/atelier-router.js').read_text()
+    css = (ROOT / 'static/atelier-workspaces.css').read_text()
+    base = (T / 'base.html').read_text()
+    assert 'htmx.ajax(' in router
+    assert 'history.pushState(' in router
+    assert "window.addEventListener('popstate'" in router
+    assert "pageRoute(url.pathname)" in router
+    assert "anchor.hasAttribute('download')" in router
+    assert "atelier:leaving" in router
+    assert 'htmx.config.inlineScriptNonce' in base
+    assert 'atelier-router.js' in base and 'atelier-workspaces.css' in base
+    assert '@media(min-width:1280px)' in css
+    assert '(min-aspect-ratio:17/10)' in css
+    assert '(max-aspect-ratio:17/10)' in css
+    assert '@media(max-width:700px)' in css
+    assert '.at2-upload-side,.at2-editor-sidebar{display:none' in css
+    assert 'var UPLOAD_PRESETS' in (T/'upload.html').read_text()
+    assert 'var RT_HF_AVAILABLE' in (T/'jobs.html').read_text()

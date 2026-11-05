@@ -78,3 +78,31 @@ must be smoke tested again after upgrading only the Atelier container.
   runtime errors. Verified 6 non-picker interactions and 2 intended
   file/folder picker activations on each viewport. Screens and test data were
   synthetic; no production files or jobs were created.
+
+## Atelier desktop workstation + SPA-like navigation
+
+Branch `feat/atelier-spa-dual-layout` provides an HTMX-driven client router
+(`static/atelier-router.js`) that fetches only the selected `#page-content`
+from existing server-rendered pages. It preserves desktop and phone navigation,
+header, Alpine theme and toast stores. It maintains browser history, link
+queries, title, keyboard focus, and redirects on auth expiry. Native POSTs,
+downloads, file pickers and external links bypass this router.
+
+**Security detail:** the initial page's CSP nonce is reused via htmx's
+`inlineScriptNonce` option for page-local scripts loaded from HTMX fragment
+responses. Upload and jobs use re-entrant `var` declarations so revisits do
+not raise top-level `const` redeclaration errors. Viewer correction polling is
+stopped on navigation, as is the Studio summary poll when the Alpine component
+is destroyed. The production worker/API layer is unchanged.
+
+Desktop (`min-width:1280px` CSS, not actual physical inches) has its own
+spacing, sidebar, multi-column controls, and separate 16:9 / 16:10 viewport
+density rules, with an intermediate 1100–1279px laptop layout. Phone retains
+full functionality but hides nonessential guide panels and reduces decorative
+spacing; safe areas and touch targets are preserved.
+
+**Fast validation:** existing Atelier smoke/JS tests plus targeted Chromium
+navigation for 1366×768, 1440×810, 1600×1000, 1920×1080 and 430×932;
+verified no full document reload, no horizontal overflow, page scripts, and
+back navigation. Test pages were synthetic; production end-to-end authenticated
+transcription and physical Safari device testing are separate tasks.

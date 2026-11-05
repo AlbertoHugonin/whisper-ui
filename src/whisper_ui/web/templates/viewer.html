@@ -306,11 +306,12 @@
 (function() {
  const box = document.getElementById('studio-correction-status');
  if (!box) return;
+ let disposed = false;
  let last = '';
  async function checkCorrection() {
    try {
      const response = await fetch('/viewer/{{ job.id }}/correction-status', {credentials:'same-origin'});
-     if (!response.ok) return;
+     if (disposed || !response.ok) return;
      const data = await response.json();
      const state = data.status || 'unknown';
      const button = document.querySelector('form[action="/viewer/{{ job.id }}/correct"] button[type="submit"]');
@@ -323,7 +324,9 @@
      last=state;
    } catch (_) { box.textContent='Stato LLM temporaneamente non disponibile'; }
  }
- checkCorrection(); setInterval(checkCorrection, 10000);
+ checkCorrection();
+ const interval = setInterval(checkCorrection, 10000);
+ document.addEventListener('atelier:leaving', () => {disposed=true;clearInterval(interval);}, {once:true});
 })();
 {% endif %}
 window.viewerData = function(segmentCount) {

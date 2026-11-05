@@ -1,0 +1,133 @@
+/* Atelier Workspaces — intentionally different desktop and phone experiences.
+ * Browsers cannot detect a screen's physical diagonal; 1280+ CSS pixels
+ * is the desktop proxy. Covers typical 15.6" 1366x768, 1440x900, 1600x1000,
+ * 1920x1080 and higher, with independent 16:9 and 16:10 density rules. */
+:root{--workbench-max:1840px;--workbench-gap:22px}
+#page-content:focus{outline:none}
+.atelier-navigating #page-content{opacity:.63;transition:opacity .16s ease}
+.atelier-navigating .atelier-topbar,.atelier-navigating .atelier-mobile-nav{cursor:progress}
+.atelier-navigation a[aria-current="page"],.atelier-mobile-nav a[aria-current="page"]{font-weight:850}
+.atelier-main-column{min-width:0}
+/* Dedicated workstation layout: wider toolbar, more balanced content grid,
+ * fixed application rail and two clearly separated content workspaces. */
+@media(min-width:1280px){
+  .atelier-sidebar{width:272px;padding:32px 17px 19px;box-shadow:inset -1px 0 0 rgba(255,255,255,.07)}
+  .atelier-brand{margin-bottom:49px}
+  .atelier-navigation{gap:6px}
+  .atelier-nav-item{min-height:51px;border-radius:12px;padding:13px 15px;font-size:13px}
+  .atelier-nav-symbol{font-size:20px}
+  .atelier-topbar{height:79px;min-height:79px;padding:0 clamp(28px,3vw,65px)}
+  .atelier-topbar-context strong{font-size:17px}
+  .atelier-topbar-create{min-height:43px;font-size:12px}
+  .atelier-main{min-height:calc(100dvh - 79px)}
+  #page-content.app-page-shell.atelier-page{width:100%;max-width:var(--workbench-max)!important;padding:clamp(28px,3vw,45px) clamp(28px,3vw,65px) 86px!important;min-height:calc(100dvh - 79px)}
+  .atelier-dashboard-heading{margin-bottom:27px}
+  .atelier-dashboard-heading h1{font-size:clamp(39px,3.1vw,57px)}
+  .atelier-home-hero{min-height:295px;padding:34px clamp(35px,3.1vw,60px)}
+  .atelier-action-grid{gap:17px}
+  .atelier-action-card{min-height:172px;padding:21px 24px}
+  .atelier-insights{gap:16px}
+  .atelier-stat{min-height:119px}
+  .at2-page-heading{margin-bottom:7px}
+  .at2-page-heading h1{font-size:clamp(37px,2.6vw,52px)}
+  .at2-screen{gap:25px}
+  .at2-workspace{min-height:230px}
+  .at2-workspace-head{padding:23px 28px}
+  .at2-workspace-filters{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;padding:16px 26px}
+  .at2-status-tabs{flex:1;min-width:300px}
+  .at2-job-search{width:clamp(230px,22vw,355px)}
+  .at2-workspace-results{padding:21px 26px 28px}
+  .at2-preset-grid-builtins{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .at2-preset-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .at2-upload-form{grid-template-columns:minmax(0,1fr) clamp(245px,19vw,308px);gap:clamp(18px,2vw,30px)}
+  .at2-upload-side{position:sticky;top:20px;display:grid;gap:15px;grid-template-columns:1fr}
+  .at2-upload-pane{padding:clamp(23px,2vw,32px)}
+  .at2-upload-form [role=tablist]{max-width:600px}
+  .at2-upload-form .at2-upload-presets .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .at2-editor-content{display:grid;grid-template-columns:minmax(0,1fr) clamp(225px,17vw,284px);gap:24px}
+  .at2-editor-sidebar{position:sticky;top:18px}
+  .at2-review-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,1.5vw,23px)}
+  .at2-review-columns>.card>.card-body{padding:clamp(17px,1.5vw,27px)}
+  .at2-viewer-details{padding:24px 27px}
+  .at2-viewer-heading h1{font-size:clamp(30px,2.5vw,43px)}
+  .at2-viewer-screen .viewer-dock{padding:14px 19px}
+  .at2-review-step h2{font-size:26px}
+  .at2-admin-users-screen .admin-table-scroll{overflow-x:auto}
+}
+/* 16:9 (1.78+) laptop/monitor: preserve useful above-the-fold height. */
+@media(min-width:1280px) and (min-aspect-ratio:17/10){
+  #page-content.app-page-shell.atelier-page{padding-top:clamp(21px,2.1vw,38px)!important}
+  .atelier-home-hero{min-height:265px}
+  .atelier-dashboard-heading{margin-bottom:22px}
+  .atelier-dashboard-heading h1{margin:10px 0 9px}
+  .atelier-section-heading{margin-top:30px}
+  .atelier-action-card{min-height:155px}
+  .atelier-stat{min-height:108px}
+  .at2-screen{gap:20px}
+  .at2-page-heading h1{margin-block:8px}
+}
+/* 16:10 (1.6) gives the workstation a roomier reading density. */
+@media(min-width:1280px) and (max-aspect-ratio:17/10){
+  #page-content.app-page-shell.atelier-page{padding-top:clamp(35px,2.8vw,50px)!important}
+  .atelier-home-hero{min-height:315px}
+  .at2-screen{gap:30px}
+  .at2-upload-pane{padding-block:clamp(26px,2vw,35px)}
+  .at2-review-columns>.card>.card-body{gap:19px}
+}
+@media(min-width:1650px){
+  .atelier-sidebar{width:292px}
+  .atelier-brand{padding-left:15px}
+  .atelier-topbar{padding-inline:64px}
+  #page-content.app-page-shell.atelier-page{padding-inline:65px!important}
+  .atelier-home-hero{min-height:330px}
+  .atelier-action-card{min-height:188px}
+  .at2-workspace-filters{gap:18px}
+  .at2-upload-form{grid-template-columns:minmax(0,1fr) 310px}
+}
+/* Small-to-medium laptop: retain real desktop rather than scaling phone UI. */
+@media(min-width:1100px) and (max-width:1279px){
+  .atelier-sidebar{width:228px}
+  #page-content.app-page-shell.atelier-page{max-width:100%!important;padding-inline:30px!important}
+  .at2-workspace-filters{gap:10px}
+  .at2-upload-form{grid-template-columns:minmax(0,1fr) 205px}
+}
+/* Phone is a separate streamlined composition. Auxiliary explanations only
+ * are hidden; every model, VAD, export and editor control remains available. */
+@media(max-width:700px){
+  .atelier-topbar{height:57px;min-height:57px}
+  #page-content.app-page-shell.atelier-page{padding-top:20px!important}
+  .atelier-dashboard-heading h1{font-size:clamp(27px,7.4vw,37px)}
+  .atelier-dashboard-heading p{max-width:350px}
+  .atelier-home-hero{min-height:238px;padding:23px 21px}
+  .atelier-hero-copy h2{font-size:clamp(36px,9.4vw,48px);margin-top:13px}
+  .atelier-hero-copy p{font-size:11px;max-width:226px}
+  .atelier-hero-cta{margin-top:13px;min-height:44px}
+  .atelier-wave-art{height:22%;width:42%;bottom:18px;opacity:.32}
+  .atelier-section-heading{margin-top:25px}
+  .atelier-action-grid{gap:8px}
+  .atelier-action-card{min-height:94px;padding-block:10px}
+  .atelier-insights{margin-top:13px}
+  .atelier-stat{min-height:96px}
+  .at2-screen{gap:17px}
+  .at2-page-heading h1{font-size:clamp(28px,7.3vw,36px)}
+  .at2-page-heading .at2-description{line-height:1.5}
+  .at2-upload-side,.at2-editor-sidebar{display:none!important}
+  .at2-upload-form{display:block}
+  .at2-upload-form>.at2-upload-main{display:flex;flex-direction:column;gap:12px}
+  .at2-upload-pane{padding:15px}
+  .at2-upload-pane .at2-panel-header p{display:none}
+  .at2-upload-pane>.at2-panel-header{margin-bottom:15px}
+  .at2-upload-pane>.at2-panel-header h2{font-size:18px}
+  .at2-workspace-head{padding:16px}
+  .at2-workspace-head p{display:none}
+  .at2-review-step p{display:none}
+  .at2-review-hero>div p{font-size:11px;line-height:1.45}
+  .at2-review-step h2{font-size:21px}
+  .at2-review-columns{gap:9px}
+  .at2-review-section>.card-body{padding:12px}
+  .at2-preset-grid{gap:9px}
+  .at2-preset-card{padding:14px}
+  .at2-viewer-details{padding:12px}
+  .at2-share-hero{padding:17px}
+}
+@media(prefers-reduced-motion:reduce){.atelier-navigating #page-content{transition:none}}

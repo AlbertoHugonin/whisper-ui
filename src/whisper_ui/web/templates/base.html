@@ -18,9 +18,14 @@
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=export-dialog1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier-v2.css') }}?v=at2-r2">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-workspaces.css') }}?v=workspaces-r1">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
+  {# htmx fragment scripts come from a different HTTP response; keep the CSP
+     nonce of the initial document so Alpine screen controllers may execute. #}
+  <script nonce="{{ csp_nonce }}">if (window.htmx) htmx.config.inlineScriptNonce = {{ csp_nonce|tojson }};</script>
+  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r1"></script>
   {# Vendored, not CDN: when the morph extension is missing htmx silently
      falls back to defaultSwapStyle=innerHTML, which would nest /jobs/list
      responses inside the existing #job-list-wrapper and break polling. #}
@@ -115,7 +120,7 @@
         <div class="atelier-powered"><span class="atelier-online-indicator"></span> Powered by Whisper <span class="atelier-powered-version">/ STUDIO</span></div>
         {% if request.state and request.state.user %}
         <div class="atelier-profile"><span class="atelier-avatar">{{ request.state.user.username[:1]|upper }}</span><span class="atelier-profile-text"><b>{{ request.state.user.username }}</b><small>{{ 'Amministratore' if request.state.user.is_admin else 'Workspace personale' }}</small></span>
-          <form method="post" action="/logout"><button class="atelier-logout" type="submit" title="Esci" aria-label="Esci dall'account">↗</button></form></div>
+          <form method="post" action="/logout" data-native-navigation><button class="atelier-logout" type="submit" title="Esci" aria-label="Esci dall'account">↗</button></form></div>
         {% endif %}
       </div>
     </aside>
@@ -130,7 +135,7 @@
         </div>
       </header>
       <main class="main-content atelier-main" id="main">
-        <div id="page-content" class="app-page-shell atelier-page">
+        <div id="page-content" class="app-page-shell atelier-page" data-active-page="{{ active_page }}" aria-live="off">
           {% block content %}{% endblock %}
           {% block scripts %}{% endblock %}
         </div>
@@ -200,10 +205,9 @@
         if (path === '/') nav.activePage = 'dashboard';
         else if (path.startsWith('/upload')) nav.activePage = 'upload';
         else if (path.startsWith('/presets')) nav.activePage = 'presets';
-        else if (path.startsWith('/presets')) nav.activePage = 'presets';
         else if (path.startsWith('/admin/users')) nav.activePage = 'admin_users';
         else if (path.startsWith('/admin/jobs')) nav.activePage = 'admin_jobs';
-        else if (path.startsWith('/jobs') || path.startsWith('/viewer')) nav.activePage = 'jobs';
+        else if (path.startsWith('/jobs') || path.startsWith('/viewer') || path.startsWith('/studio')) nav.activePage = 'jobs';
         else nav.activePage = '';
       }
     });

@@ -165,8 +165,8 @@
 // Deployment availability mirrors the disabled state on the modal toggles,
 // so the pre-filled state never enables a feature this deployment cannot run
 // (the backend clamps too; this keeps the UI honest).
-const RT_HF_AVAILABLE = {{ 'true' if diarization_available else 'false' }};
-const RT_OLLAMA_AVAILABLE = {{ 'true' if llm_correction_available else 'false' }};
+var RT_HF_AVAILABLE = {{ 'true' if diarization_available else 'false' }};
+var RT_OLLAMA_AVAILABLE = {{ 'true' if llm_correction_available else 'false' }};
 
 function mergeCompletedJobsDialog() {
   return {
