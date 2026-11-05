@@ -1,15 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="space-y-5" x-data="reviewStudio()">
-  <div class="flex flex-wrap gap-3 justify-between items-center">
-    <div>
-      <a class="link link-hover text-xs opacity-60" href="/viewer/{{ job.id }}">← Torna alla trascrizione</a>
-      <h1 class="text-2xl font-semibold mt-1">Studio di revisione</h1>
-      <p class="text-sm opacity-65">{{ job.filename }} · confronta le versioni e salva la tua correzione senza sovrascrivere Whisper.</p>
-    </div>
-    <a class="btn btn-outline btn-sm" href="/jobs">Tutti i lavori</a>
-  </div>
-  <section class="card bg-base-200 border border-base-300"><div class="card-body p-4 gap-3">
+<div class="at2-screen at2-review-shell" x-data="reviewStudio()">
+  <nav aria-label="Percorso" class="at2-viewer-breadcrumb"><a href="/jobs">Libreria</a> <span> / </span> <a href="/viewer/{{ job.id }}">Trascrizione</a> <span> / Studio</span></nav>
+  <header class="at2-review-hero"><div><span class="at2-kicker">STUDIO / POST-PRODUZIONE</span>
+      <h1>Metti a punto ogni parola.</h1>
+      <p>{{ job.filename }} · Confronta le versioni, modifica il testo e salva la tua interpretazione. L'originale resta intatto.</p></div>
+    <a class="at2-button at2-button-quiet" href="/viewer/{{ job.id }}">← Torna alla lettura</a>
+  </header>
+  <div class="at2-review-step"><span class="at2-kicker">01 / ASCOLTO</span><h2>Segui il suono.</h2><p>Riproduci, ingrandisci e raggiungi qualsiasi istante.</p></div>
+  <section class="card at2-review-section at2-review-audio"><div class="card-body gap-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <strong>Audio · navigazione temporale</strong>
       <span class="font-mono text-xs tabular-nums" x-text="formatTime(currentTime)+' / '+formatTime(audioDuration)"></span>
@@ -63,8 +62,9 @@
 
   <div role="alert" class="alert alert-error" x-show="error" x-cloak><span x-text="error"></span><button type="button" class="btn btn-ghost btn-xs" @click="error=''">Chiudi</button></div>
 
-  <section class="grid grid-cols-1 xl:grid-cols-3 gap-3" aria-label="Confronto ed editor di tre trascrizioni">
-    <div class="card border border-base-300 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+  <div class="at2-review-step"><span class="at2-kicker">02 / CONFRONTO</span><h2>Tre punti di vista, una versione tua.</h2><p>Ascolta l'originale, confronta le alternative e modifica senza perdere la cronologia.</p></div>
+  <section class="at2-review-columns" aria-label="Confronto ed editor di tre trascrizioni">
+    <div class="card at2-review-card at2-review-side"><div class="card-body p-3 gap-3">
       <div class="flex justify-between items-center"><h2 class="font-semibold">A · Versione di confronto</h2>
         <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('left')">Copia nell'editor</button></div>
       <select class="select select-bordered select-sm w-full" aria-label="Versione A" x-model="leftVersion" @change="loadSide('left')">
@@ -82,7 +82,7 @@
         <button type="button" x-show="leftSegments.length > leftLimit" class="btn btn-ghost btn-sm w-full" @click="leftLimit+=150">Mostra altre battute</button>
       </div>
     </div></div>
-    <div class="card border border-base-300 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+    <div class="card at2-review-card at2-review-side"><div class="card-body p-3 gap-3">
       <div class="flex justify-between items-center"><h2 class="font-semibold">B · Altra trascrizione</h2>
         <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('right')">Copia nell'editor</button></div>
       <select class="select select-bordered select-sm w-full" aria-label="Versione B" x-model="rightVersion" @change="loadSide('right')">
@@ -100,7 +100,7 @@
         <button type="button" x-show="rightSegments.length > rightLimit" class="btn btn-ghost btn-sm w-full" @click="rightLimit+=150">Mostra altre battute</button>
       </div>
     </div></div>
-    <div class="card border-2 border-primary/40 bg-base-100 min-w-0"><div class="card-body p-3 gap-3">
+    <div class="card at2-review-card at2-review-editor"><div class="card-body p-3 gap-3">
       <h2 class="font-semibold">C · La mia versione</h2>
       <p class="text-xs opacity-65">Copia A o B, poi modifica testo e speaker. I timestamp restano sincronizzati con l'audio.</p>
       <div class="flex flex-wrap gap-2 items-center">
@@ -124,7 +124,8 @@
     </div></div>
   </section>
 
-  <section class="card border border-base-300"><div class="card-body gap-3">
+  <div class="at2-review-step"><span class="at2-kicker">03 / INTELLIGENZA ARTIFICIALE</span><h2>Le informazioni che contano.</h2><p>Raccogli decisioni e punti chiave senza rileggere tutto.</p></div>
+  <section class="card at2-review-section at2-review-summary"><div class="card-body gap-3">
     <div><h2 class="font-semibold text-lg">Riassunto AI della riunione</h2>
       <p class="text-xs opacity-65">È un'operazione separata da Whisper, eseguita in coda al Model Router. Puoi cambiare il prompt e rigenerare il risultato.</p></div>
     <label class="fieldset max-w-xl"><span class="fieldset-legend">Versione da riassumere</span>

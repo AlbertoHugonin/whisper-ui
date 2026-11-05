@@ -1,20 +1,18 @@
 {% extends "base.html" %}
 {% from "_alert.html" import alert %}
-
-{% block title %}{{ labels.ADMIN_USERS_HEADER }} — Whisper UI{% endblock %}
-
+{% from "_atelier_components.html" import heading %}
+{% block title %}Gestione utenti · Atelier{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-medium mb-2">{{ labels.ADMIN_USERS_HEADER }}</h1>
-<p class="text-sm opacity-60 mb-6">{{ labels.ADMIN_USERS_DESCRIPTION }}</p>
-
+<div class="at2-screen at2-admin-users-screen">
+{{ heading('AMMINISTRAZIONE / ACCOUNT', 'Le persone del tuo workspace.', 'Gestisci ruoli, stato degli account e accessi alle trascrizioni.') }}
 {% if error_message %}
 {{ alert('error', error_message, 'mb-4') }}
 {% endif %}
 
-{# Single-dimension client-side filter chips: All / Admin / User / Active /
-   Inactive. Each row carries its role+status so selecting a chip hides the
-   non-matching rows without a round-trip. #}
+<section class="at2-workspace" aria-label="Account e autorizzazioni">
+<div class="at2-workspace-head"><div><span class="at2-kicker">01 / DIRECTORY</span><h2>Account registrati</h2></div><span class="at2-count">{{ users|length }} utenti</span></div>
 <div x-data="{ f: 'all' }">
+<div class="at2-workspace-filters" aria-label="Filtri account">
   <div class="flex flex-wrap gap-2 mb-4">
     {% for value, label in [
       ('all', labels.JOBS_FILTER_ALL),
@@ -29,6 +27,7 @@
     {% endfor %}
   </div>
 
+  </div>
   <div class="admin-table-scroll overflow-x-auto mb-8" role="region" aria-label="Utenti, tabella a scorrimento indipendente" tabindex="0">
     <table class="table">
       <thead>
@@ -104,30 +103,10 @@
   </div>
 </div>
 
-{# Shared reset-password modal (v2): one dialog reused for every row, its form
-   action set to the selected user. Submits as a normal POST — the route
-   redirects back to /admin/users. #}
-<div x-data="resetPasswordDialog()" @open-reset-pw.window="show($event.detail)">
-  <dialog x-ref="dialog" class="modal">
-    <div class="modal-box">
-      <h3 class="text-lg font-bold mb-3" x-text="header"></h3>
-      <form x-ref="form" :action="action" method="post" class="space-y-3">
-        <input type="password" name="new_password" required minlength="8"
-               class="input input-bordered w-full"
-               placeholder="{{ labels.AUTH_PASSWORD }}">
-        <div class="modal-action">
-          <button type="button" class="btn btn-ghost" @click="cancel()">{{ labels.DIALOG_CANCEL }}</button>
-          <button type="submit" class="btn btn-primary">{{ labels.ADMIN_RESET_PASSWORD_SUBMIT }}</button>
-        </div>
-      </form>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
-  </dialog>
-</div>
-
-<div class="card bg-base-200 border border-line">
-  <div class="card-body">
-    <h2 class="card-title text-base">{{ labels.ADMIN_ADD_USER_HEADER }}</h2>
+</section>
+<section class="at2-panel at2-admin-create">
+  <div>
+    <span class="at2-kicker">02 / ACCOUNT</span><h2>{{ labels.ADMIN_ADD_USER_HEADER }}</h2><p>Crea un accesso sicuro e assegna i privilegi necessari.</p>
     <form method="post" action="/admin/users" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
       <div class="sm:col-span-1">
         <label class="label" for="new-username"><span class="label-text">{{ labels.AUTH_USERNAME }}</span></label>
@@ -151,9 +130,27 @@
       </button>
     </form>
   </div>
+</section>
+<div x-data="resetPasswordDialog()" @open-reset-pw.window="show($event.detail)">
+  <dialog x-ref="dialog" class="modal">
+    <div class="modal-box">
+      <h3 class="text-lg font-bold mb-3" x-text="header"></h3>
+      <form x-ref="form" :action="action" method="post" class="space-y-3">
+        <input type="password" name="new_password" required minlength="8"
+               class="input input-bordered w-full"
+               placeholder="{{ labels.AUTH_PASSWORD }}">
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" @click="cancel()">{{ labels.DIALOG_CANCEL }}</button>
+          <button type="submit" class="btn btn-primary">{{ labels.ADMIN_RESET_PASSWORD_SUBMIT }}</button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</div>
+
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 function resetPasswordDialog() {

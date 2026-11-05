@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% from "_atelier_components.html" import heading %}
+{% block title %}Configura preset · Atelier{% endblock %}
 {% block content %}
-<div class="max-w-5xl">
-  <div class="mb-4"><a href="/presets" class="link link-hover text-sm opacity-60">← Torna ai preset</a></div>
-  <h1 class="text-2xl font-semibold">{{ 'Modifica preset' if preset else 'Crea preset personale' }}</h1>
-  <p class="text-sm opacity-65 mt-1 mb-6">Tutte le impostazioni verranno applicate ai nuovi lavori. Le trascrizioni già fatte non cambieranno.</p>
-  {% if error %}<div role="alert" class="alert alert-error mb-5">{{ error }}</div>{% endif %}
-  <form method="post" action="{{ '/presets/' ~ preset.id ~ '/edit' if preset else '/presets' }}" class="space-y-7">
-    <section class="card bg-base-200 border border-base-300"><div class="card-body gap-4">
+<div class="at2-screen at2-preset-editor-screen">
+  <a href="/presets" class="at2-viewer-breadcrumb">← Torna ai preset</a>
+  {{ heading('STUDIO / CONFIGURAZIONE', 'Un preset, il tuo modo di lavorare.', 'Imposta una volta le regole per audio, trascrizione e post-elaborazione. I lavori esistenti rimangono invariati.') }}
+  {% if error %}<div role="alert" class="alert alert-error">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/presets/' ~ preset.id ~ '/edit' if preset else '/presets' }}" class="at2-editor-form">
+<div class="at2-editor-content"><div class="at2-editor-stack">    <section id="editor-panel-1" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">01 / IDENTITÀ</span>
       <h2 class="font-semibold">Identità del preset</h2>
       <div class="grid md:grid-cols-2 gap-4">
         <label class="fieldset"><span class="fieldset-legend">Nome del preset *</span>
@@ -15,7 +16,7 @@
           <input class="input w-full" name="description" maxlength="300" value="{{ form_description }}" placeholder="Riunioni di lavoro e parole chiave"></label>
       </div>
     </div></section>
-    <section class="card border border-base-300"><div class="card-body gap-4">
+    <section id="editor-panel-2" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">02 / LINGUA E MODELLO</span>
       <h2 class="font-semibold">Modello e lingua</h2>
       <div class="grid md:grid-cols-3 gap-4">
         <label class="fieldset"><span class="fieldset-legend">Lingua</span>
@@ -38,7 +39,7 @@
       </div>
       <p class="text-xs opacity-60">Se una funzione non è disponibile sul server al momento dell'invio, Whisper la disattiva senza bloccare la trascrizione.</p>
     </div></section>
-    <section class="card border border-base-300"><div class="card-body gap-4">
+    <section id="editor-panel-3" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">03 / OTTIMIZZAZIONE AUDIO</span>
       <div class="flex items-center gap-2"><h2 class="font-semibold">Sensibilità VAD e ottimizzazione audio</h2><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
           class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
           aria-label="Apri guida e consigli VAD">i</button></div>
@@ -68,7 +69,7 @@
         <label class="fieldset"><span class="fieldset-legend">Filtro passa-alto Hz</span><input type="number" class="input w-full" name="audio_highpass_hz" min="0" max="180" step="10" value="{{ cfg.audio_highpass_hz }}"></label>
       </div>
     </div></section>
-    <section class="card border border-base-300"><div class="card-body gap-4">
+    <section id="editor-panel-4" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">04 / INTELLIGENZA ARTIFICIALE</span>
       <h2 class="font-semibold">I tre prompt</h2>
       <label class="fieldset"><span class="fieldset-legend">Parole chiave e contesto iniziale per Whisper</span>
         <textarea class="textarea textarea-bordered w-full" rows="4" name="whisper_keywords" maxlength="1500" placeholder="Airdass, API, nomi di prodotti, acronimi...">{{ cfg.whisper_keywords }}</textarea>
@@ -84,10 +85,13 @@
       <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="summary_enabled" type="checkbox" value="true" {% if cfg.summary_enabled|default(false) %}checked{% endif %}> Genera automaticamente il riassunto dopo la trascrizione</label>
       <p class="text-xs opacity-65">La trascrizione originale non aspetta l'LLM e rimane sempre disponibile. La correzione usa la coda dedicata.</p>
     </div></section>
-    <div class="flex flex-wrap gap-3 sticky bottom-0 bg-base-100/95 p-3 border-t border-base-300 z-10">
+    <div class="at2-editor-actions">
       <button type="submit" class="btn btn-primary">{{ 'Salva modifiche' if preset else 'Crea preset' }}</button>
       <a class="btn btn-ghost" href="/presets">Annulla</a>
     </div>
+</div><aside class="at2-editor-sidebar" aria-label="Passaggi del preset"><div><span class="at2-kicker">GUIDA ALLA CONFIGURAZIONE</span><h2>Il tuo percorso</h2></div><ol>
+<li><span>01</span> Identità</li><li><span>02</span> Modello e lingua</li><li><span>03</span> Audio e VAD</li><li><span>04</span> Prompt e AI</li></ol>
+<p class="at2-description">Le modifiche saranno disponibili ai tuoi prossimi lavori.</p></aside></div>
   </form>
 </div>
 {% endblock %}

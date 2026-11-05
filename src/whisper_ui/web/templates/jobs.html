@@ -1,29 +1,21 @@
 {% extends "base.html" %}
-
+{% from "_atelier_components.html" import heading %}
+{% block title %}Libreria · Atelier{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-medium mb-4">{{ labels.JOBS_HEADER }}</h1>
-
-{# Sticky filter+search header. Chips show per-status counts so the user
-   can scan workload at a glance without expanding the lists. The search
-   input filters by filename AND source URL — useful for YouTube-heavy
-   workflows where the filename is just the video id. #}
-<div class="sticky top-0 z-10 bg-base-100 pt-1 pb-3 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-line">
-  {% include "_status_chips.html" %}
-
-  {% include "_job_search.html" %}
-</div>
-
-{# Job list fragment — replaced by htmx polling and actions #}
-<section class="jobs-scroll-panel" aria-label="Elenco delle trascrizioni, area a scorrimento indipendente">
-{% include "_job_list.html" %}
-</section>
-
-{# Bulk action bar + confirm/batch-download dialogs + jobSelection store. #}
-{% include "_job_interactions.html" %}
-
-{# Post-hoc merge: pick completed jobs from any filter/page, choose source
-   transcript variants, and rearrange the exact order before submission. #}
-<div x-data="mergeCompletedJobsDialog()" @open-merge-jobs.window="show()">
+<div class="at2-screen at2-jobs-screen">
+  {{ heading('LIBRERIA / LE TUE TRASCRIZIONI', 'Tutte le parole, in ordine.', 'Cerca un contenuto, monitora le elaborazioni o riprendi da dove hai lasciato.', '/upload', 'Nuovo lavoro') }}
+  <section class="at2-workspace" aria-label="Libreria trascrizioni">
+    <header class="at2-workspace-head"><div><span class="at2-kicker">01 / WORKSPACE</span><h2>Esplora i tuoi lavori</h2></div><span class="at2-live"><i></i> Aggiornamento automatico</span></header>
+    <div class="at2-workspace-filters" aria-label="Filtri e ricerca">
+      {% include "_status_chips.html" %}
+      {% include "_job_search.html" %}
+    </div>
+    <div class="at2-workspace-results jobs-scroll-panel" aria-label="Trascrizioni, elenco aggiornato automaticamente">
+      {% include "_job_list.html" %}
+    </div>
+  </section>
+  {% include "_job_interactions.html" %}
+  <div x-data="mergeCompletedJobsDialog()" @open-merge-jobs.window="show()">
   <dialog x-ref="joinDialog" class="modal" aria-labelledby="join-title">
     <div class="modal-box w-11/12 max-w-3xl space-y-4">
       <div class="flex items-center justify-between gap-3">
@@ -166,8 +158,8 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 </div>
+</div>
 {% endblock %}
-
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 // Deployment availability mirrors the disabled state on the modal toggles,

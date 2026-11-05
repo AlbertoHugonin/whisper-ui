@@ -3,13 +3,14 @@
 {% from "_alert.html" import alert %}
 
 {% block content %}
+<div class="at2-screen at2-viewer-screen">
 {# Breadcrumb #}
-<div class="breadcrumbs text-sm mb-4">
+<nav class="breadcrumbs at2-viewer-breadcrumb" aria-label="Percorso">
   <ul>
     <li><a href="/jobs">{{ labels.NAV_JOBS }}</a></li>
     {% if job %}<li>{{ job.filename }}</li>{% endif %}
   </ul>
-</div>
+</nav>
 
 {% if error == 'not_found' %}
 {{ alert('error', labels.VIEWER_NOT_FOUND) }}
@@ -32,10 +33,13 @@
 
 {# Transcript display #}
 {% if result %}
-<header class="viewer-heading"><div><p class="viewer-eyebrow">STUDIO / TRASCRIZIONE</p><h1>{{ job.filename }}</h1></div>
-  <div class="flex gap-2 items-center flex-wrap"><a class="btn btn-primary btn-sm" href="/studio/{{ job.id }}">Apri suite di editing e confronto</a>
-    <span class="viewer-heading-chip">{{ result.segments|length }} battute</span></div></header>
+<header class="at2-viewer-heading" aria-label="Dettagli trascrizione">
+  <div><span class="at2-kicker">LIBRERIA / TRASCRIZIONE</span><h1>{{ job.filename }}</h1></div>
+  <div class="at2-viewer-heading-actions"><span class="at2-count">{{ result.segments|length }} battute</span><a class="at2-button at2-button-primary" href="/studio/{{ job.id }}">Apri Studio <span aria-hidden="true">↗</span></a></div>
+</header>
 
+<section class="at2-viewer-details" aria-label="Metadati e impostazioni trascrizione">
+  <div class="at2-viewer-details-head"><span class="at2-kicker">01 / CONTENUTO</span><span class="at2-live"><i></i> Pronto per la revisione</span></div>
 {% if job.quality_warning %}
 {{ alert('warning', job.quality_warning, 'mb-4') }}
 {% endif %}
@@ -51,17 +55,17 @@
 {% if result.duration > 0 %}
 {% set minutes = (result.duration // 60)|int %}
 {% set seconds = (result.duration % 60)|int %}
-<p class="text-sm opacity-50 mb-4">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
+<p class="at2-viewer-meta">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
 {% endif %}
 
 
-<p class="text-xs opacity-60 mb-3" title="Probabilità minima per Silero VAD: più bassa significa più sensibile alle voci deboli.">
+<p class="at2-viewer-meta" title="Probabilità minima per Silero VAD: più bassa significa più sensibile alle voci deboli.">
   Sensibilità voce utilizzata: <strong>{{ '%.2f'|format(job.vad_threshold) }}</strong> (valore più basso = più parole deboli riconosciute).
   Per modificarla, scegli <a class="link link-primary" href="/upload?source_job={{ job.id }}">Ritrascrivi con altre impostazioni</a>: la versione esistente rimane disponibile.
 </p>
 
 {% if processed_available %}
-<details class="viewer-processing-details mb-4"><summary>Audio elaborato · dettagli tecnici</summary>
+<details class="viewer-processing-details at2-technical-details"><summary>Audio elaborato · dettagli tecnici</summary>
 <div class="card bg-base-200 border border-line mb-4"><div class="card-body p-4">
     <div class="text-sm font-medium mb-2">Processed audio sent to Whisper</div>
 
@@ -82,7 +86,7 @@
 {% endif %}
 
 {% if correction_available %}
-<details class="border border-base-300 rounded-box p-3 mb-3" {% if not corrected_result or correction_state.status in ('queued','started','deferred','scheduled') or request.query_params.get('correction') %}open{% endif %}>
+<details class="at2-ai-details" {% if not corrected_result or correction_state.status in ('queued','started','deferred','scheduled') or request.query_params.get('correction') %}open{% endif %}>
   <summary class="font-semibold cursor-pointer">Correzione LLM separata {% if corrected_result %}· disponibile{% endif %}{% if correction_state.status in ('queued','started','deferred','scheduled') %} · {{ 'in corso' if correction_state.status == 'started' else 'in coda' }}{% endif %}</summary>
   {% if request.query_params.get('correction') == 'already-active' %}
   <div role="alert" class="alert alert-info text-sm my-2">C'è già una correzione LLM in coda o in elaborazione. Non ne ho creata un'altra: attendi il completamento o controlla lo stato qui sotto.</div>
@@ -100,6 +104,8 @@
 </details>
 {% endif %}
 
+</section>
+<div class="at2-viewer-transcript-title"><div><span class="at2-kicker">02 / LETTURA E ASCOLTO</span><h2>La tua conversazione.</h2></div></div>
 {% if result.segments %}
 {% set _speaker_glyphs = ['●', '▲', '■', '◆', '★', '✦', '◉', '♦'] %}
 <div class="viewer-workspace {{ 'has-player' if media_available else '' }}"
@@ -119,7 +125,7 @@
   else if (!inField && ($event.key === 'l' || $event.key === 'L') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(5); }
 ">
   {# Sticky toolbar #}
-  <div class="viewer-dock viewer-controls-fixed bg-base-100 border-b border-line">
+  <div class="viewer-dock viewer-controls-fixed at2-viewer-dock bg-base-100 border-b border-line">
     {% if media_available %}
     <div class="viewer-transport" aria-label="Controlli audio e forma d'onda">
       <div class="viewer-source-switch" role="group" aria-label="Versione della registrazione">
@@ -289,6 +295,7 @@
 {% endif %}
 
 {% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}

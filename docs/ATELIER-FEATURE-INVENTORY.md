@@ -38,3 +38,25 @@
 2. Existing JS component tests and relevant server-side regression tests.
 3. Container smoke tests: `/login` and static Atelier CSS, public proxy authentication, `/internal/worker` blocked, and original production endpoint still healthy.
 4. Viewport/device-level visual QA: desktop 1440px/1920px, iPhone 430px and narrower 390px/320px, especially upload drag/drop, long filenames, modal export dialogs and transcript scrolling.
+
+## Atelier v2 (full page architecture refactor)
+
+The `feat/whisper-atelier-ui` branch now provides independent layouts for all
+12 primary screens: dashboard, upload, jobs, viewer, studio, presets, preset
+editor, admin users, admin jobs, login, registration, and public token viewer.
+The design primitives, page layouts, reusable job list/search/status controls
+and export dialogs are styled in `atelier-v2.css`. The existing route,
+form-name, Alpine, HTMX and worker callback interfaces remain unchanged.
+
+Non-destructive preview QA generated 12 synthetic page renderings against the
+actual Jinja templates (without production user data) and ran Chromium
+Playwright in 36 viewport cases: 1440×900 desktop, 430×932 iPhone 15 Pro Max,
+375×812 narrow phone. All pages loaded with CSS and no document horizontal
+scroll; additional descendant overflow tests discovered and fixed the long
+filename row, preset editor grid and viewer breadcrumb. 8 pre-existing Atelier
+unit checks, 3 new visual contract checks and all 3 client JS tests passed.
+
+**Scope of validation:** synthetic previews exercise layout and DOM, not real
+Apple Safari hardware or authenticated end-to-end job processing. The public
+login, CSS, Authentik gate, existing worker API restrictions, and old hub health
+must be smoke tested again after upgrading only the Atelier container.

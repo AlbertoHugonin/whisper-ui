@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=wide-layout1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-v2.css') }}?v=at2-r1">
   <script nonce="{{ csp_nonce }}">
   window.sharedViewerData = function(segmentCount) {
     return {
@@ -104,21 +105,18 @@
           integrity="sha384-X9kJyAubVxnP0hcA+AMMs21U445qsnqhnUF8EBlEpP3a42Kh/JwWjlv2ZcvGfphb"
           crossorigin="anonymous"></script>
 </head>
-<body class="atelier-body min-h-screen bg-base-100 text-base-content leading-relaxed">
-  <div class="app-page-shell shared-page-shell mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-8 2xl:px-12 py-6 sm:py-8">
-
-    <div class="flex items-center gap-2 mb-2">
-      <span class="badge badge-outline badge-sm">{{ labels.VIEWER_SHARED_BADGE }}</span>
-    </div>
-
-    <h1 class="text-xl font-medium mb-2">{{ job.filename }}</h1>
-
-    {% if result.duration > 0 %}
-    {% set minutes = (result.duration // 60)|int %}
-    {% set seconds = (result.duration % 60)|int %}
-    <p class="text-sm opacity-50 mb-4">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
-    {% endif %}
-
+<body class="atelier-body at2-share-body">
+  <main class="at2-share-root">
+    <header class="at2-share-header"><a class="at2-share-brand" href="/">atelier<span class="atelier-brand-dot">.</span></a><span class="at2-share-label">CONDIVISIONE SICURA / READ ONLY</span></header>
+    <section class="at2-share-hero">
+      <span class="at2-kicker">TRASCRIZIONE CONDIVISA</span>
+      <h1>{{ job.filename }}</h1>
+      <p class="at2-description">Una conversazione da leggere, ascoltare e ritrovare.</p>
+      {% if result.duration > 0 %}{% set minutes = (result.duration // 60)|int %}{% set seconds = (result.duration % 60)|int %}
+      <p class="at2-viewer-meta">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
+      {% endif %}
+    </section>
+    <section class="at2-viewer-panel at2-shared-reader" aria-label="Trascrizione condivisa">
     {% if media_available %}
     <div class="player-wrapper">
       {% if media_is_video %}
@@ -150,7 +148,7 @@
 
       {# Search #}
       {% if result.segments|length <= 5000 %}
-      <div class="sticky top-0 z-10 bg-base-100 border-b border-line pb-3 mb-4 pt-2">
+      <div class="at2-shared-search border-b border-line pb-3 mb-4 pt-2">
         <div class="relative max-w-sm">
           <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-40">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -209,9 +207,8 @@
     <p class="text-sm opacity-50">{{ labels.VIEWER_NO_SEGMENTS }}</p>
     {% endif %}
 
-    <div class="text-center mt-8 opacity-40 text-xs">
-      Whisper UI
-    </div>
-  </div>
+</section>
+    <footer class="at2-share-label">ATELIER · WHISPER WORKSPACE</footer>
+  </main>
 </body>
 </html>

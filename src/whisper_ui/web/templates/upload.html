@@ -2,21 +2,14 @@
 {% from "_icons.html" import icon_upload, icon_folder_open, icon_link, icon_x %}
 {% from "_alert.html" import alert %}
 
+{% from "_atelier_components.html" import heading %}
 {% block content %}
 {% set rt = retranscribe_source %}
-<h1 class="text-2xl font-medium mb-2">{% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_TITLE }}{% else %}{{ labels.UPLOAD_HEADER }}{% endif %}</h1>
-{% if rt %}
-<p class="text-sm opacity-60 mb-4">Configure all options before creating a new transcript version. The existing transcript is preserved.</p>
-<div class="card bg-base-200 border border-line mb-6"><div class="card-body p-4">
-  <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Source</div>
-  <div class="font-medium break-all">{{ rt.filename }}</div>
-  {% if rt.source_url %}<div class="text-xs opacity-50 truncate mt-1">{{ rt.source_url }}</div>{% endif %}
-</div></div>
-{% else %}
-<p class="text-sm opacity-60 mb-1">{{ labels.UPLOAD_DESCRIPTION }}</p>
-<p class="text-xs opacity-40 mb-6">{{ labels.UPLOAD_SUPPORTED_FORMATS.format(formats=supported_extensions|join(', ')) }}</p>
-{% endif %}
-
+<div class="at2-screen at2-upload-screen">
+  {{ heading('STUDIO / NUOVA TRASCRIZIONE', 'Dai voce ai tuoi contenuti.', 'Importa una registrazione, scegli le impostazioni e lascia lavorare Whisper.') if not rt else heading('STUDIO / NUOVA VERSIONE', 'Riascolta, da capo.', 'Crea una nuova versione senza modificare la trascrizione originale.') }}
+  {% if rt %}
+  <div class="at2-aside-card"><span class="at2-kicker">REGISTRAZIONE SORGENTE</span><h3>{{ rt.filename }}</h3>{% if rt.source_url %}<p>{{ rt.source_url }}</p>{% endif %}</div>
+  {% endif %}
 {% set error = request.query_params.get('error', '') %}
 {% if error %}
 {% set upload_error_msg %}
@@ -61,7 +54,7 @@
 {{ alert('error', upload_error_msg|trim, 'mb-4') }}
 {% endif %}
 
-<form method="post"
+<form method="post" class="at2-upload-form"
       x-data="uploadForm()"
       {% if rt %}
       action="/jobs/{{ rt.id }}/re-transcribe"
@@ -74,6 +67,32 @@
       hx-encoding="multipart/form-data"
       hx-target="#upload-feedback" hx-swap="innerHTML"
       {% if not rt %}@htmx:config-request="if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
+      @htmx:xhr:progress.window="onProgress($event)"
+      @htmx:before-request="uploading = true"
+      @htmx:after-request="uploading = false; progress = 0"
+      @input="markCustomised($event)"
+      @change="markCustomised($event)">
+
+  <div id="upload-feedback" class="at2-upload-feedback" role="status" aria-live="polite"></div>
+
+  {# Upload progress overlay #}
+  <template x-if="uploading">
+    <div class="fixed inset-0 bg-base-100/80 z-50 flex items-center justify-center">
+      <div class="card bg-base-100 border border-line shadow-lg w-80">
+        <div class="card-body items-center text-center p-6">
+          <span class="loading loading-spinner loading-lg text-primary mb-2"></span>
+          <progress class="progress progress-primary w-full" :value="progress" max="100"></progress>
+          <p class="text-sm mt-2" x-text="Math.round(progress) + '% — {{ labels.UPLOAD_UPLOADING }}'"></p>
+        </div>
+      </div>
+    </div>
+  </template>
+
+
+  <div class="at2-upload-main">
+<section class="at2-upload-pane at2-upload-source" aria-label="Origine del contenuto">
+<div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Da dove iniziamo?</h2><p>Carica file, scegli una cartella o importa un link.</p></div></div>
+  {% if not rt %}@htmx:config-request="if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
       @htmx:xhr:progress.window="onProgress($event)"
       @htmx:before-request="uploading = true"
       @htmx:after-request="uploading = false; progress = 0"
@@ -166,7 +185,7 @@
 
   {% if not rt %}
   {# Source selection tabs — pill style #}
-  <div role="tablist" class="tabs tabs-box mb-6 inline-flex" aria-label="{{ labels.UPLOAD_MODE_GROUP }}">
+  <div role="tablist" class="at2-source-tabs" aria-label="{{ labels.UPLOAD_MODE_GROUP }}">
     <button type="button" role="tab" class="tab gap-2"
             :class="{ 'tab-active': tab === 'files' }"
             :aria-selected="tab === 'files' ? 'true' : 'false'"
@@ -192,7 +211,7 @@
 
   {# Files tab #}
   <div x-show="tab === 'files'" x-transition.opacity>
-    <div class="border-2 border-dashed border-line rounded-box p-8 sm:p-12 text-center transition-colors"
+    <div class="at2-source-drop"
          :class="{ 'border-primary bg-primary/5': dragging }"
          x-data="{ dragging: false }"
          @dragover.prevent="dragging = true"
@@ -277,10 +296,83 @@
 
   {% endif %}
 
+</section>
+  {# Scene presets — one-tap configure of the basic + advanced controls. #}
+  <section class="at2-upload-pane at2-upload-presets" aria-label="{{ labels.UPLOAD_PRESET_SECTION }}">
+    <div class="at2-panel-header"><div><span class="at2-kicker">02 / PROFILI</span><h2>Trova il tuo ritmo</h2><p>Un preset ti permette di partire con le impostazioni giuste.</p></div></div>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-medium opacity-80">{{ labels.UPLOAD_PRESET_SECTION }}</h2>
+      <a href="/presets" class="btn btn-ghost btn-xs">Gestisci preset</a>
+      <span class="text-xs opacity-60"
+            x-show="activePreset === null && presetsTouched"
+            x-cloak>{{ labels.UPLOAD_PRESET_CUSTOM }}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <button type="button"
+              class="card bg-base-200 border text-left transition-colors hover:bg-base-300 focus-visible:border-primary card-hover-lift"
+              :class="activePreset === 'meeting' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === 'meeting').toString()"
+              @click="applyPreset('meeting')">
+        <div class="card-body p-3">
+          <div class="text-sm font-medium">{{ labels.UPLOAD_PRESET_MEETING }}</div>
+          <div class="text-xs opacity-60">{{ labels.UPLOAD_PRESET_MEETING_DESC }}</div>
+        </div>
+      </button>
+      <button type="button"
+              class="card bg-base-200 border text-left transition-colors hover:bg-base-300 focus-visible:border-primary card-hover-lift"
+              :class="activePreset === 'podcast' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === 'podcast').toString()"
+              @click="applyPreset('podcast')">
+        <div class="card-body p-3">
+          <div class="text-sm font-medium">{{ labels.UPLOAD_PRESET_PODCAST }}</div>
+          <div class="text-xs opacity-60">{{ labels.UPLOAD_PRESET_PODCAST_DESC }}</div>
+        </div>
+      </button>
+      <button type="button"
+              class="card bg-base-200 border text-left transition-colors hover:bg-base-300 focus-visible:border-primary card-hover-lift"
+              :class="activePreset === 'interview' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === 'interview').toString()"
+              @click="applyPreset('interview')">
+        <div class="card-body p-3">
+          <div class="text-sm font-medium">{{ labels.UPLOAD_PRESET_INTERVIEW }}</div>
+          <div class="text-xs opacity-60">{{ labels.UPLOAD_PRESET_INTERVIEW_DESC }}</div>
+        </div>
+      </button>
+      <button type="button"
+              class="card bg-base-200 border text-left transition-colors hover:bg-base-300 focus-visible:border-primary card-hover-lift"
+              :class="activePreset === 'lecture' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === 'lecture').toString()"
+              @click="applyPreset('lecture')">
+        <div class="card-body p-3">
+          <div class="text-sm font-medium">{{ labels.UPLOAD_PRESET_LECTURE }}</div>
+          <div class="text-xs opacity-60">{{ labels.UPLOAD_PRESET_LECTURE_DESC }}</div>
+        </div>
+      </button>
+    </div>
+    {% if saved_presets %}
+    <h3 class="text-xs font-semibold mt-4 mb-2 opacity-65">I tuoi preset</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {% for item in saved_presets %}
+      <button type="button" class="card bg-base-200 border border-line text-left hover:border-primary transition-colors"
+              :class="activePreset === '{{ item.id }}' ? 'border-primary' : 'border-line'"
+              :aria-pressed="(activePreset === '{{ item.id }}').toString()"
+              @click="applyPreset('{{ item.id }}')">
+        <span class="card-body p-3 gap-1"><strong class="text-sm break-words">{{ item.name }}</strong>
+          {% if item.description %}<span class="text-xs opacity-60 line-clamp-2">{{ item.description }}</span>{% endif %}
+        </span>
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <a class="link link-primary text-xs inline-block mt-3" href="/presets/new?source=meeting">+ Crea un preset a partire da Meeting</a>
+  </section>
+
+
   {# Settings #}
   {# Basic settings — always visible, the two controls every user adjusts. #}
-  <section class="mt-8 pt-6 border-t border-line">
-    <h2 class="text-sm font-medium opacity-80 mb-3">{{ labels.UPLOAD_SECTION_BASIC }}</h2>
+  <section class="at2-upload-pane at2-upload-basic">
+    <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Come ascoltiamo</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <fieldset class="fieldset w-full">
         <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_LANGUAGE }}</legend>
@@ -303,8 +395,9 @@
     </div>
   </section>
 
-  <section class="mt-6 pt-6 border-t border-line">
-    <h2 class="text-sm font-medium opacity-80 mb-3">Audio optimization for transcription</h2>
+  <section class="at2-upload-pane at2-upload-audio">
+    <div class="at2-panel-header"><div><span class="at2-kicker">04 / QUALITÀ AUDIO</span><h2>Ogni parola conta</h2><p>Pulisci il rumore e normalizza la voce.</p></div></div>
+
     <p class="text-xs opacity-60 mb-4">Auto analyzes loudness and dynamics first, then applies conservative speech cleanup before Whisper.</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Processing</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Auto (recommended)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Convert only</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Custom</option></select></fieldset>
@@ -319,7 +412,8 @@
   {# Advanced settings — collapsed by default. The enabled-count pill is a
      summary so users never have to expand the panel just to see whether
      diarization / Traditional Chinese / LLM are on. #}
-  <section class="mt-6 pt-6 border-t border-line">
+  <section class="at2-upload-pane at2-upload-ai">
+    <div class="at2-panel-header"><div><span class="at2-kicker">05 / OPZIONI AVANZATE</span><h2>Il tuo controllo, completo</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
     <button type="button"
             class="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none"
             :aria-expanded="advancedOpen.toString()"
@@ -467,10 +561,11 @@
     </div>
   </section>
 
+
   {# Sticky submit footer — keeps the primary action close to the user's
      cursor regardless of how far they've scrolled (Fitts's Law). The status
      line previews how many files / URLs the current selection will submit. #}
-  <div class="sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-8 mt-8 bg-base-100/95 backdrop-blur border-t border-line px-4 sm:px-6 lg:px-8 py-3 z-10">
+  <div class="at2-upload-submit">
     <div class="flex items-center gap-3">
       <span class="text-sm opacity-70 flex-1 min-w-0 truncate" x-text="statusLine"></span>
       <button type="submit" class="btn btn-primary btn-lg gap-2" :disabled="uploading">
@@ -479,7 +574,14 @@
       </button>
     </div>
   </div>
+
+  </div>
+<aside class="at2-upload-side" aria-label="Guida alla trascrizione">
+  <div class="at2-aside-card"><span class="at2-kicker">UN FLUSSO, TRE PASSI</span><h3>Semplice da iniziare.<br>Potente da usare.</h3><ol><li>Scegli un file, una cartella o un indirizzo web.</li><li>Adatta lingua, modello e pulizia audio.</li><li>Avvia e segui i progressi nella libreria.</li></ol></div>
+  <div class="at2-aside-card"><span class="at2-kicker">IL TUO ARCHIVIO</span><h3>Non perdi niente.</h3><p>I lavori e le versioni precedenti restano consultabili nella libreria.</p><a href="/jobs">Vai ai tuoi lavori ↗</a></div>
+</aside>
 </form>
+</div>
 {% endblock %}
 
 {% block scripts %}

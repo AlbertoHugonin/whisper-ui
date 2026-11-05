@@ -1,29 +1,19 @@
 {% extends "base.html" %}
-
-{% block title %}{{ labels.ADMIN_JOBS_HEADER }} — Whisper UI{% endblock %}
-
+{% from "_atelier_components.html" import heading %}
+{% block title %}Lavori del sistema · Atelier{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-medium mb-2">{{ labels.ADMIN_JOBS_HEADER }}</h1>
-<p class="text-sm opacity-60 mb-6">{{ labels.ADMIN_JOBS_DESCRIPTION }}</p>
-
-{# Sticky filter+search header — same shape as /jobs, but the chips and the
-   polled list fragment point at /admin/jobs/list so the admin (owner_id=None)
-   scope and owner badges are preserved. #}
-<div class="sticky top-0 z-10 bg-base-100 pt-1 pb-3 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 border-b border-line">
-  {# list_url (set by the admin routes) points the chips at /admin/jobs/list. #}
-  {% include "_status_chips.html" %}
-
-  {% include "_job_search.html" %}
+<div class="at2-screen at2-admin-jobs-screen">
+  {{ heading('AMMINISTRAZIONE / OPERAZIONI', 'Lavori del sistema.', 'Una vista completa su code, stato ed elaborazioni di tutti gli account.') }}
+  <section class="at2-workspace" aria-label="Controlli e lavori di tutti gli utenti">
+    <div class="at2-workspace-head"><div><span class="at2-kicker">TUTTI I LAVORI</span><h2>Monitoraggio</h2></div><span class="at2-live"><i></i> Stato aggiornato automaticamente</span></div>
+    <div class="at2-workspace-filters" aria-label="Filtri dei lavori">
+      {% include "_status_chips.html" %}
+      {% include "_job_search.html" %}
+    </div>
+    <div class="at2-workspace-results jobs-scroll-panel" aria-label="Elenco dei lavori amministrativi, area a scorrimento indipendente">
+      {% include "_job_list.html" %}
+    </div>
+  </section>
+  {% include "_job_interactions.html" %}
 </div>
-
-{# Job list fragment — owner badges + bulk-select checkboxes; polling/pagination
-   target /admin/jobs/list via the list_url passed from the route. #}
-<section class="jobs-scroll-panel" aria-label="Elenco dei lavori amministrativi, area a scorrimento indipendente">
-{% include "_job_list.html" %}
-</section>
-
-{# Bulk action bar + confirm/batch-download dialogs + jobSelection store.
-   Bulk delete/retry/export reuse /jobs/bulk/* — admin's owner_filter is None
-   so they operate across every owner. #}
-{% include "_job_interactions.html" %}
 {% endblock %}
