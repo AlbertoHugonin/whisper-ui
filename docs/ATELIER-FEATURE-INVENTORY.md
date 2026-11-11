@@ -106,3 +106,20 @@ navigation for 1366×768, 1440×810, 1600×1000, 1920×1080 and 430×932;
 verified no full document reload, no horizontal overflow, page scripts, and
 back navigation. Test pages were synthetic; production end-to-end authenticated
 transcription and physical Safari device testing are separate tasks.
+
+## Direct transcription without Silero VAD
+
+Upload shows two explicit engine modes above advanced settings:
+**Standard · Silero VAD** (default) and **Diretta · senza Silero**.
+Both are available for file/folder/URL inputs and new transcript versions.
+The choice submits `vad_enabled=true/false` through the existing upload API;
+workers already honor `job.vad_enabled` when constructing `whisper-cli`.
+The direct option omits the `--vad` CLI flags and Silero model resolution,
+but does not disable audio resampling, the transcription model, or downstream
+alignment/correction stages. Without VAD, silence hallucinations are more
+likely; it is an opt-in per job and is also configurable in saved presets.
+A selected preset can update the radio cards without losing Alpine state.
+
+Browser interaction checks (synthetic preview, no production jobs): 1366×768
+16:9, 1600×1000 16:10, 430×932 iPhone; all passed direct/standard
+selection, submitted FormData, preset roundtrip and viewport overflow.

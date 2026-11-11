@@ -68,3 +68,20 @@ def test_spa_router_and_desktop_phone_layout_contract():
     assert '.at2-upload-side,.at2-editor-sidebar{display:none' in css
     assert 'var UPLOAD_PRESETS' in (T/'upload.html').read_text()
     assert 'var RT_HF_AVAILABLE' in (T/'jobs.html').read_text()
+
+
+def test_direct_transcription_option_is_exposed_and_backward_compatible():
+    upload = (T / 'upload.html').read_text()
+    assert upload.count('type="radio" name="vad_enabled"') == 2
+    assert 'value="true" x-model="vadEnabled"' in upload
+    assert 'value="false" x-model="vadEnabled"' in upload
+    assert 'Diretta · senza Silero' in upload
+    assert '<select name="vad_enabled"' not in upload
+    assert 'eventField.dispatchEvent' in upload
+    editor = (T / 'preset_editor.html').read_text()
+    assert 'Diretta · senza Silero VAD' in editor
+    # Existing API+worker already pass per-job VAD flag to whisper.cpp.
+    route = (ROOT / 'routes/upload.py').read_text()
+    pipeline = (ROOT.parent / 'worker/stage_tasks.py').read_text()
+    assert 'vad_enabled=vad_enabled' in route
+    assert 'vad=runtime.settings.whispercpp_vad and job.vad_enabled' in pipeline

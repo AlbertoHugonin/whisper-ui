@@ -182,3 +182,19 @@ body.at2-auth-body{background:var(--atelier-side);overflow-x:hidden}.at2-auth-la
 /* The picker is triggered only by an explicit, accessible control. */
 .at2-upload-source input[type="file"]{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;opacity:0!important;overflow:hidden!important;pointer-events:none!important;clip-path:inset(50%)!important}
 .at2-upload-source label[for="upload-files"],.at2-upload-source label[for="upload-folder"]{cursor:pointer;position:relative;isolation:isolate;z-index:1}
+/* Upload engine mode: choice is visible before advanced controls on all screens. */
+.at2-vad-choice{min-width:0;margin-bottom:21px;padding:0;border:0}
+.at2-vad-label{font-size:12px;font-weight:790;margin-bottom:11px;color:var(--color-base-content)}
+.at2-vad-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.at2-vad-option{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:15px 16px;border:1px solid var(--atelier-border);border-radius:13px;background:var(--color-base-100);cursor:pointer;transition:border-color .12s,background .12s}
+.at2-vad-option:hover{border-color:var(--color-primary)}
+.at2-vad-option.is-selected{border-color:var(--color-primary);background:var(--color-base-200);box-shadow:inset 0 0 0 1px var(--color-primary)}
+.at2-vad-option input{width:17px;height:17px;min-width:17px;margin:3px 1px 0 0;accent-color:var(--color-primary);cursor:pointer}
+.at2-vad-option-copy{min-width:0;display:flex;flex-direction:column;gap:5px;flex:1}
+.at2-vad-option-copy strong{font-size:13px;font-weight:780;line-height:1.4}
+.at2-vad-option-copy small{font-size:11px;line-height:1.6;color:var(--atelier-muted)}
+.at2-vad-option-tick{font-size:14px;color:var(--color-primary);opacity:0}
+.at2-vad-option.is-selected .at2-vad-option-tick{opacity:1}
+.at2-vad-notice{margin:11px 2px 0;color:var(--color-warning);font-size:11px;line-height:1.55}
+@media(max-width:700px){.at2-vad-options{grid-template-columns:minmax(0,1fr);gap:9px}.at2-vad-option{padding:13px 12px;min-height:80px}.at2-vad-choice{margin-bottom:16px}}
+@media(prefers-reduced-motion:reduce){.at2-vad-option{transition:none}}

@@ -281,6 +281,23 @@
   <section class="at2-upload-pane at2-upload-basic">
     <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Come ascoltiamo</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
 
+    <fieldset class="at2-vad-choice" aria-label="Modalità di trascrizione">
+      <legend class="at2-vad-label">Modalità di trascrizione</legend>
+      <div class="at2-vad-options">
+        <label class="at2-vad-option" :class="vadEnabled === 'true' ? 'is-selected' : ''">
+          <input type="radio" name="vad_enabled" value="true" x-model="vadEnabled" aria-describedby="vad-standard-info">
+          <span class="at2-vad-option-copy"><strong>Standard · Silero VAD</strong><small id="vad-standard-info">Rileva il parlato e salta i silenzi lunghi. Consigliata.</small></span>
+          <span class="at2-vad-option-tick" aria-hidden="true">✓</span>
+        </label>
+        <label class="at2-vad-option" :class="vadEnabled === 'false' ? 'is-selected' : ''">
+          <input type="radio" name="vad_enabled" value="false" x-model="vadEnabled" aria-describedby="vad-direct-info">
+          <span class="at2-vad-option-copy"><strong>Diretta · senza Silero</strong><small id="vad-direct-info">Trascrive tutto l'audio, anche le pause. Può salvare parole deboli, ma generare frasi inesistenti nei silenzi.</small></span>
+          <span class="at2-vad-option-tick" aria-hidden="true">✓</span>
+        </label>
+      </div>
+      <p class="at2-vad-notice" x-show="vadEnabled === 'false'" x-cloak role="status">Silero disattivato per questo lavoro. Controlla eventuali parole inventate nelle pause.</p>
+    </fieldset>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <fieldset class="fieldset w-full">
         <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_LANGUAGE }}</legend>
@@ -390,12 +407,7 @@
         <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
           class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
           aria-label="Apri guida e consigli VAD">i</button></div>
-        <label class="fieldset"><span class="fieldset-label">Rilevamento voce</span>
-          <select name="vad_enabled" class="select select-bordered w-full max-w-md" x-model="vadEnabled">
-            <option value="true">Attivo · consigliato</option>
-            <option value="false">Disattivato · solo prove, rischio frasi inventate nei silenzi</option>
-          </select></label>
-        <p class="text-xs opacity-65">Il VAD individua i tratti parlati prima di Whisper; disattivalo solo per confronti su audio con poche pause.</p>
+        <p class="text-xs opacity-65">La modalità si sceglie sopra, in «Come ascoltiamo». Questi valori hanno effetto solo quando Silero è attivo.</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="vadEnabled === 'false' ? 'opacity-50' : ''">
           <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
             <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
@@ -598,13 +610,21 @@ function uploadForm() {
       for (const [name, value] of Object.entries(config)) {
         const field = form.querySelector(`[name="${name}"]`);
         if (!field || field.disabled) continue;
+        let eventField = field;
         if (field.type === 'checkbox') {
           field.checked = !!value;
+        } else if (field.type === 'radio') {
+          // Select the matching radio before notifying Alpine; the first
+          // (possibly unchecked) radio must not override a saved preset.
+          eventField = form.querySelector(`[name="${name}"][value="${String(value)}"]`);
+          if (!eventField) continue;
+          eventField.checked = true;
         } else {
           field.value = String(value);
         }
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-        field.dispatchEvent(new Event('change', { bubbles: true }));
+        eventField.dispatchEvent(new Event('input', { bubbles: true }));
+        eventField.dispatchEvent(new Event('change', { bubbles: true }));
+        if (name === 'vad_enabled') this.vadEnabled = String(value);
       }
       // Release the suppression flag after the dispatch cycle settles.
       Promise.resolve().then(() => { this._applyingPreset = false; });
