@@ -410,9 +410,11 @@ class TestViewerRoutes:
         resp = client.get(f"/viewer/{job.id}")
 
         assert resp.status_code == 200
-        assert f">{marker}</span>" in resp.text
-        # Search is enabled under the limit, so the highlight path is wired up.
-        assert "data-raw=" in resp.text
+        from lxml import html
+
+        document = html.fromstring(resp.text)
+        visible_text = document.xpath("//article[contains(@class, 'viewer-segment')]/p")[0].text_content()
+        assert visible_text == marker
 
     def test_processed_audio_is_playable_and_downloadable(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
@@ -883,10 +885,10 @@ class TestStandaloneLLMCorrectionRoutes:
         db.insert_job(job)
         page = client.get(f"/viewer/{job.id}")
         assert page.status_code == 200
-        assert "Whisper originale" in page.text
+        assert "Originale Whisper" in page.text
         assert "Paragrafi" in page.text
         assert "Airdass e la piattaforma" in page.text
-        assert "Ricorreggi con LLM" in page.text
+        assert f'action="/viewer/{job.id}/correct"' in page.text
         assert "version=corrected" in page.text
         raw = client.get(f"/viewer/{job.id}/export/txt")
         fixed = client.get(f"/viewer/{job.id}/export/txt?version=corrected")

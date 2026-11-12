@@ -44,12 +44,9 @@
       <div class="viewer-export-utilities">
         {% if result.segments %}
         <button type="button" class="viewer-export-utility"
-                @click="window.whisperCopy(Array.from(document.querySelectorAll('.viewer-transcript-list .segment'))
-                  .filter(s => s.offsetParent !== null)
-                  .map(s => s.textContent.trim()).join('\n'))
-                  .then(() => { copied = true; setTimeout(() => copied = false, 2000); })">
+                @click="copyTranscript()">
           {{ icon_copy('w-4 h-4') }}
-          <span x-text="copied ? '{{ labels.VIEWER_COPIED }}' : '{{ labels.VIEWER_COPY }}'">{{ labels.VIEWER_COPY }}</span>
+          <span>{{ labels.VIEWER_COPY }}</span>
         </button>
         {% endif %}
         {% if original_available %}

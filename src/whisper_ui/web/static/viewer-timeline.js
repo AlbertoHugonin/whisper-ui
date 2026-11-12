@@ -38,7 +38,9 @@
       const host = isOverview ? c.parentElement : shell;
       const rawWidth = host?.getBoundingClientRect().width || window.innerWidth || 600;
       const w = clamp(Math.floor(rawWidth - (isOverview ? 0 : 2)), 2, 4096);
-      const h = isOverview ? 32 : (window.matchMedia('(max-width:680px)').matches ? 87 : 106);
+      const compactPlayer = canvas.closest('.wv-player');
+      const compact = compactPlayer && window.matchMedia('(max-width:900px)').matches && !compactPlayer.classList.contains('is-expanded');
+      const h = isOverview ? 32 : (compact ? 48 : (window.matchMedia('(max-width:680px)').matches ? 87 : 106));
       // Explicit CSS pixels protect even if the browser has cached old CSS.
       c.style.display = 'block';
       c.style.boxSizing = 'border-box';
@@ -83,7 +85,7 @@
       const target = Math.max(1, span / Math.max(2, Math.floor(w / 108)));
       const intervals = [1,2,5,10,15,30,60,120,300,600,900,1800,3600,7200];
       const step = intervals.find(x => x >= target) || 14400;
-      context.fillStyle = 'rgba(180,198,220,.8)';
+      context.fillStyle = getComputedStyle(canvas).getPropertyValue('--atelier-muted').trim() || '#93a3b5';
       context.font = '10px ui-monospace, SFMono-Regular, monospace';
       for (let t = Math.ceil(start / step) * step; t <= start + span; t += step) {
         const x = (t - start) / span * w;
@@ -117,6 +119,7 @@
       range.min = String(start);range.max = String(Math.max(start+.001,end));
       range.value = String(clamp(player.currentTime || 0,start,end));
       range.disabled = !total;
+      range.setAttribute('aria-valuetext', formatTime(player.currentTime || 0) + ' di ' + formatTime(total));
       if (onClock) onClock(player.currentTime || 0,total);
       if (onWindow) onWindow(formatTime(start),formatTime(end),zoom);
       cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);
@@ -164,11 +167,11 @@
       }).then(d=>{
         if(destroyed||generation!==thisGeneration)return;
         points=Array.isArray(d.peaks)?d.peaks.map(v=>clamp(Number(v)||0,0,1)):[];
-        if(status)status.textContent=points.length?'Forma d’onda · Zoom +/−, trascina il cursore; rotella per navigare quando ingrandita':'Forma d’onda vuota';
+        if(status)status.textContent=points.length?'Forma d’onda · tocca o trascina per spostarti':'Forma d’onda vuota';
         update();
       }).catch(error=>{
         if(destroyed||generation!==thisGeneration||error.name==='AbortError')return;
-        if(status)status.textContent='Forma d’onda non disponibile · la ricerca temporale funziona comunque';
+        if(status)status.textContent='Forma d’onda non disponibile. Puoi comunque spostarti nella traccia.';
         update();
       });
     }

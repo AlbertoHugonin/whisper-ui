@@ -1,527 +1,128 @@
 {% extends "base.html" %}
-{% from "_icons.html" import icon_copy, icon_check, icon_search, icon_download, icon_link %}
+{% from "_icons.html" import icon_copy, icon_search, icon_download, icon_link %}
 {% from "_alert.html" import alert %}
-
 {% block content %}
-<div class="at2-screen at2-viewer-screen">
-{# Breadcrumb #}
-<nav class="breadcrumbs at2-viewer-breadcrumb" aria-label="Percorso">
-  <ul>
-    <li><a href="/jobs">{{ labels.NAV_JOBS }}</a></li>
-    {% if job %}<li>{{ job.filename }}</li>{% endif %}
-  </ul>
-</nav>
-
-{% if error == 'not_found' %}
-{{ alert('error', labels.VIEWER_NOT_FOUND) }}
-{% elif error == 'not_completed' %}
-{{ alert('error', labels.VIEWER_NOT_COMPLETED.format(status=job.status.value)) }}
-{% elif error == 'no_result' %}
-{{ alert('error', labels.VIEWER_RESULT_NOT_FOUND) }}
-{% endif %}
-
-{% if not result and not error %}
-{# No job selected — redirect should handle this, but fallback #}
-<div class="text-center py-16 opacity-60">
-  <svg class="w-12 h-12 mx-auto mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-  </svg>
-  <p>{{ labels.VIEWER_EMPTY_STATE }}</p>
-  <a href="/jobs" class="btn btn-outline btn-sm mt-4">{{ labels.VIEWER_BACK_TO_JOBS }}</a>
-</div>
-{% endif %}
-
-{# Transcript display #}
-{% if result %}
-<header class="at2-viewer-heading" aria-label="Dettagli trascrizione">
-  <div><span class="at2-kicker">LIBRERIA / TRASCRIZIONE</span><h1>{{ job.filename }}</h1></div>
-  <div class="at2-viewer-heading-actions"><span class="at2-count">{{ result.segments|length }} battute</span><a class="at2-button at2-button-primary" href="/studio/{{ job.id }}">Apri Studio <span aria-hidden="true">↗</span></a></div>
-</header>
-
-<section class="at2-viewer-details" aria-label="Metadati e impostazioni trascrizione">
-  <div class="at2-viewer-details-head"><span class="at2-kicker">01 / CONTENUTO</span><span class="at2-live"><i></i> Pronto per la revisione</span></div>
-{% if job.quality_warning %}
-{{ alert('warning', job.quality_warning, 'mb-4') }}
-{% endif %}
-
-{% if job.source_url %}
-<p class="text-sm mb-1">
-  <span class="opacity-50">{{ labels.VIEWER_SOURCE_URL }}：</span>
-  <a href="{{ job.source_url }}" target="_blank" rel="noopener noreferrer"
-     class="link link-primary">{{ job.source_url }}</a>
-</p>
-{% endif %}
-
-{% if result.duration > 0 %}
-{% set minutes = (result.duration // 60)|int %}
-{% set seconds = (result.duration % 60)|int %}
-<p class="at2-viewer-meta">{{ labels.VIEWER_METADATA.format(minutes=minutes, seconds=seconds, segments=result.segments|length, language=result.language) }}</p>
-{% endif %}
-
-
-<p class="at2-viewer-meta" title="Probabilità minima per Silero VAD: più bassa significa più sensibile alle voci deboli.">
-  Sensibilità voce utilizzata: <strong>{{ '%.2f'|format(job.vad_threshold) }}</strong> (valore più basso = più parole deboli riconosciute).
-  Per modificarla, scegli <a class="link link-primary" href="/upload?source_job={{ job.id }}">Ritrascrivi con altre impostazioni</a>: la versione esistente rimane disponibile.
-</p>
-
-{% if processed_available %}
-<details class="viewer-processing-details at2-technical-details"><summary>Audio elaborato · dettagli tecnici</summary>
-<div class="card bg-base-200 border border-line mb-4"><div class="card-body p-4">
-    <div class="text-sm font-medium mb-2">Processed audio sent to Whisper</div>
-
-    {% if audio_analysis %}
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
-      <div><span class="opacity-50">Original loudness</span><br>{{ audio_analysis.before.integrated_lufs }} LUFS</div>
-      <div><span class="opacity-50">Processed loudness</span><br>{{ audio_analysis.after.integrated_lufs }} LUFS</div>
-      <div><span class="opacity-50">Original / processed peak</span><br>{{ audio_analysis.before.true_peak_dbfs }} / {{ audio_analysis.after.true_peak_dbfs }} dBFS</div>
-      <div><span class="opacity-50">Loudness range</span><br>{{ audio_analysis.before.loudness_range_lu }} → {{ audio_analysis.after.loudness_range_lu }} LU</div>
-      <div><span class="opacity-50">Compression</span><br>{{ audio_analysis.processing.compression }}</div>
-      <div><span class="opacity-50">Denoise</span><br>{{ audio_analysis.processing.denoise }}</div>
-      <div><span class="opacity-50">High-pass</span><br>{{ audio_analysis.processing.highpass_hz }} Hz</div>
-      <div><span class="opacity-50">Target / applied</span><br>{{ audio_analysis.processing.target_lufs }} / {{ audio_analysis.processing.applied_target_lufs }} LUFS</div>
+<div class="at2-screen wv-page" {% if result %}x-data="viewerData" data-job="{{ job.id }}" data-duration="{{ result.duration or 0 }}" data-source="{{ initial_media_source }}" data-version="{{ 'corrected' if corrected_result else 'original' }}" @keydown.window="handleKey($event)"{% endif %}>
+  <nav class="wv-breadcrumb" aria-label="Percorso"><a href="/jobs">← Libreria</a><span>/</span><span>Trascrizione</span></nav>
+  {% if error == 'not_found' %}{{ alert('error', labels.VIEWER_NOT_FOUND) }}
+  {% elif error == 'not_completed' %}{{ alert('error', labels.VIEWER_NOT_COMPLETED.format(status=job.status.value)) }}
+  {% elif error == 'no_result' %}{{ alert('error', labels.VIEWER_RESULT_NOT_FOUND) }}{% endif %}
+  {% if result %}
+  <header class="wv-heading">
+    <div class="wv-heading-copy"><span class="at2-kicker">IL TUO AUDIO, PAROLA PER PAROLA</span><h1>{{ job.filename }}</h1>
+      <div class="wv-meta"><span class="wv-ready"><i></i>Trascrizione pronta</span><span>{{ result.duration|format_time }}</span><span>{{ result.language|upper }}</span><span>{{ result.segments|length }} battute</span></div>
     </div>
-    {% endif %}
-  </div>
-</div></details>
-{% endif %}
-
-{% if correction_available %}
-<details class="at2-ai-details" {% if not corrected_result or correction_state.status in ('queued','started','deferred','scheduled') or request.query_params.get('correction') %}open{% endif %}>
-  <summary class="font-semibold cursor-pointer">Correzione LLM separata {% if corrected_result %}· disponibile{% endif %}{% if correction_state.status in ('queued','started','deferred','scheduled') %} · {{ 'in corso' if correction_state.status == 'started' else 'in coda' }}{% endif %}</summary>
-  {% if request.query_params.get('correction') == 'already-active' %}
-  <div role="alert" class="alert alert-info text-sm my-2">C'è già una correzione LLM in coda o in elaborazione. Non ne ho creata un'altra: attendi il completamento o controlla lo stato qui sotto.</div>
-  {% elif request.query_params.get('correction') == 'queued' %}
-  <div role="status" class="alert alert-success text-sm my-2">Correzione richiesta e inserita nella coda LLM. Il testo Whisper originale rimane disponibile.</div>
-  {% endif %}
-  <p class="text-xs opacity-70 my-2">Il risultato Whisper rimane disponibile. La correzione viene eseguita in coda senza ritrascrivere l'audio.</p>
-  <form method="post" action="/viewer/{{ job.id }}/correct" class="flex flex-col gap-2">
-    <label for="studio-llm-context" class="text-xs font-semibold">Contesto e terminologia LLM</label>
-    <textarea id="studio-llm-context" name="llm_context_prompt" maxlength="4000" rows="3" class="textarea textarea-bordered w-full" placeholder="Meeting Airdass, nomi, acronimi...">{{ job.llm_context_prompt }}</textarea>
-    <button type="submit" class="btn btn-primary btn-sm self-start"
-            {% if correction_state.status in ('queued','started','deferred','scheduled') %}disabled{% endif %}>{{ 'Ricorreggi con LLM' if corrected_result else 'Correggi con LLM' }}</button>
-  </form>
-  <p id="studio-correction-status" class="text-xs opacity-70 mt-2" role="status">Controllo stato correzione…</p>
-</details>
-{% endif %}
-
-</section>
-<div class="at2-viewer-transcript-title"><div><span class="at2-kicker">02 / LETTURA E ASCOLTO</span><h2>La tua conversazione.</h2></div></div>
-{% if result.segments %}
-{% set _speaker_glyphs = ['●', '▲', '■', '◆', '★', '✦', '◉', '♦'] %}
-<div class="viewer-workspace {{ 'has-player' if media_available else '' }}"
-     x-data="viewerData({{ result.segments|length }})"
-     x-init="initPlayer()"
-@keydown.window="
-  const tag = document.activeElement.tagName;
-  const inField = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable || Boolean($refs.exportDialog?.open);
-  if ($event.key === '/' && !inField) { $event.preventDefault(); focusSearch(); }
-  else if ($event.key === 'Escape' && document.activeElement.matches('input[type=search]')) { clearSearch(); document.activeElement.blur(); }
-  else if (!inField && $event.key === 'ArrowDown') { $event.preventDefault(); navigateSegments(1); }
-  else if (!inField && $event.key === 'ArrowUp') { $event.preventDefault(); navigateSegments(-1); }
-  {# Bare c only: Ctrl+C / Cmd+C is the user copying their own selection and must not be hijacked. #}
-  else if (!inField && !$event.ctrlKey && !$event.metaKey && ($event.key === 'c' || $event.key === 'C')) { copyActive(); }
-  else if (!inField && $event.key === ' ' && document.getElementById('media-player')) { $event.preventDefault(); togglePlayPause(); }
-  else if (!inField && ($event.key === 'j' || $event.key === 'J') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(-5); }
-  else if (!inField && ($event.key === 'l' || $event.key === 'L') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(5); }
-">
-  {# Sticky toolbar #}
-  <div class="viewer-dock viewer-controls-fixed at2-viewer-dock bg-base-100 border-b border-line">
+    <div class="wv-actions"><a class="at2-button at2-button-quiet" href="/studio/{{ job.id }}">Modifica in Studio ↗</a>
+      <button type="button" class="at2-button at2-button-primary" @click="$refs.exportDialog.showModal()">{{ icon_download('w-4 h-4') }} Esporta</button>
+    </div>
+  </header>
+  {% if job.quality_warning %}{{ alert('warning', job.quality_warning) }}{% endif %}
+  <div class="wv-workspace {{ 'wv-with-audio' if media_available else '' }}">
     {% if media_available %}
-    <div class="viewer-transport" aria-label="Controlli audio e forma d'onda">
-      <div class="viewer-source-switch" role="group" aria-label="Versione della registrazione">
-        {% if original_available %}<button type="button" :class="{'is-selected': audioSource==='original'}" :aria-pressed="(audioSource==='original').toString()" @click="switchAudio('original')">◉ Originale</button>{% endif %}
-        {% if processed_available %}<button type="button" :class="{'is-selected': audioSource==='processed'}" :aria-pressed="(audioSource==='processed').toString()" @click="switchAudio('processed')">✦ Elaborato</button>{% endif %}
-        {% if processed_available %}<a class="viewer-source-download" href="/viewer/{{ job.id }}/processed-audio?download=1" download aria-label="Scarica audio elaborato WAV">{{ icon_download("w-4 h-4") }} Scarica elaborato</a>{% endif %}
-        <span>Una sola traccia · stessa posizione</span>
+    <aside class="wv-player" :class="{'is-expanded': audioExpanded}" aria-label="Ascolto della registrazione">
+      <div class="wv-panel-heading"><div><span class="at2-kicker">ASCOLTA E RITROVA</span><h2>La registrazione</h2></div><button type="button" class="wv-expand" @click="audioExpanded=!audioExpanded; $nextTick(() => _timeline?.refresh())" :aria-expanded="audioExpanded" x-text="audioExpanded ? 'Meno dettagli -' : 'Dettagli audio +'">Dettagli audio +</button><span class="wv-audio-dot" :class="{'is-playing': playing}" aria-hidden="true">♪</span></div>
+      <div class="wv-switch" role="group" aria-label="Versione audio">
+        {% if original_available %}<button type="button" :aria-pressed="audioSource==='original'" @click="switchAudio('original')">Originale</button>{% endif %}
+        {% if processed_available %}<button type="button" :aria-pressed="audioSource==='processed'" @click="switchAudio('processed')">Audio elaborato</button>{% endif %}
       </div>
-      <div class="viewer-transport-head"><div><span class="viewer-transport-kicker">NAVIGAZIONE AUDIO</span><p>Scorri la voce, trova la battuta</p></div>
-        <div class="viewer-transport-time"><span x-text="clock">00:00</span><span class="viewer-time-divider">/</span><span x-text="clockTotal">--:--</span></div></div>
-      <div class="viewer-waveform-wrap">
-        <canvas id="viewer-waveform" class="viewer-waveform" height="106" style="display:block;width:100%;max-width:100%;height:106px;max-height:106px;box-sizing:border-box" aria-hidden="true"></canvas>
-        <input id="viewer-seek" type="range" min="0" max="{{ result.duration or 1 }}" step="0.1" value="0" aria-label="Scorri la registrazione" title="Sposta la riproduzione al tempo desiderato">
+      <div class="wv-clock"><strong x-text="clock">00:00</strong><span>/ <span x-text="clockTotal">{{ result.duration|format_time }}</span></span></div>
+      <div class="viewer-waveform-wrap wv-waveform">
+        <canvas id="viewer-waveform" height="106" aria-hidden="true"></canvas>
+        <input id="viewer-seek" type="range" min="0" max="{{ result.duration or 1 }}" value="0" step=".01" aria-label="Posizione nella registrazione">
       </div>
-      <div class="viewer-audacity-tools" aria-label="Zoom e panoramica della registrazione">
-        <span x-text="viewWindow">Intera registrazione</span>
-        <div><button type="button" @click="timelineZoom(1.7)" aria-label="Aumenta lo zoom">＋ Zoom</button><button type="button" @click="timelineZoom(1/1.7)" aria-label="Riduci lo zoom">－ Zoom</button><button type="button" @click="timelinePan(-.55)" aria-label="Scorri la traccia indietro">◀</button><button type="button" @click="timelinePan(.55)" aria-label="Scorri la traccia avanti">▶</button><button type="button" @click="timelineFit()">Tutto</button></div>
+      <div class="wv-zoom"><span x-text="viewWindow">Registrazione completa</span><div>
+        <button type="button" @click="timelineZoom(1/1.7)" aria-label="Riduci zoom">−</button>
+        <button type="button" @click="timelineZoom(1.7)" aria-label="Aumenta zoom">+</button>
+        <button type="button" @click="_timeline?.pan(-.5)" aria-label="Sposta vista indietro">‹</button>
+        <button type="button" @click="_timeline?.pan(.5)" aria-label="Sposta vista avanti">›</button>
+        <button type="button" @click="_timeline?.fit()">Tutto</button>
+      </div></div>
+      <canvas id="viewer-overview" height="32" aria-label="Panoramica della registrazione"></canvas>
+      <p id="viewer-waveform-status" class="wv-hint" role="status">Caricamento forma d’onda…</p>
+      <div class="wv-transport">
+        <button type="button" @click="seekDelta(-5)" aria-label="Indietro di 5 secondi">↶ 5</button>
+        <button type="button" class="wv-play" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'"><span x-text="playing ? 'Ⅱ' : '▶'" aria-hidden="true">▶</span><span x-text="playing ? 'Pausa' : 'Ascolta'">Ascolta</span></button>
+        <button type="button" @click="seekDelta(5)" aria-label="Avanti di 5 secondi">5 ↷</button>
       </div>
-      <canvas id="viewer-overview" class="viewer-overview" height="32" style="display:block;width:100%;max-width:100%;height:32px;max-height:32px;box-sizing:border-box" aria-label="Panoramica completa, clicca per spostare la vista" title="Panoramica; clicca per centrare la selezione"></canvas>
-      <div class="viewer-waveform-help">Ingrandisci per leggere le singole battute · sposta la vista con le frecce o Shift + rotella</div>
-      <div class="viewer-transport-footer">
-        <div class="viewer-transport-buttons">
-          <button type="button" class="viewer-control-main" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'" x-text="playing ? '❚❚ Pausa' : '▶ Riproduci'">▶ Riproduci</button>
-          <button type="button" class="viewer-control-quiet" @click="seekDelta(-5)" aria-label="Indietro di 5 secondi">−5s</button>
-          <button type="button" class="viewer-control-quiet" @click="seekDelta(5)" aria-label="Avanti di 5 secondi">+5s</button>
-          <button type="button" class="viewer-control-follow" :class="{'is-on': followPlayback}" @click="toggleFollow()" :aria-pressed="followPlayback.toString()" title="Mantieni la trascrizione sincronizzata">↳ Segui testo</button>
+      <div class="wv-play-options"><button type="button" class="wv-follow" :aria-pressed="followPlayback" @click="toggleFollow()">↳ Segui testo</button>
+        <label>Velocità <select aria-label="Velocità di riproduzione" x-model="speed" @change="setSpeed()">{% for speed in ['0.75','1','1.25','1.5','2'] %}<option value="{{ speed }}">{{ speed }}×</option>{% endfor %}</select></label>
+      </div>
+      <p class="wv-error" x-text="mediaError" x-show="mediaError" role="alert" x-cloak></p>
+      <details class="wv-spectrum-details" @toggle="toggleSpectrum($event.target.open)">
+        <summary>Spettro delle frequenze <span>dal vivo</span></summary>
+        <canvas id="viewer-spectrum" height="96" aria-label="Intensità delle frequenze audio durante l’ascolto"></canvas>
+        <div class="wv-frequency-labels"><span>60 Hz</span><span>1 kHz</span><span>16 kHz</span></div>
+        <p class="wv-hint" x-text="spectrumStatus" role="status">Avvia l’audio per vedere le frequenze.</p>
+      </details>
+      <audio id="media-player" preload="metadata" aria-label="Registrazione"><source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}"></audio>
+      <p class="wv-player-tip">Seleziona un timestamp nel testo per riascoltare quel passaggio.</p>
+    </aside>
+    {% endif %}
+    <section class="wv-document" aria-label="Trascrizione">
+      <div class="wv-document-head"><div><span class="at2-kicker">LEGGI AL TUO RITMO</span><h2>La conversazione</h2></div>
+        <div class="wv-switch" role="group" aria-label="Formato di lettura"><button type="button" :aria-pressed="!readingMode" @click="setReading(false)">Battute</button><button type="button" :aria-pressed="readingMode" @click="setReading(true)">Paragrafi</button></div>
+      </div>
+      <div class="wv-document-toolbar">
+        {% if not search_disabled %}<div class="wv-search">{{ icon_search('w-4 h-4') }}<input type="search" aria-label="Cerca nella trascrizione" placeholder="Cerca una parola o una frase…" x-model.debounce.100ms="search"><button type="button" x-show="search" @click="search=''" aria-label="Cancella ricerca" x-cloak>×</button></div>{% else %}<p class="wv-hint">{{ labels.VIEWER_SEARCH_DISABLED.format(count=result.segments|length) }}</p>{% endif %}
+        {% if corrected_result %}<div class="wv-switch wv-versions" role="group" aria-label="Versione del testo"><button type="button" :aria-pressed="textSource==='corrected'" @click="switchText('corrected')">✦ Corretta</button><button type="button" :aria-pressed="textSource==='original'" @click="switchText('original')">Originale Whisper</button></div>{% endif %}
+      </div>
+      <div class="wv-document-caption"><span x-text="search ? matchCount + ' risultati' : (readingMode ? 'Lettura continua, senza interruzioni' : 'Una voce, una battuta alla volta')">Una voce, una battuta alla volta</span><button type="button" @click="shortcutsOpen=!shortcutsOpen" :aria-expanded="shortcutsOpen">Scorciatoie ⌨</button></div>
+      <p class="wv-shortcuts" x-show="shortcutsOpen" x-cloak><kbd>/</kbd> Cerca · <kbd>↑ ↓</kbd> Sposta selezione · <kbd>C</kbd> Copia · <kbd>Spazio</kbd> Play / pausa · <kbd>J L</kbd> − / + 5 secondi</p>
+      <div class="wv-transcript-scroll" tabindex="0" aria-label="Testo della trascrizione" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
+        <div class="viewer-transcript-list" x-show="!readingMode">
+        {% for seg in result.segments %}
+          <article class="segment viewer-segment wv-segment" data-seg-idx="{{ loop.index0 }}" data-start="{{ seg.start }}" data-end="{{ seg.end }}"
+            data-original="{{ seg.text|e }}" data-corrected="{{ (corrected_result.segments[loop.index0].text if corrected_result else seg.text)|e }}"
+            :class="{'is-current': currentSegIdx === {{ loop.index0 }}, 'is-selected': selectedIndex === {{ loop.index0 }}}"
+            {% if not search_disabled %}x-show="matches($el)"{% endif %}>
+            <div class="wv-segment-meta">{% if media_available %}<button type="button" class="wv-timestamp" @click="seekTo({{ seg.start }})" aria-label="Ascolta da {{ seg.start|format_time }}">{{ seg.start|format_time }} <span aria-hidden="true">↗</span></button>{% else %}<code>{{ seg.start|format_time }}</code>{% endif %}
+              <span class="wv-speaker {{ speaker_colors.get(seg.speaker, '') }}" data-speaker="{{ seg.speaker or '' }}">{{ seg.speaker or 'Voce' }}</span>
+              <button type="button" class="wv-copy" @click="copyRow($el.closest('article'))" aria-label="Copia battuta" title="Copia battuta">{{ icon_copy('w-4 h-4') }}</button>
+            </div>
+            <p {% if not search_disabled %}x-html="highlight($el.parentElement)"{% else %}x-text="rowText($el.parentElement)"{% endif %}>{{ corrected_result.segments[loop.index0].text if corrected_result else seg.text }}</p>
+          </article>
+        {% endfor %}
         </div>
-        <span id="viewer-waveform-status" class="viewer-waveform-status" role="status">Caricamento della forma d’onda…</span>
+        <div class="viewer-reading-list" x-show="readingMode" x-cloak>
+        {% for start, end, speaker, original, corrected in reading_paragraphs %}
+          <article class="wv-paragraph" data-start="{{ start }}" data-end="{{ end }}" data-original="{{ original|e }}" data-corrected="{{ corrected|e }}"
+            :class="{'is-current': currentTime >= {{ start }} && currentTime < {{ end }}}" {% if not search_disabled %}x-show="matches($el)"{% endif %}>
+            <div class="wv-segment-meta">{% if media_available %}<button type="button" class="wv-timestamp" @click="seekTo({{ start }})">{{ start|format_time }} ↗</button>{% else %}<code>{{ start|format_time }}</code>{% endif %}<span class="wv-speaker">{{ speaker or 'Voce' }}</span><button type="button" class="wv-copy" @click="copyRow($el.closest('article'))" aria-label="Copia paragrafo">{{ icon_copy('w-4 h-4') }}</button></div>
+            <p {% if not search_disabled %}x-html="highlight($el.parentElement)"{% else %}x-text="rowText($el.parentElement)"{% endif %}>{{ corrected if corrected_result else original }}</p>
+          </article>
+        {% endfor %}
+        </div>
+        {% if not search_disabled %}<div class="wv-empty" x-show="search && matchCount === 0" x-cloak><strong>Nessun passaggio trovato</strong><p>Prova un’altra parola o cancella la ricerca.</p><button type="button" @click="search=''">Mostra tutto il testo</button></div>{% endif %}
+        {% if not result.segments %}<div class="wv-empty"><strong>Nessuna voce rilevata</strong><p>{{ labels.VIEWER_NO_SEGMENTS }}</p></div>{% endif %}
       </div>
-      <audio id="media-player" preload="metadata" class="viewer-audio-native" aria-label="Riproduzione della traccia selezionata">
-        <source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}">
-      </audio>
-      {% if media_is_video %}<a class="viewer-source-note" href="/viewer/{{ job.id }}/media" download>Scarica anche il video originale</a>{% endif %}
-    </div>
-    {% endif %}
-
-    {% if search_disabled %}
-    {# Live search would lock up the browser tab on transcripts this large. #}
-    {{ alert('info', labels.VIEWER_SEARCH_DISABLED.format(count=result.segments|length), 'text-xs') }}
-    {% else %}
-    {# Search + keyboard shortcut hint #}
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="relative max-w-sm flex-1 min-w-[180px]">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-40">{{ icon_search("w-4 h-4") }}</span>
-        <input type="search" class="input input-sm w-full pl-9 pr-20" x-model="search"
-               placeholder="{{ labels.VIEWER_SEARCH_PLACEHOLDER }}">
-        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-40"
-              x-show="search"
-              x-text="matchCount + ' / {{ result.segments|length }}'"></span>
+      <footer class="wv-document-footer"><span>Il testo originale resta sempre disponibile.</span><button type="button" @click="copyTranscript()">Copia testo {{ icon_copy('w-4 h-4') }}</button></footer>
+    </section>
+  </div>
+  {% if media_available %}<div class="wv-mini-player" x-show="miniPlayer" x-cloak aria-label="Controlli audio durante la lettura">
+    <button type="button" class="wv-mini-play" @click="togglePlayPause()" :aria-label="playing ? 'Metti in pausa' : 'Riprendi audio'" x-text="playing ? 'Ⅱ' : '▶'">▶</button>
+    <span x-text="clock">00:00</span><button type="button" @click="seekDelta(-5)" aria-label="Torna indietro di 5 secondi">−5s</button><button type="button" @click="seekDelta(5)" aria-label="Salta avanti di 5 secondi">+5s</button>
+    <button type="button" @click="$el.closest('.wv-page').querySelector('.wv-player').scrollIntoView({behavior:'smooth',block:'center'})">Audio ↑</button>
+  </div>{% endif %}
+  <div class="wv-notice" x-show="notice" x-text="notice" role="status" x-cloak></div>
+  <section class="wv-details" aria-label="Dettagli e strumenti">
+    <details><summary>Dettagli della trascrizione <span>Lingua, sorgente e impostazioni</span></summary>
+      <div class="wv-details-body">
+        {% if job.source_url %}<p>Sorgente: <a href="{{ job.source_url }}" target="_blank" rel="noopener noreferrer">{{ job.source_url }}</a></p>{% endif %}
+        <p>Sensibilità voce: <strong>{{ '%.2f'|format(job.vad_threshold) }}</strong>. Un valore più basso riconosce anche le voci deboli.</p>
+        <a href="/upload?source_job={{ job.id }}">Ritrascrivi con altre impostazioni ↗</a>
+        {% if audio_analysis %}<div class="wv-analysis"><div>Volume originale<strong>{{ audio_analysis.before.integrated_lufs }} LUFS</strong></div><div>Volume elaborato<strong>{{ audio_analysis.after.integrated_lufs }} LUFS</strong></div><div>Picco originale / elaborato<strong>{{ audio_analysis.before.true_peak_dbfs }} / {{ audio_analysis.after.true_peak_dbfs }} dBFS</strong></div><div>Filtro passa-alto<strong>{{ audio_analysis.processing.highpass_hz }} Hz</strong></div></div>{% endif %}
       </div>
-      <button type="button" class="btn btn-ghost btn-xs gap-1"
-              :aria-expanded="shortcutsOpen.toString()"
-              @click="shortcutsOpen = !shortcutsOpen">
-        <kbd class="kbd kbd-xs">?</kbd>
-        <span class="hidden sm:inline">{{ labels.VIEWER_SHORTCUTS_TITLE }}</span>
-      </button>
-    </div>
-    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs mt-2 opacity-70"
-        x-show="shortcutsOpen" x-transition.opacity x-cloak>
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">/</kbd><span>{{ labels.VIEWER_SHORTCUTS_FOCUS_SEARCH }}</span></div>
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">↑</kbd><kbd class="kbd kbd-xs">↓</kbd><span>{{ labels.VIEWER_SHORTCUTS_NAV }}</span></div>
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">C</kbd><span>{{ labels.VIEWER_SHORTCUTS_COPY }}</span></div>
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">Esc</kbd><span>{{ labels.VIEWER_SHORTCUTS_CLEAR }}</span></div>
-      {% if media_available %}
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">Space</kbd><span>{{ labels.VIEWER_SHORTCUTS_PLAY_PAUSE }}</span></div>
-      <div class="flex items-center gap-2"><kbd class="kbd kbd-xs">J</kbd><kbd class="kbd kbd-xs">L</kbd><span>{{ labels.VIEWER_SHORTCUTS_SEEK }}</span></div>
-      {% endif %}
-    </dl>
-    {% endif %}
-  </div>
-
-  {# Only the conversation scrolls. Header/search/export remain outside. #}
-  <section class="viewer-transcript-frame" aria-label="Pannello della trascrizione">
-  <div class="viewer-transcript-head"><div><strong>Conversazione</strong><span>{{ result.segments|length }} segmenti · Seleziona una battuta per ascoltarla</span>
-  <div class="flex flex-wrap gap-1 mt-2" aria-label="Versione e formato testo">
-    {% if corrected_result %}<button type="button" class="btn btn-xs" :class="textSource==='corrected' ? 'btn-primary' : 'btn-outline'" @click="switchText('corrected')">✦ Corretta</button>
-    <button type="button" class="btn btn-xs" :class="textSource==='original' ? 'btn-primary' : 'btn-outline'" @click="switchText('original')">Whisper originale</button>{% endif %}
-    <button type="button" class="btn btn-xs" :class="!readingMode ? 'btn-primary' : 'btn-outline'" @click="readingMode=false">Battute</button>
-    <button type="button" class="btn btn-xs" :class="readingMode ? 'btn-primary' : 'btn-outline'" @click="readingMode=true">Paragrafi</button>
-  </div></div>
-    <button type="button" class="viewer-export-trigger" aria-haspopup="dialog" aria-controls="viewer-export-dialog"
-            @click="$refs.exportDialog.showModal()">
-      {{ icon_download('w-4 h-4') }} <span>Esporta</span>
-    </button>
-  </div>
-  <div x-show="!readingMode" class="transcript-container viewer-transcript-list" aria-label="Trascrizione, area a scorrimento indipendente" @wheel.passive="pauseFollow()" @touchstart.passive="pauseFollow()">
-    {% for seg in result.segments %}
-    {%- set _color_class = speaker_colors.get(seg.speaker, '') if seg.speaker else '' -%}
-    {%- set _glyph_idx_raw = _color_class.rsplit('-', 1)[-1] if _color_class else '' -%}
-    <div class="segment viewer-segment group flex gap-3 py-2 px-3 rounded-box hover:bg-base-200 transition-colors"
-         data-seg-idx="{{ loop.index0 }}" data-start="{{ seg.start }}" data-end="{{ seg.end }}"
-         {% if seg.speaker %}data-speaker="{{ seg.speaker|e }}"{% endif %}
-         :class="{ 'segment-active': currentSegIdx === {{ loop.index0 }} }"
-         {% if media_available %}@click="if (!$event.target.closest('button')) seekTo({{ seg.start }})"{% endif %}
-         {% if corrected_result %}data-original-search="{{ seg.text|lower|e }}" data-corrected-search="{{ corrected_result.segments[loop.index0].text|lower|e }}"{% endif %}
-         {% if not search_disabled %}data-text="{{ (corrected_result.segments[loop.index0].text if corrected_result else seg.text)|lower|e }}"
-         x-show="!search || $el.dataset.text.includes(search.toLowerCase())"
-         x-transition.opacity{% endif %}>
-      {% if media_available %}
-      <button type="button" class="timestamp-btn text-xs font-mono opacity-40 whitespace-nowrap pt-0.5"
-              title="{{ labels.VIEWER_SEEK_TO }}"
-              @click="seekTo({{ seg.start }})">{{ seg.start|format_time }}</button>
-      {% else %}
-      <code class="text-xs font-mono opacity-40 whitespace-nowrap pt-0.5">{{ seg.start|format_time }}</code>
-      {% endif %}
-      <div class="flex-1 min-w-0">
-        {% if seg.speaker %}
-        <strong class="text-xs font-medium {{ _color_class }}">
-          {% if _glyph_idx_raw in ('1','2','3','4','5','6','7','8') %}
-          <span class="font-mono mr-0.5" aria-hidden="true">{{ _speaker_glyphs[_glyph_idx_raw|int - 1] }}</span>
-          {% endif %}
-          [{{ seg.speaker }}]
-        </strong>
-        {% endif %}
-        {#- Text renders server-side so it survives Alpine/JS failure; x-html
-            re-renders it (with search highlighting) only when Alpine is alive.
-            Gated on the same search_disabled flag as the row above (line ~168):
-            a huge transcript has search turned off for performance, so there is
-            nothing to highlight and the per-segment data-raw copy + x-html eval
-            would be wasted work. Reading from data-raw also avoids tojson's
-            quotes breaking the attribute. -#}
-        <span {% if corrected_result %}data-original="{{ seg.text|e }}" data-corrected="{{ corrected_result.segments[loop.index0].text|e }}"{% endif %}
-              {% if not search_disabled %}data-raw="{{ seg.text|e }}"
-              x-html="window.whisperHighlight({% if corrected_result %}textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original{% else %}$el.dataset.raw{% endif %},search)"
-              {% elif corrected_result %}x-text="textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original"{% endif %}>{{ seg.text }}</span>
+    </details>
+    {% if correction_available %}
+    <details {% if request.query_params.get('correction') or correction_state.status in ('queued','started','deferred','scheduled') %}open{% endif %}>
+      <summary>Rivedi il testo con l’AI <span>{{ 'Versione corretta disponibile' if corrected_result else 'Correzione e terminologia' }}</span></summary>
+      <div class="wv-details-body"><p>Correggi punteggiatura, nomi e termini senza ritrascrivere l’audio. La correzione viene salvata in una versione separata.</p>
+        <form method="post" action="/viewer/{{ job.id }}/correct"><label for="studio-llm-context">Contesto e terminologia</label><textarea id="studio-llm-context" name="llm_context_prompt" maxlength="4000" rows="3" class="textarea textarea-bordered" placeholder="Nomi delle persone, acronimi, argomento…">{{ job.llm_context_prompt }}</textarea><button type="submit" class="at2-button at2-button-primary" {% if correction_state.status in ('queued','started','deferred','scheduled') %}disabled{% endif %}>{{ 'Correggi di nuovo' if corrected_result else 'Correggi con AI' }}</button></form>
+        <p id="studio-correction-status" role="status">Controllo stato correzione…</p>
       </div>
-      <button class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity flex-shrink-0"
-              type="button"
-              title="{{ labels.VIEWER_COPY_SEGMENT }}"
-              aria-label="{{ labels.VIEWER_COPY_SEGMENT }}"
-              data-copy-text="{{ (corrected_result.segments[loop.index0].text if corrected_result else seg.text)|e }}"
-              {% if corrected_result %}data-copy-original="{{ seg.text|e }}" data-copy-corrected="{{ corrected_result.segments[loop.index0].text|e }}"{% endif %}
-              @click="navigator.clipboard.writeText($el.dataset.copyText)">
-        {{ icon_copy("w-3 h-3") }}
-      </button>
-    </div>
-    {% endfor %}
-  </div>
-  <div x-cloak x-show="readingMode" class="transcript-container viewer-reading-list" aria-label="Lettura per paragrafi">
-    {% for start, speaker, original, corrected in reading_paragraphs %}
-    <div class="rounded-box border border-base-300 p-3 mb-2">
-      <button class="timestamp-btn text-xs opacity-60" type="button" @click="seekTo({{ start }})">{{ start|format_time }}</button>
-      {% if speaker %}<strong class="text-xs opacity-60 ml-2">{{ speaker }}</strong>{% endif %}
-      <p class="mt-2 leading-relaxed whitespace-pre-wrap" {% if corrected_result %}data-original="{{ original|e }}" data-corrected="{{ corrected|e }}" x-text="textSource==='corrected' ? $el.dataset.corrected : $el.dataset.original"{% endif %}>{{ corrected if corrected_result else original }}</p>
-    </div>
-    {% endfor %}
-  </div>
-  {% if not search_disabled %}
-  <p class="viewer-transcript-empty text-center py-8 opacity-50"
-     x-show="search && matchCount === 0"
-     x-transition.opacity>
-    {{ labels.VIEWER_SEARCH_NO_RESULTS }}
-  </p>
-  {% endif %}
+    </details>{% endif %}
   </section>
   {% include "_viewer_export_dialog.html" %}
+  {% endif %}
 </div>
-{% else %}
-{# No segments: exports still available from the same compact trigger. #}
-{% if media_available %}<div class="player-wrapper mb-4"><audio controls preload="metadata"><source src="/viewer/{{ job.id }}/{{ 'media' if initial_media_source=='original' else 'processed-audio' }}"></audio></div>{% endif %}
-<div class="viewer-empty-export" x-data="{}">
-  <button type="button" class="viewer-export-trigger" aria-haspopup="dialog" aria-controls="viewer-export-dialog"
-          @click="$refs.exportDialog.showModal()">{{ icon_download('w-4 h-4') }} Esporta</button>
-  {% include "_viewer_export_dialog.html" %}
-</div>
-<p class="text-sm opacity-50">{{ labels.VIEWER_NO_SEGMENTS }}</p>
-{% endif %}
-
-{% endif %}
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', path='viewer-timeline.js') }}?v=clean-waveform1"></script>
-<script src="{{ url_for('static', path='viewer-docked-layout.js') }}?v=docked-v1"></script>
-<script nonce="{{ csp_nonce }}">
-{% if correction_available %}
-(function() {
- const box = document.getElementById('studio-correction-status');
- if (!box) return;
- let disposed = false;
- let last = '';
- async function checkCorrection() {
-   try {
-     const response = await fetch('/viewer/{{ job.id }}/correction-status', {credentials:'same-origin'});
-     if (disposed || !response.ok) return;
-     const data = await response.json();
-     const state = data.status || 'unknown';
-     const button = document.querySelector('form[action="/viewer/{{ job.id }}/correct"] button[type="submit"]');
-     if (button) button.disabled = ['queued','started','deferred','scheduled'].includes(state);
-     box.textContent = ({queued:'Correzione in coda',started:'Correzione in corso',finished:'Correzione terminata',
-       failed:'Correzione fallita: puoi riprovare',not_requested:'Nessuna correzione richiesta',
-      deferred:'Correzione in attesa',scheduled:'Correzione programmata',
-      unknown:'Stato LLM incerto: controlla la coda'})[state] || 'Stato: '+state;
-     if (state==='finished' && last && last!=='finished') location.reload();
-     last=state;
-   } catch (_) { box.textContent='Stato LLM temporaneamente non disponibile'; }
- }
- checkCorrection();
- const interval = setInterval(checkCorrection, 10000);
- document.addEventListener('atelier:leaving', () => {disposed=true;clearInterval(interval);}, {once:true});
-})();
-{% endif %}
-window.viewerData = function(segmentCount) {
-  return {
-    search: '',
-    textSource: 'corrected',
-    readingMode: false,
-    activeIndex: 0,
-    shortcutsOpen: false,
-    currentSegIdx: -1,
-    clock: '00:00', clockTotal: '--:--', viewWindow: 'Intera registrazione', playing: false, followPlayback: true, audioSource: '{{ initial_media_source }}', _timeline: null, _manualScrollUntil: 0,
-    _segments: [],
-    _editorLayout: null,
-    _lastScrollTime: 0,
-    _segmentCount: segmentCount,
-    get matchCount() {
-      if (!this.search) return this._segmentCount;
-      var q = this.search.toLowerCase();
-      return Array.from(document.querySelectorAll('.segment[data-text]')).filter(function(el) { return el.dataset.text.includes(q); }).length;
-    },
-    _visibleSegments() {
-      return Array.from(document.querySelectorAll('.segment')).filter(function(el) { return el.offsetParent !== null; });
-    },
-    focusSearch() {
-      var el = document.querySelector('input[type=search]');
-      if (el) { el.focus(); el.select(); }
-    },
-    navigateSegments(delta) {
-      var visible = this._visibleSegments();
-      if (!visible.length) return;
-      this.activeIndex = Math.max(0, Math.min(visible.length - 1, this.activeIndex + delta));
-      var target = visible[this.activeIndex];
-      if (target) this.scrollSegmentWithinTranscript(target);
-    },
-    copyActive() {
-      var visible = this._visibleSegments();
-      var target = visible[this.activeIndex];
-      var text = target && target.querySelector('button[data-copy-text]');
-      text = text && text.dataset && text.dataset.copyText;
-      if (text) {
-        window.whisperCopy(text);
-      }
-    },
-    switchText(source) {
-      this.textSource = source;
-      document.querySelectorAll('.viewer-segment').forEach(function(row) {
-        if (row.dataset[source + 'Search'] !== undefined) row.dataset.text = row.dataset[source + 'Search'];
-        const copy = row.querySelector('button[data-copy-text]');
-        const key = 'copy' + source.charAt(0).toUpperCase() + source.slice(1);
-        if (copy && copy.dataset[key] !== undefined) copy.dataset.copyText = copy.dataset[key];
-      });
-    },
-    clearSearch() { this.search = ''; },
-    initPlayer() {
-      this._editorLayout = window.WhisperDockedLayout?.init();
-      var player = document.getElementById('media-player');
-      if (!player) return;
-      var segs = Array.from(document.querySelectorAll('.segment[data-start]'));
-      this._segments = segs.map(function(el) {
-        return { start: parseFloat(el.dataset.start), end: parseFloat(el.dataset.end) };
-      });
-      var self = this;
-      player.addEventListener('timeupdate', function() { self._onTimeUpdate(player.currentTime); });
-      player.addEventListener('play', function() { self.playing = true; });
-      player.addEventListener('pause', function() { self.playing = false; });
-      if (window.WhisperTimeline) {
-        self._timeline = window.WhisperTimeline.init({
-          player: player,
-          canvas: document.getElementById('viewer-waveform'),
-          overview: document.getElementById('viewer-overview'),
-          segments: self._segments,
-          range: document.getElementById('viewer-seek'),
-          status: document.getElementById('viewer-waveform-status'),
-          url: '/viewer/{{ job.id }}/waveform?source={{ initial_media_source }}',
-          duration: {{ result.duration or 0 }},
-          onClock: function(t, duration) { self.clock = window.WhisperTimeline.formatTime(t); self.clockTotal = window.WhisperTimeline.formatTime(duration); },
-          onSeek: function(t) { self._onTimeUpdate(t); self.scrollToCurrent(); },
-          onWindow: function(a,b,z) { self.viewWindow = a + ' – ' + b + (z > 1.05 ? ' · ' + z.toFixed(1) + '×' : ' · Vista completa'); }
-        });
-      }
-    },
-    destroy() {
-      this._editorLayout?.destroy();
-      this._timeline?.destroy();
-    },
-    _onTimeUpdate(t) {
-      var segs = this._segments;
-      var idx = -1;
-      var lo = 0, hi = segs.length - 1;
-      while (lo <= hi) {
-        var mid = (lo + hi) >> 1;
-        if (segs[mid].start <= t) { idx = mid; lo = mid + 1; }
-        else { hi = mid - 1; }
-      }
-      if (idx >= 0 && t > segs[idx].end) idx = -1;
-      if (idx === this.currentSegIdx) return;
-      this.currentSegIdx = idx;
-      if (idx < 0 || !this.followPlayback || Date.now() < this._manualScrollUntil) return;
-      var now = Date.now();
-      if (now - this._lastScrollTime < 1000) return;
-      this._lastScrollTime = now;
-      var el = document.querySelector('[data-seg-idx="' + idx + '"]');
-      if (el && el.offsetParent !== null) this.scrollSegmentWithinTranscript(el);
-    },
-    timelineZoom(factor) { this._timeline?.zoom(factor); },
-    timelinePan(fraction) { this._timeline?.pan(fraction); },
-    timelineFit() { this._timeline?.fit(); },
-    switchAudio(source) {
-      if (source === this.audioSource) return;
-      const player = document.getElementById('media-player');
-      if (!player) return;
-      const pos = player.currentTime || 0, playing = !player.paused;
-      // The SAME HTMLAudioElement is reused; no second parallel player.
-      player.pause();
-      this.audioSource = source;
-      player.addEventListener('loadedmetadata', () => {
-        player.currentTime = Math.min(pos,Math.max(0,player.duration || pos));
-        this._onTimeUpdate(player.currentTime);
-        this._timeline?.refresh();
-        if (playing) player.play().catch(() => {});
-      }, {once:true});
-      player.src = source === 'original' ? '/viewer/{{ job.id }}/media' : '/viewer/{{ job.id }}/processed-audio';
-      player.load();
-      this._timeline?.setSource('/viewer/{{ job.id }}/waveform?source='+encodeURIComponent(source));
-    },
-    pauseFollow() { this._manualScrollUntil = Date.now() + 6000; },
-    toggleFollow() { this.followPlayback = !this.followPlayback; if (this.followPlayback) { this._manualScrollUntil = 0; this.scrollToCurrent(); } },
-    // Scroll ONLY the transcript panel. Native scrollIntoView also scrolls
-    // outer ancestors and used to pull the entire page away from the player.
-    scrollSegmentWithinTranscript(el) {
-      const pane = document.querySelector('.viewer-transcript-list');
-      if (!pane || !el || !pane.contains(el)) return;
-      const paneBox = pane.getBoundingClientRect();
-      const segmentBox = el.getBoundingClientRect();
-      const shift = (segmentBox.top + segmentBox.height / 2) - (paneBox.top + paneBox.height / 2);
-      pane.scrollTo({top: Math.max(0, pane.scrollTop + shift), behavior: 'smooth'});
-    },
-    scrollToCurrent() {
-      if (this.currentSegIdx < 0) return;
-      const el = document.querySelector('[data-seg-idx="' + this.currentSegIdx + '"]');
-      if (el && el.offsetParent !== null) this.scrollSegmentWithinTranscript(el);
-    },
-    seekTo(time) {
-      this.followPlayback = true; this._manualScrollUntil = 0;
-      var player = document.getElementById('media-player');
-      if (!player) return;
-      player.currentTime = time;
-      this._onTimeUpdate(time); this.scrollToCurrent();
-      player.play().catch(function () {});
-    },
-    togglePlayPause() {
-      var player = document.getElementById('media-player');
-      if (!player) return;
-      if (player.paused) player.play(); else player.pause();
-    },
-    seekDelta(delta) {
-      var player = document.getElementById('media-player');
-      if (!player) return;
-      player.currentTime = Math.max(0, player.currentTime + delta);
-    }
-  };
-};
-
-(function() {
-  var escapeHtml = function(s) { return String(s).replace(/[&<>"']/g, function(c) {
-    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
-  }); };
-  var escapeRegex = function(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
-  window.whisperHighlight = function(text, query) {
-    if (!query) return escapeHtml(text);
-    var q = String(query).trim();
-    if (!q) return escapeHtml(text);
-    try {
-      var parts = text.split(new RegExp('(' + escapeRegex(q) + ')', 'gi'));
-      return parts.map(function(part, i) {
-        return i % 2 === 0 ? escapeHtml(part) : '<mark>' + escapeHtml(part) + '</mark>';
-      }).join('');
-    } catch (_) {
-      return escapeHtml(text);
-    }
-  };
-  window.whisperCopy = function(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text);
-    }
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    return Promise.resolve();
-  };
-})();
-</script>
 {% endblock %}

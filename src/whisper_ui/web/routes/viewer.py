@@ -129,7 +129,7 @@ async def viewer_page(
                     if corrected_result
                     else original
                 )
-                reading_paragraphs.append((block[0].start, block[0].speaker, original, corrected))
+                reading_paragraphs.append((block[0].start, block[-1].end, block[0].speaker, original, corrected))
             first = idx
     search_disabled = result is not None and len(result.segments) > VIEWER_SEARCH_SEGMENT_LIMIT
     # The Download Media button is only useful when the URL job's

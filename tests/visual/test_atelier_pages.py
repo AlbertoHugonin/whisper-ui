@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import re
 import threading
 import wave
+from array import array
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -63,7 +65,12 @@ def atelier_app(tmp_path, monkeypatch):
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(16000)
-        audio.writeframes(b"\x00\x00" * 64000)
+        audio.writeframes(
+            array("h", (int(16000 * math.sin(2 * math.pi * 1000 * i / 16000)) for i in range(64000))).tobytes()
+        )
+    processed = settings.output_dir / job.id / "processed.wav"
+    processed.parent.mkdir(parents=True, exist_ok=True)
+    processed.write_bytes(media.read_bytes())
     job.filepath = str(media)
     result = TranscriptResult(
         segments=[Segment(0, 2, "Prima frase di prova.", "S1"), Segment(2, 4, "Seconda frase.", "S2")],
@@ -279,3 +286,86 @@ def test_studio_edit_and_preset_save(atelier_page, atelier_app):
     page.wait_for_url(ORIGIN + "/presets")
     assert PresetRepository(atelier_app["db"].conn).get(created.id, 1).name == "Modificato dal browser QA"
     assert not errors
+
+
+def test_viewer_audio_reading_and_frequency_spectrum(atelier_page, atelier_app, browser_name):
+    """Use real media decoding and FFT, not mocked player/canvas callbacks."""
+    page, _, errors = atelier_page
+    page.goto(ORIGIN + f"/viewer/{atelier_app['job']}")
+    page.wait_for_function("!!window.Alpine && document.querySelector('.wv-page')._x_dataStack")
+    page.wait_for_function("document.querySelector('#viewer-waveform-status').textContent.includes('tocca')")
+    response = page.request.get(ORIGIN + f"/viewer/{atelier_app['job']}/waveform")
+    assert max(response.json()["peaks"]) > 0.35
+    page.get_by_role("searchbox", name="Cerca nella trascrizione").fill("Seconda")
+    page.wait_for_function("document.querySelectorAll('.wv-segment[style*=none]').length === 1")
+    page.get_by_role("button", name="Paragrafi", exact=True).click()
+    page.locator(".wv-paragraph:visible").wait_for(state="visible")
+    assert page.locator(".wv-paragraph:visible").count() == 1
+    assert page.locator(".wv-paragraph:visible mark").inner_text() == "Seconda"
+    page.get_by_role("button", name="Originale Whisper", exact=True).click()
+    page.locator(".wv-paragraph:visible").wait_for(state="visible")
+    assert page.locator(".wv-paragraph:visible").count() == 1
+    page.get_by_role("button", name="Cancella ricerca").click()
+    page.get_by_role("button", name="Battute", exact=True).click()
+    page.locator(".wv-spectrum-details summary").click()
+    page.get_by_role("button", name="Riproduci", exact=True).click()
+    page.wait_for_function("document.querySelector('#media-player').currentTime > .15")
+    page.wait_for_function("Number(document.querySelector('#viewer-spectrum').dataset.peakHz) > 900")
+    peak = page.locator("#viewer-spectrum").get_attribute("data-peak-hz")
+    assert 900 < int(peak) < 1100, peak
+    page.get_by_role("button", name="Pausa", exact=True).click()
+    page.get_by_role("combobox", name="Velocità di riproduzione").select_option("1.5")
+    assert page.locator("#media-player").evaluate("el => el.playbackRate") == 1.5
+    page.locator("#viewer-seek").evaluate(
+        "el => { el.value=1.25; el.dispatchEvent(new Event('input',{bubbles:true})); }"
+    )
+    page.wait_for_function("Math.abs(document.querySelector('#media-player').currentTime-1.25)<.05")
+    page.get_by_role("button", name="Audio elaborato", exact=True).click()
+    page.wait_for_function(
+        "document.querySelector('#media-player').readyState>=1 && "
+        "document.querySelector('#media-player').src.endsWith('processed-audio')"
+    )
+    assert abs(page.locator("#media-player").evaluate("el => el.currentTime") - 1.25) < 0.1
+    page.get_by_role("button", name="Aumenta zoom").click()
+    assert float(page.locator("#viewer-seek").get_attribute("max")) < 4
+    page.get_by_role("button", name="Tutto", exact=True).click()
+    assert float(page.locator("#viewer-seek").get_attribute("max")) == 4
+    page.evaluate("window.whisperCopy = async text => { window.__copiedText = text; }")
+    page.get_by_role("button", name="Copia testo", exact=True).click()
+    assert page.evaluate("window.__copiedText") == "Prima frase di prova.\n\nSeconda frase."
+    page.get_by_role("button", name="Esporta", exact=True).click()
+    assert page.locator("#viewer-export-dialog").is_visible()
+    with page.expect_download():
+        page.locator('a[href$="/export/txt"]').click()
+    page.keyboard.press("Escape")
+    page.evaluate("window.__oldPlayer = document.querySelector('#media-player')")
+    page.evaluate("AtelierNavigation.navigate('/jobs')")
+    page.wait_for_url(ORIGIN + "/jobs")
+    assert page.evaluate("window.__oldPlayer.paused")
+    page.evaluate("path => AtelierNavigation.navigate(path)", f"/viewer/{atelier_app['job']}")
+    page.wait_for_url(ORIGIN + f"/viewer/{atelier_app['job']}")
+    page.get_by_role("button", name="Riproduci", exact=True).click()
+    page.wait_for_function("document.querySelector('#media-player').currentTime > .1")
+    page.get_by_role("button", name="Pausa", exact=True).click()
+    for width in (1440, 768, 390):
+        page.set_viewport_size({"width": width, "height": 950 if width > 390 else 844})
+        for theme in ("whisper-light", "whisper-dark"):
+            page.evaluate("theme => document.documentElement.dataset.theme=theme", theme)
+            page.wait_for_timeout(100)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+2")
+            page.evaluate("scrollTo(0,0)")
+            page.wait_for_timeout(150)
+            page.screenshot(path=f".qa-artifacts/viewer-{browser_name}-{width}-{theme}.png")
+    page.get_by_role("button", name="Dettagli audio +", exact=True).click()
+    page.locator(".wv-spectrum-details summary").click()
+    page.get_by_role("button", name="Riproduci", exact=True).click()
+    page.wait_for_function("Number(document.querySelector('#viewer-spectrum').dataset.peakHz) > 900")
+    page.get_by_role("button", name="Pausa", exact=True).click()
+    page.get_by_role("button", name="Meno dettagli -", exact=True).click()
+    page.locator(".wv-document").evaluate("el => el.scrollIntoView({block: 'start'})")
+    page.locator(".wv-mini-player").wait_for(state="visible")
+    page.get_by_role("button", name="Riprendi audio", exact=True).click()
+    page.wait_for_function("!document.querySelector('#media-player').paused")
+    page.get_by_role("button", name="Metti in pausa", exact=True).click()
+    page.screenshot(path=f".qa-artifacts/viewer-{browser_name}-390-reading.png")
+    assert not errors, errors
