@@ -16,7 +16,7 @@
     if (!ctx) return { destroy() {}, zoom() {}, pan() {}, fit() {}, setSource() {} };
     let points = [], generation = 0, destroyed = false;
     let total = Math.max(0, Number(duration) || 0), zoom = 1, start = 0, frame = 0;
-    const shell = canvas.closest('.viewer-waveform-wrap');
+    const shell = canvas.closest('.wv-waveform, .viewer-waveform-wrap');
     const full = () => Math.max(.001, total);
     const visible = () => full() / zoom;
     const bound = () => { start = clamp(start, 0, Math.max(0, full() - visible())); };
@@ -40,7 +40,7 @@
       const w = clamp(Math.floor(rawWidth - (isOverview ? 0 : 2)), 2, 4096);
       const compactPlayer = canvas.closest('.wv-player');
       const compact = compactPlayer && window.matchMedia('(max-width:900px)').matches && !compactPlayer.classList.contains('is-expanded');
-      const h = isOverview ? 32 : (compact ? 48 : (window.matchMedia('(max-width:680px)').matches ? 87 : 106));
+      const h = isOverview ? 32 : (compact ? 96 : (window.matchMedia('(max-width:900px)').matches ? 112 : 144));
       // Explicit CSS pixels protect even if the browser has cached old CSS.
       c.style.display = 'block';
       c.style.boxSizing = 'border-box';
