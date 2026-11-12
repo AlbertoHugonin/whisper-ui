@@ -36,7 +36,8 @@ uv run pytest tests/visual/test_atelier_pages.py -m visual --browser chromium -q
 For a release pass, also install WebKit and add `--browser webkit`. The browser
 checks cover the main screens, responsive/light/dark layouts, upload pickers,
 navigation errors, expired sessions, mobile account actions, transcript edits
-and preset saves. The viewer workflow checks real audio playback, seeking,
+and preset saves. They also exercise search clearing, account filtering,
+single-file selection, folded audio settings and unsaved edits in the mobile Studio. The viewer workflow checks real audio playback, seeking,
 source switching, text search/copy/export and a 1 kHz signal through the live
 frequency analyser. Integration checks preserve MP3/AAC waveform amplitudes. Screenshots are a diagnostic tool, not a growing repository
 of implementation snapshots.

@@ -9,11 +9,12 @@
    string in literal double quotes, which would terminate this double-quoted
    x-data attribute early (the v2.3.1 breakage). status is validated to an
    empty string or a JobStatus value, so it is always quote-free. #}
-<div class="at2-status-tabs" x-data="{ activeFilter: '{{ status }}' }">
+<div class="at2-status-tabs" role="group" aria-label="Stato della trascrizione" x-data="{ activeFilter: '{{ status }}' }">
   {% for value, label in [('', labels.JOBS_FILTER_ALL)] + labels.STATUS_LABELS.items()|list %}
   <button class="btn btn-sm gap-1.5 at2-status-tab"
           :class="activeFilter === '{{ value }}' ? 'btn-primary' : 'btn-ghost border border-line'"
           hx-get="{{ list_url|default('/jobs/list', true) }}?status={{ value }}" hx-target="#job-list-wrapper" hx-swap="outerHTML"
+          :aria-pressed="activeFilter === '{{ value }}'"
           @click="activeFilter = '{{ value }}'">
     <span>{{ label }}</span>
     {{ count_badge(value, status_counts) }}

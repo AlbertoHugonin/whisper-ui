@@ -1,42 +1,48 @@
 {% extends "base.html" %}
+{% from "_atelier_components.html" import empty_state %}
+{% block title %}Panoramica · Atelier{% endblock %}
 {% block content %}
-<section class="atelier-dashboard-heading">
-  <div><div class="atelier-eyebrow"><span class="atelier-eyebrow-line"></span> YOUR AUDIO WORKSPACE</div>
+<div class="at2-home-screen">
+<header class="atelier-dashboard-heading">
+  <div><div class="atelier-eyebrow"><span class="atelier-eyebrow-line"></span> IL TUO WORKSPACE AUDIO</div>
     <h1>Le idee diventano <em>parole.</em></h1>
-    <p>Un unico spazio per trasformare audio, video e conversazioni in contenuti pronti da usare.</p>
+    <p>Riprendi una trascrizione o parti da una nuova registrazione.</p>
   </div>
-  <div class="atelier-date-marker" aria-hidden="true"><span>WHISPER</span><strong>STUDIO / 01</strong></div>
-</section>
-<section class="atelier-home-hero" aria-labelledby="start-work-title">
-  <div class="atelier-hero-copy"><span class="atelier-hero-kicker">INIZIA DA QUI <span class="atelier-hero-star">✦</span></span>
-    <h2 id="start-work-title">Cosa vuoi<br><i>trascrivere?</i></h2>
-    <p>Scegli da dove partire: penseremo noi a tutto il resto.</p>
-    <a class="atelier-hero-cta" href="/upload">Apri lo studio <span aria-hidden="true">↗</span></a>
+</header>
+<section class="at2-home-start" aria-labelledby="start-work-title">
+  <div><span class="at2-kicker">UN NUOVO CONTENUTO</span><h2 id="start-work-title">Cosa vuoi trascrivere?</h2><p>Scegli la sorgente. Al resto pensiamo noi.</p></div>
+  <div class="at2-home-sources" aria-label="Crea una trascrizione">
+    <a href="/upload?mode=files"><span aria-hidden="true">↥</span><strong>Carica file</strong><small>Audio e video</small></a>
+    <a href="/upload?mode=folder"><span aria-hidden="true">▤</span><strong>Importa cartella</strong><small>Più file insieme</small></a>
+    <a href="/upload?mode=url"><span aria-hidden="true">↗</span><strong>Incolla un link</strong><small>Video e playlist</small></a>
   </div>
-  <div class="atelier-wave-art" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-  <div class="atelier-hero-index" aria-hidden="true">AT — 001 / AUDIO INTELLIGENCE</div>
 </section>
-<div class="atelier-section-heading"><div><span class="atelier-eyebrow">ACCESSO RAPIDO</span><h2>Il tuo prossimo passo</h2></div></div>
-<section class="atelier-action-grid" aria-label="Azioni rapide">
- <a class="atelier-action-card" href="/upload?mode=files"><span class="atelier-action-num">01 /</span><span class="atelier-action-icon">↥</span><h3>Carica file</h3><p>Audio e video dal tuo dispositivo.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
- <a class="atelier-action-card" href="/upload?mode=folder"><span class="atelier-action-num">02 /</span><span class="atelier-action-icon">▤</span><h3>Importa cartella</h3><p>Più file insieme, un solo flusso.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
- <a class="atelier-action-card" href="/upload?mode=url"><span class="atelier-action-num">03 /</span><span class="atelier-action-icon">⌁</span><h3>Incolla un link</h3><p>Video online, playlist e URL supportati.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
+<section class="atelier-insights at2-home-stats" aria-label="Il tuo riepilogo">
+  <a href="/jobs" class="atelier-stat"><span>Lavori totali</span><strong>{{ total_jobs }}</strong><small>Apri la libreria ↗</small></a>
+  <a href="/jobs" class="atelier-stat"><span>In elaborazione</span><strong>{{ active_count }}</strong><small>Segui i progressi ↗</small></a>
+  <a href="/jobs?status=completed" class="atelier-stat"><span>Completati oggi</span><strong>{{ completed_today }}</strong><small>Leggi le trascrizioni ↗</small></a>
 </section>
-<section class="atelier-insights" aria-label="Il tuo riepilogo">
- <div class="atelier-stat"><span>Lavori totali</span><strong>{{ total_jobs }}</strong><small>nel tuo workspace</small></div>
- <div class="atelier-stat"><span>In elaborazione</span><strong>{{ active_count }}</strong><small>monitoraggio in tempo reale</small></div>
- <div class="atelier-stat"><span>Completati oggi</span><strong>{{ completed_today }}</strong><small>pronti per la revisione</small></div>
-</section>
-<div class="atelier-section-heading atelier-activity-heading"><div><span class="atelier-eyebrow">ACTIVITY FEED</span><h2>In questo momento</h2></div><a href="/jobs" class="atelier-text-link">Tutti i lavori ↗</a></div>
-<div class="atelier-live-section">{% include "_dashboard_active.html" %}</div>
-<div class="atelier-section-heading"><div><span class="atelier-eyebrow">LA TUA LIBRERIA</span><h2>Ultime trascrizioni</h2></div><a href="/jobs" class="atelier-text-link">Esplora archivio ↗</a></div>
-{% if recent_completed %}
-<div class="atelier-recent-list">
- {% for job in recent_completed %}
- <a href="/viewer/{{ job.id }}" class="atelier-recent-row"><span class="atelier-recent-symbol" aria-hidden="true">◧</span><span class="atelier-recent-meta"><strong>{{ job.filename }}</strong><small>{{ job.created_at|relative_time }}{% if job.duration %} · {{ (job.duration // 60)|int }}m {{ (job.duration % 60)|int }}s{% endif %}</small></span><span class="atelier-recent-status">Completato</span><span class="atelier-recent-arrow" aria-hidden="true">↗</span></a>
- {% endfor %}
+<div class="at2-home-content">
+  <section class="at2-home-library" aria-label="Trascrizioni recenti">
+    <div class="atelier-section-heading"><div><span class="atelier-eyebrow">RIPRENDI DA QUI</span><h2>Ultime trascrizioni</h2></div><a href="/jobs" class="atelier-text-link">Vedi tutte ↗</a></div>
+    {% if recent_completed %}
+    <div class="atelier-recent-list">
+      {% for job in recent_completed %}
+      <a href="/viewer/{{ job.id }}" class="atelier-recent-row">
+        <span class="atelier-recent-symbol" aria-hidden="true">◧</span>
+        <span class="atelier-recent-meta"><strong>{{ job.filename }}</strong><small>{{ job.created_at|relative_time }}{% if job.duration %} · {{ job.duration|format_time }}{% endif %}</small></span>
+        <span class="atelier-recent-status">Pronta</span><span class="atelier-recent-arrow" aria-hidden="true">↗</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state('Qui ritroverai le tue parole.', 'Le trascrizioni completate appariranno in questa sezione.', '/upload', 'Crea la prima trascrizione') }}
+    {% endif %}
+  </section>
+  <section class="at2-home-activity" aria-label="Attività in corso">
+    <div class="atelier-section-heading"><div><span class="atelier-eyebrow">IN TEMPO REALE</span><h2>Attività</h2></div><span class="at2-live"><i></i> Automatico</span></div>
+    <div class="atelier-live-section">{% include "_dashboard_active.html" %}</div>
+  </section>
 </div>
-{% else %}
-<div class="atelier-empty-state"><span>✳</span><h3>Il tuo prossimo progetto comincia qui.</h3><p>Le trascrizioni completate appariranno in questa sezione.</p><a href="/upload" class="atelier-text-link">Crea la prima trascrizione ↗</a></div>
-{% endif %}
+</div>
 {% endblock %}

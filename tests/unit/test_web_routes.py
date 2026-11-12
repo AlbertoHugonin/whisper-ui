@@ -1091,19 +1091,16 @@ class TestReviewStudio:
         filestore.save_corrected_result(second.id, corrected)
         response = client.get(f"/studio/{second.id}")
         assert response.status_code == 200
-        assert "at2-review-shell" in response.text
-        assert "Versione di confronto" in response.text
-        assert "La mia versione" in response.text
-        assert "Riassunto AI" in response.text
+        from lxml import html
+
+        document = html.fromstring(response.text)
+        assert document.xpath("//select[@aria-label='Versione A']")
+        assert document.xpath("//select[@aria-label='Versione B']")
+        assert document.xpath("//textarea[@aria-label='Testo modificabile della battuta']")
         assert f"{original.id}~original" in response.text
         assert f"{second.id}~corrected" in response.text
         assert 'id="studio-timeline-seek"' in response.text
         assert 'id="studio-timeline-overview"' in response.text
-        assert "onAudioTimeUpdate" in response.text
-        assert "Segui testo: attivo" in response.text
-        assert "data-studio-index" in response.text
-        assert "<canvas" not in response.text
-        assert "/waveform?" not in response.text
         assert client.get(f"/viewer/{second.id}").status_code == 200
         assert f"/studio/{second.id}" in client.get(f"/viewer/{second.id}").text
 

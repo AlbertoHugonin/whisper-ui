@@ -191,13 +191,44 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             page.locator('input[name="vad_enabled"][value="false"]').check()
             assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
             page.locator('input[name="vad_enabled"][value="true"]').check()
-            with page.expect_file_chooser():
-                page.locator('label[for="upload-files"]').click()
+            with page.expect_file_chooser() as chooser:
+                page.locator('label[for="upload-files"]').focus()
+                page.keyboard.press("Enter")
+            media = atelier_app["db"].get_job(job).filepath
+            chooser.value.set_files(media)
+            page.get_by_text("File selezionati", exact=True).wait_for(state="visible")
+            assert page.locator("#merge-mode").is_hidden()
+            page.locator(".at2-upload-audio summary").click()
+            page.locator('select[name="audio_denoise"]').select_option("medium")
+            page.locator('input[name="audio_target_lufs"]').fill("-2")
+            page.locator(".at2-upload-audio summary").click()
+            assert not page.locator("form.at2-upload-form").evaluate("el => el.reportValidity()")
+            assert page.locator(".at2-upload-audio").get_attribute("open") is not None
+            page.locator('input[name="audio_target_lufs"]').fill("-16")
+            page.locator(".at2-upload-audio summary").click()
+            assert (
+                page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('audio_denoise')") == "medium"
+            )
             page.locator("button").evaluate_all(
                 "buttons => buttons.find(b => /tab.*folder/.test(b.getAttribute('@click') || '')).click()"
             )
             with page.expect_file_chooser():
                 page.locator('label[for="upload-folder"]').click()
+        if path in {"/jobs", "/admin/jobs"}:
+            search = page.get_by_role("searchbox")
+            search.fill("nessun-risultato-qa")
+            page.get_by_text("Nessun risultato in questa pagina", exact=True).wait_for(state="visible")
+            assert page.locator(".at2-job-row:visible").count() == 0
+            page.get_by_role("button", name="Cancella ricerca", exact=True).click()
+            page.locator(".at2-job-row:visible").wait_for(state="visible")
+        if path == "/admin/users":
+            page.get_by_role("searchbox", name="Cerca un account").fill("qa-reader")
+            page.wait_for_function(
+                "Array.from(document.querySelectorAll('.admin-table-scroll tbody tr'))"
+                ".filter(el=>el.offsetParent!==null).length===1"
+            )
+            assert page.locator(".admin-table-scroll tbody tr:visible").inner_text().find("qa-reader") >= 0
+            page.get_by_role("searchbox", name="Cerca un account").fill("")
         assert not errors, (path, errors)
 
 
@@ -251,7 +282,13 @@ def test_mobile_account_menu_and_login(atelier_page):
     assert logout.value.status in {302, 303}, logout.value.status
     page.wait_for_url(re.compile(r".*/login.*"), timeout=5000)
     page.locator('input[name="username"]').fill("qa-admin")
-    page.locator('input[name="password"]').fill("qa-password-123")
+    password = page.locator('input[name="password"]')
+    password.fill("qa-password-123")
+    assert password.get_attribute("type") == "password"
+    password.locator("..").get_by_role("button").click()
+    assert password.get_attribute("type") == "text"
+    password.locator("..").get_by_role("button").click()
+    assert password.get_attribute("type") == "password"
     page.locator('button[type="submit"]').click()
     page.wait_for_url(ORIGIN + "/")
     assert page.locator(".atelier-account-menu").is_visible()
@@ -274,6 +311,14 @@ def test_studio_edit_and_preset_save(atelier_page, atelier_app):
     assert files.load_custom_result(job).segments[0].text == "Testo modificato durante la verifica isolata."
     assert files.load_result(job).segments[0].text == "Prima frase di prova."
 
+    page.set_viewport_size({"width": 390, "height": 844})
+    editor.fill("Modifica non salvata durante la revisione.")
+    page.get_by_text("Modifiche non salvate", exact=True).wait_for(state="visible")
+    page.get_by_role("button", name="Confronta versioni", exact=True).click()
+    page.once("dialog", lambda dialog: dialog.dismiss())
+    page.get_by_role("button", name="Copia nell'editor", exact=True).first.click()
+    page.get_by_role("button", name="Modifica testo", exact=True).click()
+    assert editor.input_value() == "Modifica non salvata durante la revisione."
     page.goto(ORIGIN + "/presets/new")
     page.locator('input[name="name"]').fill("Creato dal browser QA")
     page.locator('form[action="/presets"] button[type="submit"]').click()

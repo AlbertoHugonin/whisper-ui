@@ -9,7 +9,7 @@
     <span class="sr-only">{{ labels.JOBS_SELECT_ROW }}</span>
   </label>
   {% endif %}
-  <strong class="at2-job-title">{{ job.filename }}</strong>
+  {% if job.status.value == 'completed' %}<a class="at2-job-title" href="/viewer/{{ job.id }}" title="Leggi {{ job.filename }}">{{ job.filename }}</a>{% else %}<strong class="at2-job-title">{{ job.filename }}</strong>{% endif %}
   <span class="badge badge-sm gap-1
     {% if job.status.value == 'queued' %}badge-info
     {% elif job.status.value == 'processing' %}badge-warning
@@ -24,7 +24,7 @@
 </div>
 
 {% if job.source_url %}
-<div class="mt-1">
+<div class="mt-1 at2-job-origin">
   <a href="{{ job.source_url }}" target="_blank" rel="noopener noreferrer"
      class="text-xs opacity-40 hover:opacity-70 truncate block link" title="{{ job.source_url }}"
      @click.stop>{{ job.source_url[:60] }}{% if job.source_url|length > 60 %}...{% endif %}</a>
@@ -45,13 +45,13 @@
       {%- endif -%}
     </span>
     {% endif %}
-    {{ job.language }} | {{ job.model_name }} | {{ job.created_at|relative_time }}
+    {{ job.language|upper }} · {{ job.model_name }} · {{ job.created_at|relative_time }}
     {% if job.source_job_id %}<span class="badge badge-ghost badge-xs ml-1">{{ labels.JOBS_VERSION_BADGE }}</span>{% endif %}
   </span>
   <div class="at2-job-actions">
     {% if job.status.value == 'completed' %}
     <a href="/viewer/{{ job.id }}" class="btn btn-primary btn-xs">{{ labels.JOBS_VIEW }}</a>
-    <a href="/studio/{{ job.id }}" class="btn btn-outline btn-xs">Confronta / Modifica</a>
+    <a href="/studio/{{ job.id }}" class="btn btn-outline btn-xs">Modifica in Studio</a>
     {# Inline export dropdown. Visibility is driven by DaisyUI's
        :focus-within CSS alone — an Alpine x-show here would be a second
        source of truth that desyncs whenever a swap or focus loss closes

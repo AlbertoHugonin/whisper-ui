@@ -9,9 +9,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=wide-layout1">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=pages-r1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier-v2.css') }}?v=at2-r3">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-workspaces.css') }}?v=workspaces-r3">
   <script nonce="{{ csp_nonce }}">
   window.sharedViewerData = function(segmentCount) {
     return {
@@ -66,17 +67,17 @@
         var player = document.getElementById('media-player');
         if (!player) return;
         player.currentTime = time;
-        player.play();
+        player.play().catch(() => {});
       },
       togglePlayPause() {
         var player = document.getElementById('media-player');
         if (!player) return;
-        if (player.paused) player.play(); else player.pause();
+        if (player.paused) player.play().catch(() => {}); else player.pause();
       },
       seekDelta(delta) {
         var player = document.getElementById('media-player');
         if (!player) return;
-        player.currentTime = Math.max(0, player.currentTime + delta);
+        player.currentTime = Math.max(0, Math.min(Number.isFinite(player.duration) ? player.duration : Infinity, player.currentTime + delta));
       }
     };
   };
@@ -107,7 +108,7 @@
 </head>
 <body class="atelier-body at2-share-body">
   <main class="at2-share-root">
-    <header class="at2-share-header"><a class="at2-share-brand" href="/">atelier<span class="atelier-brand-dot">.</span></a><span class="at2-share-label">CONDIVISIONE SICURA / READ ONLY</span></header>
+    <header class="at2-share-header"><a class="at2-share-brand" href="/">atelier<span class="atelier-brand-dot">.</span></a><span class="at2-share-label">LINK CONDIVISO · SOLA LETTURA</span></header>
     <section class="at2-share-hero">
       <span class="at2-kicker">TRASCRIZIONE CONDIVISA</span>
       <h1>{{ job.filename }}</h1>
@@ -140,7 +141,7 @@
          x-init="initPlayer()"
          @keydown.window="
            const tag = document.activeElement.tagName;
-           const inField = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable;
+           const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT' || tag === 'A' || document.activeElement.isContentEditable;
            if (!inField && $event.key === ' ' && document.getElementById('media-player')) { $event.preventDefault(); togglePlayPause(); }
            else if (!inField && ($event.key === 'j' || $event.key === 'J') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(-5); }
            else if (!inField && ($event.key === 'l' || $event.key === 'L') && document.getElementById('media-player')) { $event.preventDefault(); seekDelta(5); }
@@ -154,7 +155,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           </span>
           <input type="search" class="input input-sm w-full pl-9 pr-20" x-model="search"
-                 placeholder="{{ labels.VIEWER_SEARCH_PLACEHOLDER }}">
+                 placeholder="{{ labels.VIEWER_SEARCH_PLACEHOLDER }}" aria-label="Cerca nella trascrizione condivisa">
           <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-40"
                 x-show="search"
                 x-text="matchCount + ' / {{ result.segments|length }}'"></span>

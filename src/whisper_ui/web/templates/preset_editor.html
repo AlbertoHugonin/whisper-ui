@@ -4,16 +4,16 @@
 {% block content %}
 <div class="at2-screen at2-preset-editor-screen">
   <a href="/presets" class="at2-viewer-breadcrumb">← Torna ai preset</a>
-  {{ heading('STUDIO / CONFIGURAZIONE', 'Un preset, il tuo modo di lavorare.', 'Imposta una volta le regole per audio, trascrizione e post-elaborazione. I lavori esistenti rimangono invariati.') }}
+  {{ heading('STUDIO / CONFIGURAZIONE', 'Configura il tuo preset.', 'Imposta una volta le regole per audio, trascrizione e post-elaborazione. I lavori esistenti rimangono invariati.') }}
   {% if error %}<div role="alert" class="alert alert-error">{{ error }}</div>{% endif %}
   <form method="post" action="{{ '/presets/' ~ preset.id ~ '/edit' if preset else '/presets' }}" class="at2-editor-form">
 <div class="at2-editor-content"><div class="at2-editor-stack">    <section id="editor-panel-1" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">01 / IDENTITÀ</span>
       <h2 class="font-semibold">Identità del preset</h2>
       <div class="grid md:grid-cols-2 gap-4">
         <label class="fieldset"><span class="fieldset-legend">Nome del preset *</span>
-          <input class="input w-full" type="text" name="name" maxlength="70" required value="{{ form_name }}" placeholder="Meeting Airdass"></label>
+          <input class="input w-full" type="text" name="name" maxlength="70" required value="{{ form_name }}" placeholder="Es. Riunioni di lavoro"></label>
         <label class="fieldset"><span class="fieldset-legend">Descrizione (opzionale)</span>
-          <input class="input w-full" name="description" maxlength="300" value="{{ form_description }}" placeholder="Riunioni di lavoro e parole chiave"></label>
+          <input class="input w-full" name="description" maxlength="300" value="{{ form_description }}" placeholder="Quando userai queste impostazioni?"></label>
       </div>
     </div></section>
     <section id="editor-panel-2" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">02 / LINGUA E MODELLO</span>
@@ -53,6 +53,7 @@
         <input id="preset-vad" class="range range-primary w-full" type="range" name="vad_threshold" min="0.10" max="0.60" step="0.05" value="{{ cfg.vad_threshold }}" x-model.number="vad">
         <div class="flex justify-between text-xs opacity-65"><span>0,10 · Voci deboli</span><span>0,25 · Bilanciato</span><span>0,60 · Più selettivo</span></div>
       </div>
+      <details class="at2-inline-details" @invalid.capture="$el.open=true"><summary>Regolazioni avanzate del parlato <span>Pause, margini e sovrapposizione</span></summary>
       <div class="grid sm:grid-cols-2 gap-3">
         <label class="fieldset"><span class="fieldset-legend">Parlato minimo (ms)</span><input type="number" name="vad_min_speech_ms" class="input w-full" min="0" max="5000" step="10" value="{{ cfg.vad_min_speech_ms|default(100) }}"></label>
         <label class="fieldset"><span class="fieldset-legend">Pausa per separare (ms)</span><input type="number" name="vad_min_silence_ms" class="input w-full" min="0" max="10000" step="10" value="{{ cfg.vad_min_silence_ms|default(300) }}"></label>
@@ -60,6 +61,7 @@
         <label class="fieldset"><span class="fieldset-legend">Sovrapposizione (secondi)</span><input type="number" name="vad_samples_overlap" class="input w-full" min="0" max="1" step="0.05" value="{{ cfg.vad_samples_overlap|default(0.20) }}"></label>
       </div>
       <p class="text-xs opacity-65">Prova di confronto: margine 800 ms e sovrapposizione 0,50 s; poi confronta con VAD spento soltanto su estratti brevi. Il VAD spento può generare testo nei silenzi.</p>
+      </details>
       <div class="grid sm:grid-cols-3 gap-4">
         <label class="fieldset"><span class="fieldset-legend">Elaborazione audio</span><select name="audio_processing" class="select w-full">{% for v, label in [('auto','Automatica'),('off','Solo conversione'),('custom','Personalizzata')] %}<option value="{{ v }}" {% if cfg.audio_processing == v %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
         <label class="fieldset"><span class="fieldset-legend">Riduzione del rumore</span><select name="audio_denoise" class="select w-full">{% for v in ['auto','off','light','medium'] %}<option value="{{ v }}" {% if cfg.audio_denoise == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
@@ -70,27 +72,27 @@
       </div>
     </div></section>
     <section id="editor-panel-4" class="card at2-editor-panel"><div class="card-body gap-4"><span class="at2-kicker">04 / INTELLIGENZA ARTIFICIALE</span>
-      <h2 class="font-semibold">I tre prompt</h2>
+      <h2 class="font-semibold">Istruzioni per l’AI</h2>
       <label class="fieldset"><span class="fieldset-legend">Parole chiave e contesto iniziale per Whisper</span>
         <textarea class="textarea textarea-bordered w-full" rows="4" name="whisper_keywords" maxlength="1500" placeholder="Airdass, API, nomi di prodotti, acronimi...">{{ cfg.whisper_keywords }}</textarea>
         <span class="text-xs opacity-65">Suggerisce il vocabolario al riconoscimento vocale. Non scrivere istruzioni da eseguire.</span></label>
       <label class="fieldset"><span class="fieldset-legend">Contesto per la correzione LLM</span>
-        <textarea class="textarea textarea-bordered w-full" rows="6" name="llm_context_prompt" maxlength="4000" placeholder="Terminologia del meeting; non inventare né omettere contenuti...">{{ cfg.llm_context_prompt }}</textarea>
+        <textarea class="textarea textarea-bordered w-full" rows="4" name="llm_context_prompt" maxlength="4000" placeholder="Terminologia del meeting; non inventare né omettere contenuti...">{{ cfg.llm_context_prompt }}</textarea>
         <span class="text-xs opacity-65">Aiuta a correggere termini ambigui dopo che la trascrizione originale è già disponibile.</span></label>
       <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="llm_correction_enabled" type="checkbox" value="true" {% if cfg.llm_correction_enabled %}checked{% endif %}>
         Avvia la correzione LLM automaticamente dopo la trascrizione</label>
       <label class="fieldset"><span class="fieldset-legend">Prompt personalizzato per il riassunto AI</span>
-        <textarea class="textarea textarea-bordered w-full" rows="6" name="summary_prompt" maxlength="4000" placeholder="Riassumi la riunione: decisioni, azioni, responsabili, scadenze e punti irrisolti. Non inventare informazioni.">{{ cfg.summary_prompt|default('') }}</textarea>
+        <textarea class="textarea textarea-bordered w-full" rows="4" name="summary_prompt" maxlength="4000" placeholder="Riassumi la riunione: decisioni, azioni, responsabili, scadenze e punti irrisolti. Non inventare informazioni.">{{ cfg.summary_prompt|default('') }}</textarea>
         <span class="text-xs opacity-65">Il riassunto viene generato separatamente e puoi rigenerarlo dall'Editor.</span></label>
       <label class="label justify-start gap-3"><input class="checkbox checkbox-primary" name="summary_enabled" type="checkbox" value="true" {% if cfg.summary_enabled|default(false) %}checked{% endif %}> Genera automaticamente il riassunto dopo la trascrizione</label>
       <p class="text-xs opacity-65">La trascrizione originale non aspetta l'LLM e rimane sempre disponibile. La correzione usa la coda dedicata.</p>
     </div></section>
-    <div class="at2-editor-actions">
+    <div class="at2-editor-actions"><span class="at2-save-hint">Il preset sarà disponibile per le prossime trascrizioni.</span>
       <button type="submit" class="btn btn-primary">{{ 'Salva modifiche' if preset else 'Crea preset' }}</button>
       <a class="btn btn-ghost" href="/presets">Annulla</a>
     </div>
 </div><aside class="at2-editor-sidebar" aria-label="Passaggi del preset"><div><span class="at2-kicker">GUIDA ALLA CONFIGURAZIONE</span><h2>Il tuo percorso</h2></div><ol>
-<li><span>01</span> Identità</li><li><span>02</span> Modello e lingua</li><li><span>03</span> Audio e VAD</li><li><span>04</span> Prompt e AI</li></ol>
+<li><a href="#editor-panel-1"><span>01</span> Nome e descrizione</a></li><li><a href="#editor-panel-2"><span>02</span> Lingua e modello</a></li><li><a href="#editor-panel-3"><span>03</span> Audio e VAD</a></li><li><a href="#editor-panel-4"><span>04</span> Istruzioni AI</a></li></ol>
 <p class="at2-description">Le modifiche saranno disponibili ai tuoi prossimi lavori.</p></aside></div>
   </form>
 </div>

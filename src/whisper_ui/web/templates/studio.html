@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="at2-screen at2-review-shell" x-data="reviewStudio()">
+<div class="at2-screen at2-review-shell" x-data="reviewStudio()" :class="{'is-comparing': studioView==='compare'}">
   <nav aria-label="Percorso" class="at2-viewer-breadcrumb"><a href="/jobs">Libreria</a> <span> / </span> <a href="/viewer/{{ job.id }}">Trascrizione</a> <span> / Studio</span></nav>
   <header class="at2-review-hero"><div><span class="at2-kicker">STUDIO / POST-PRODUZIONE</span>
-      <h1>Metti a punto ogni parola.</h1>
+      <h1>Rivedi la trascrizione.</h1>
       <p>{{ job.filename }} · Confronta le versioni, modifica il testo e salva la tua interpretazione. L'originale resta intatto.</p></div>
     <a class="at2-button at2-button-quiet" href="/viewer/{{ job.id }}">← Torna alla lettura</a>
   </header>
-  <div class="at2-review-step"><span class="at2-kicker">01 / ASCOLTO</span><h2>Segui il suono.</h2><p>Riproduci, ingrandisci e raggiungi qualsiasi istante.</p></div>
+  <div class="at2-review-step"><span class="at2-kicker">01 / ASCOLTO</span><h2>Riascolta un passaggio.</h2><p>Riproduci, ingrandisci e raggiungi qualsiasi istante.</p></div>
   <section class="card at2-review-section at2-review-audio"><div class="card-body gap-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <strong>Audio · navigazione temporale</strong>
@@ -62,10 +62,14 @@
 
   <div role="alert" class="alert alert-error" x-show="error" x-cloak><span x-text="error"></span><button type="button" class="btn btn-ghost btn-xs" @click="error=''">Chiudi</button></div>
 
-  <div class="at2-review-step"><span class="at2-kicker">02 / CONFRONTO</span><h2>Tre punti di vista, una versione tua.</h2><p>Ascolta l'originale, confronta le alternative e modifica senza perdere la cronologia.</p></div>
+  <div class="at2-review-step"><span class="at2-kicker">02 / CONFRONTO</span><h2>Confronta e modifica.</h2><p>Ascolta l'originale, confronta le alternative e modifica senza perdere la cronologia.</p></div>
+  <div class="at2-studio-mode-switch" role="group" aria-label="Modalità dello Studio">
+    <button type="button" :aria-pressed="studioView==='edit'" @click="studioView='edit'">Modifica testo</button>
+    <button type="button" :aria-pressed="studioView==='compare'" @click="studioView='compare'">Confronta versioni</button>
+  </div>
   <section class="at2-review-columns" aria-label="Confronto ed editor di tre trascrizioni">
     <div class="card at2-review-card at2-review-side"><div class="card-body p-3 gap-3">
-      <div class="flex justify-between items-center"><h2 class="font-semibold">A · Versione di confronto</h2>
+      <div class="flex justify-between items-center"><h2 class="font-semibold">A · Originale o confronto</h2>
         <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('left')">Copia nell'editor</button></div>
       <select class="select select-bordered select-sm w-full" aria-label="Versione A" x-model="leftVersion" @change="loadSide('left')">
         <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
@@ -83,7 +87,7 @@
       </div>
     </div></div>
     <div class="card at2-review-card at2-review-side"><div class="card-body p-3 gap-3">
-      <div class="flex justify-between items-center"><h2 class="font-semibold">B · Altra trascrizione</h2>
+      <div class="flex justify-between items-center"><h2 class="font-semibold">B · Versione alternativa</h2>
         <button type="button" class="btn btn-xs btn-outline" @click="copyFrom('right')">Copia nell'editor</button></div>
       <select class="select select-bordered select-sm w-full" aria-label="Versione B" x-model="rightVersion" @change="loadSide('right')">
         <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
@@ -100,8 +104,8 @@
         <button type="button" x-show="rightSegments.length > rightLimit" class="btn btn-ghost btn-sm w-full" @click="rightLimit+=150">Mostra altre battute</button>
       </div>
     </div></div>
-    <div class="card at2-review-card at2-review-editor"><div class="card-body p-3 gap-3">
-      <h2 class="font-semibold">C · La mia versione</h2>
+    <div class="card at2-review-card at2-review-editor" @input="saveStatus='Modifiche non salvate'; savedVersion=''"><div class="card-body p-3 gap-3">
+      <h2 class="font-semibold">La tua versione</h2>
       <p class="text-xs opacity-65">Copia A o B, poi modifica testo e speaker. I timestamp restano sincronizzati con l'audio.</p>
       <div class="flex flex-wrap gap-2 items-center">
         <button type="button" class="btn btn-primary btn-sm" :disabled="saving||!draft.length" @click="saveCustom()" x-text="saving ? 'Salvataggio…' : 'Salva personalizzata'"></button>
@@ -124,10 +128,10 @@
     </div></div>
   </section>
 
-  <div class="at2-review-step"><span class="at2-kicker">03 / INTELLIGENZA ARTIFICIALE</span><h2>Le informazioni che contano.</h2><p>Raccogli decisioni e punti chiave senza rileggere tutto.</p></div>
+  <div class="at2-review-step"><span class="at2-kicker">03 / INTELLIGENZA ARTIFICIALE</span><h2>Riassunto e punti chiave.</h2><p>Raccogli decisioni e punti chiave senza rileggere tutto.</p></div>
   <section class="card at2-review-section at2-review-summary"><div class="card-body gap-3">
     <div><h2 class="font-semibold text-lg">Riassunto AI della riunione</h2>
-      <p class="text-xs opacity-65">È un'operazione separata da Whisper, eseguita in coda al Model Router. Puoi cambiare il prompt e rigenerare il risultato.</p></div>
+      <p class="text-xs opacity-65">Scegli quale versione riassumere e indica le informazioni che ti servono. Il testo della trascrizione resta disponibile.</p></div>
     <label class="fieldset max-w-xl"><span class="fieldset-legend">Versione da riassumere</span>
       <select class="select select-bordered w-full" x-model="summaryVersion" @change="fetchSummary()">
         <template x-for="v in versions" :key="v.id"><option :value="v.id" x-text="v.label"></option></template>
@@ -136,17 +140,17 @@
       <textarea x-model="summaryPrompt" maxlength="4000" rows="4" class="textarea textarea-bordered w-full" placeholder="Riassumi decisioni, attività, responsabili, scadenze e rischi. Non inventare dati."></textarea></label>
     <div class="flex gap-2 items-center flex-wrap">
       <button type="button" class="btn btn-primary btn-sm" @click="generateSummary()" {% if not llm_available %}disabled{% endif %}>Genera / Rigenera riassunto</button>
-      <button type="button" x-show="summaryText" class="btn btn-outline btn-sm" @click="navigator.clipboard.writeText(summaryText)">Copia</button>
+      <button type="button" x-show="summaryText" class="btn btn-outline btn-sm" @click="copySummary()">Copia</button>
       <span role="status" class="text-xs opacity-65" x-text="summaryStatus"></span>
     </div>
     <div x-show="summaryText" class="bg-base-200 rounded-box p-4 whitespace-pre-wrap text-sm leading-relaxed" x-text="summaryText"></div>
-    {% if not llm_available %}<p class="text-sm text-warning">Model Router non configurato: il riassunto non è disponibile.</p>{% endif %}
+    {% if not llm_available %}<p class="text-sm text-warning">Il riassunto AI non è disponibile al momento.</p>{% endif %}
   </div></section>
 </div>
 <script nonce="{{ csp_nonce }}">
 function reviewStudio() {
  return {
-  versions: {{ versions|tojson }}, leftVersion: {{ left_initial|tojson }}, rightVersion: {{ right_initial|tojson }},
+  studioView:'edit', versions: {{ versions|tojson }}, leftVersion: {{ left_initial|tojson }}, rightVersion: {{ right_initial|tojson }},
   leftSegments: [],rightSegments: [],draft: [],draftSource: '', savedVersion: '',
   leftLimit:150,rightLimit:150,draftLimit:150,saving:false,saveStatus:'',error:'',
   zoom:1,viewStart:0,audioDuration:0,currentTime:0,playing:false,followPlayback:true,
@@ -176,8 +180,12 @@ function reviewStudio() {
    }
    // Alpine wraps segments in reactive Proxies, which structuredClone rejects.
    this.draft=JSON.parse(JSON.stringify(list));this.draftSource=side==='left'?this.leftVersion:this.rightVersion;
-   this.savedVersion='';this.saveStatus='Modifiche non salvate';this.draftLimit=150;this.draftActive=-1;
+   this.studioView='edit';this.savedVersion='';this.saveStatus='Modifiche non salvate';this.draftLimit=150;this.draftActive=-1;
    this.$nextTick(()=>this.syncTranscriptToAudio(true));
+  },
+  async copySummary() {
+   try {await window.whisperCopy(this.summaryText);this.summaryStatus='Riassunto copiato';}
+   catch(_){this.summaryStatus='Copia non disponibile. Seleziona il testo per copiarlo.';}
   },
   async saveCustom() {
    this.saving=true;this.error='';

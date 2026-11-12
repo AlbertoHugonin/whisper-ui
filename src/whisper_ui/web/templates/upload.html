@@ -6,7 +6,7 @@
 {% block content %}
 {% set rt = retranscribe_source %}
 <div class="at2-screen at2-upload-screen">
-  {{ heading('STUDIO / NUOVA TRASCRIZIONE', 'Dai voce ai tuoi contenuti.', 'Importa una registrazione, scegli le impostazioni e lascia lavorare Whisper.') if not rt else heading('STUDIO / NUOVA VERSIONE', 'Riascolta, da capo.', 'Crea una nuova versione senza modificare la trascrizione originale.') }}
+  {{ heading('STUDIO / NUOVA TRASCRIZIONE', 'Nuova trascrizione.', 'Importa una registrazione, scegli le impostazioni e lascia lavorare Whisper.') if not rt else heading('STUDIO / NUOVA VERSIONE', 'Crea una nuova versione.', 'Crea una nuova versione senza modificare la trascrizione originale.') }}
   {% if rt %}
   <div class="at2-aside-card"><span class="at2-kicker">REGISTRAZIONE SORGENTE</span><h3>{{ rt.filename }}</h3>{% if rt.source_url %}<p>{{ rt.source_url }}</p>{% endif %}</div>
   {% endif %}
@@ -92,7 +92,7 @@
   <div class="at2-upload-main">
 {% if not rt %}
 <section class="at2-upload-pane at2-upload-source" aria-label="Origine del contenuto">
-<div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Da dove iniziamo?</h2><p>Carica file, scegli una cartella o importa un link.</p></div></div>
+<div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Scegli la registrazione</h2><p>Carica file, scegli una cartella o importa un link.</p></div></div>
   {# Source selection tabs — pill style #}
   <div role="tablist" class="at2-source-tabs" aria-label="{{ labels.UPLOAD_MODE_GROUP }}">
     <button type="button" role="tab" class="tab gap-2"
@@ -128,7 +128,7 @@
          @drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; updateFileList()">
       {{ icon_upload("w-10 h-10 mx-auto mb-3 opacity-30") }}
       <p class="text-sm opacity-60 mb-4">{{ labels.UPLOAD_DRAG_DROP }}</p>
-      <label for="upload-files" class="btn btn-outline btn-sm">{{ labels.UPLOAD_CHOOSE_FILE }}</label>
+      <label for="upload-files" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.fileInput.click()" @keydown.space.prevent="$refs.fileInput.click()">{{ labels.UPLOAD_CHOOSE_FILE }}</label>
       <input type="file" id="upload-files" name="files" multiple
              accept="{{ supported_extensions|join(',') }}"
              :disabled="tab !== 'files'"
@@ -141,7 +141,7 @@
   {# Folder tab #}
   <div x-show="tab === 'folder'" x-transition.opacity>
     <p class="text-sm opacity-60 mb-3">{{ labels.UPLOAD_FOLDER_DESCRIPTION }}</p>
-    <label for="upload-folder" class="btn btn-outline btn-sm">{{ labels.UPLOAD_CHOOSE_FOLDER }}</label>
+    <label for="upload-folder" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.folderInput.click()" @keydown.space.prevent="$refs.folderInput.click()">{{ labels.UPLOAD_CHOOSE_FOLDER }}</label>
     <input type="file" id="upload-folder" name="files" webkitdirectory
            :disabled="tab !== 'folder'"
            x-ref="folderInput"
@@ -162,8 +162,8 @@
 
   {# Merge controls apply to both selected files and folders. User-defined order
      is the real multipart upload order, not merely a visual preview. #}
-  <section x-show="tab === 'files' || tab === 'folder'" class="mt-4 space-y-3" aria-label="Modalità di caricamento multi-file">
-    <label class="fieldset"><span class="fieldset-legend font-semibold">Come elaborare più registrazioni</span>
+  <section class="mt-4 space-y-3" x-cloak x-show="tab !== 'url' && selectedFiles.length > 0" aria-label="Modalità di caricamento multi-file">
+    <label class="fieldset" x-show="selectedFiles.length > 1 || mergeMode === 'merge'"><span class="fieldset-legend font-semibold">Come elaborare più registrazioni</span>
       <select id="merge-mode" name="merge_mode" x-model="mergeMode" class="select select-bordered w-full max-w-xl"
               :disabled="tab === 'url'">
         <option value="separate">Trascrivi ogni file separatamente (standard)</option>
@@ -207,7 +207,7 @@
 {% endif %}
   {# Scene presets — one-tap configure of the basic + advanced controls. #}
   <section class="at2-upload-pane at2-upload-presets" aria-label="{{ labels.UPLOAD_PRESET_SECTION }}">
-    <div class="at2-panel-header"><div><span class="at2-kicker">02 / PROFILI</span><h2>Trova il tuo ritmo</h2><p>Un preset ti permette di partire con le impostazioni giuste.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">02 / PROFILI</span><h2>Parti da un preset</h2><p>Un preset ti permette di partire con le impostazioni giuste.</p></div></div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-sm font-medium opacity-80">{{ labels.UPLOAD_PRESET_SECTION }}</h2>
       <a href="/presets" class="btn btn-ghost btn-xs">Gestisci preset</a>
@@ -279,7 +279,7 @@
   {# Settings #}
   {# Basic settings — always visible, the two controls every user adjusts. #}
   <section class="at2-upload-pane at2-upload-basic">
-    <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Come ascoltiamo</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
 
     <fieldset class="at2-vad-choice" aria-label="Modalità di trascrizione">
       <legend class="at2-vad-label">Modalità di trascrizione</legend>
@@ -320,25 +320,25 @@
     </div>
   </section>
 
-  <section class="at2-upload-pane at2-upload-audio">
-    <div class="at2-panel-header"><div><span class="at2-kicker">04 / QUALITÀ AUDIO</span><h2>Ogni parola conta</h2><p>Pulisci il rumore e normalizza la voce.</p></div></div>
+  <details class="at2-upload-pane at2-upload-audio at2-settings-disclosure" @invalid.capture="$el.open=true">
+    <summary><span><strong>Pulizia e qualità audio</strong><small>Volume, rumore e filtri · automatica per impostazione predefinita</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary>
 
-    <p class="text-xs opacity-60 mb-4">Auto analyzes loudness and dynamics first, then applies conservative speech cleanup before Whisper.</p>
+    <p class="text-xs opacity-60 mb-4">La modalità automatica regola il volume e pulisce il parlato. Apri queste opzioni per intervenire manualmente.</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Processing</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Auto (recommended)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Convert only</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Custom</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Noise reduction</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Voice compression</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Target loudness (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Higher (closer to 0) is louder.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Maximum boost (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Safety cap for very quiet recordings.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">High-pass (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Removes rumble below speech.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Elaborazione</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Automatica (consigliata)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Solo conversione</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Personalizzata</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Riduzione del rumore</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Compressione della voce</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Volume obiettivo (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Un valore più vicino a zero aumenta il volume.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Amplificazione massima (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Limita l’amplificazione delle registrazioni molto deboli.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Filtro passa-alto (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Riduce i rumori bassi sotto la voce.</p></fieldset>
     </div>
-  </section>
+  </details>
 
   {# Advanced settings — collapsed by default. The enabled-count pill is a
      summary so users never have to expand the panel just to see whether
      diarization / Traditional Chinese / LLM are on. #}
   <section class="at2-upload-pane at2-upload-ai">
-    <div class="at2-panel-header"><div><span class="at2-kicker">05 / OPZIONI AVANZATE</span><h2>Il tuo controllo, completo</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">05 / OPZIONI AVANZATE</span><h2>Personalizza la trascrizione</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
     <button type="button"
             class="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none"
             :aria-expanded="advancedOpen.toString()"
@@ -407,7 +407,7 @@
         <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
           class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
           aria-label="Apri guida e consigli VAD">i</button></div>
-        <p class="text-xs opacity-65">La modalità si sceglie sopra, in «Come ascoltiamo». Questi valori hanno effetto solo quando Silero è attivo.</p>
+        <p class="text-xs opacity-65">La modalità si sceglie sopra, in «Lingua e riconoscimento». Questi valori hanno effetto solo quando Silero è attivo.</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="vadEnabled === 'false' ? 'opacity-50' : ''">
           <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
             <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
@@ -497,8 +497,8 @@
 
   </div>
 <aside class="at2-upload-side" aria-label="Guida alla trascrizione">
-  <div class="at2-aside-card"><span class="at2-kicker">UN FLUSSO, TRE PASSI</span><h3>Semplice da iniziare.<br>Potente da usare.</h3><ol><li>Scegli un file, una cartella o un indirizzo web.</li><li>Adatta lingua, modello e pulizia audio.</li><li>Avvia e segui i progressi nella libreria.</li></ol></div>
-  <div class="at2-aside-card"><span class="at2-kicker">IL TUO ARCHIVIO</span><h3>Non perdi niente.</h3><p>I lavori e le versioni precedenti restano consultabili nella libreria.</p><a href="/jobs">Vai ai tuoi lavori ↗</a></div>
+  <div class="at2-aside-card"><span class="at2-kicker">PRONTO A PARTIRE</span><h3>La tua selezione</h3><p class="at2-selection-summary" x-text="statusLine"></p><ol><li>Scegli un file, una cartella o un indirizzo web.</li><li>Adatta lingua, modello e pulizia audio.</li><li>Avvia e segui i progressi nella libreria.</li></ol></div>
+  <div class="at2-aside-card"><span class="at2-kicker">DOPO L’INVIO</span><h3>Segui il lavoro in libreria.</h3><p>I lavori e le versioni precedenti restano consultabili nella libreria.</p><a href="/jobs">Vai ai tuoi lavori ↗</a></div>
 </aside>
 </form>
 </div>

@@ -108,5 +108,7 @@
     </div>
     {% endfor %}
   </section>
+  {% else %}
+  <div class="at2-activity-idle"><span aria-hidden="true">{{ icon_check('w-5 h-5') }}</span><div><strong>Tutto pronto per il prossimo audio.</strong><p>Le elaborazioni in corso appariranno qui, con i progressi aggiornati.</p></div></div>
   {% endif %}
 </div>

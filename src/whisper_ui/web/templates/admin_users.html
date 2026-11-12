@@ -4,15 +4,15 @@
 {% block title %}Gestione utenti · Atelier{% endblock %}
 {% block content %}
 <div class="at2-screen at2-admin-users-screen">
-{{ heading('AMMINISTRAZIONE / ACCOUNT', 'Le persone del tuo workspace.', 'Gestisci ruoli, stato degli account e accessi alle trascrizioni.') }}
+{{ heading('AMMINISTRAZIONE / ACCOUNT', 'Account e accessi.', 'Gestisci ruoli, stato degli account e accessi alle trascrizioni.', '#new-account', 'Aggiungi account') }}
 {% if error_message %}
 {{ alert('error', error_message, 'mb-4') }}
 {% endif %}
 
 <section class="at2-workspace" aria-label="Account e autorizzazioni">
 <div class="at2-workspace-head"><div><span class="at2-kicker">01 / DIRECTORY</span><h2>Account registrati</h2></div><span class="at2-count">{{ users|length }} utenti</span></div>
-<div x-data="{ f: 'all' }">
-<div class="at2-workspace-filters" aria-label="Filtri account">
+<div x-data="{ f: 'all', query: '' }">
+<div class="at2-workspace-filters" aria-label="Filtri account"><label class="at2-user-search"><span class="sr-only">Cerca un account</span><input type="search" class="input input-bordered w-full" x-model="query" placeholder="Cerca un account…" aria-label="Cerca un account"></label>
   <div class="flex flex-wrap gap-2 mb-4">
     {% for value, label in [
       ('all', labels.JOBS_FILTER_ALL),
@@ -22,7 +22,7 @@
       ('inactive', labels.ADMIN_USER_STATUS_INACTIVE),
     ] %}
     <button class="btn btn-sm"
-            :class="f === '{{ value }}' ? 'btn-primary' : 'btn-ghost border border-line'"
+            :aria-pressed="f === '{{ value }}'" :class="f === '{{ value }}' ? 'btn-primary' : 'btn-ghost border border-line'"
             @click="f = '{{ value }}'">{{ label }}</button>
     {% endfor %}
   </div>
@@ -44,28 +44,28 @@
         {% for user in users %}
         {% set _role = 'admin' if user.is_admin else 'user' %}
         {% set _status = 'active' if user.is_active else 'inactive' %}
-        <tr x-show="f === 'all' || f === '{{ _role }}' || f === '{{ _status }}'">
-          <td class="font-medium">
+        <tr data-current="{{ 'true' if user.id == current_admin_id else 'false' }}" data-username="{{ user.username|lower|e }}" x-show="(f === 'all' || f === '{{ _role }}' || f === '{{ _status }}') && (!query || $el.dataset.username.includes(query.toLowerCase()))">
+          <td data-label="{{ labels.ADMIN_USER_COL_USERNAME }}" class="font-medium">
             {{ user.username }}
             {% if user.id == current_admin_id %}<span class="badge badge-xs ml-2">{{ labels.ADMIN_SELF_BADGE }}</span>{% endif %}
           </td>
-          <td>
+          <td data-label="{{ labels.ADMIN_USER_COL_ROLE }}">
             {% if user.is_admin %}
             <span class="badge badge-primary">{{ labels.ADMIN_USER_ROLE_ADMIN }}</span>
             {% else %}
             <span class="badge badge-ghost">{{ labels.ADMIN_USER_ROLE_USER }}</span>
             {% endif %}
           </td>
-          <td>
+          <td data-label="{{ labels.ADMIN_USER_COL_STATUS }}">
             {% if user.is_active %}
             <span class="badge badge-success">{{ labels.ADMIN_USER_STATUS_ACTIVE }}</span>
             {% else %}
             <span class="badge badge-warning">{{ labels.ADMIN_USER_STATUS_INACTIVE }}</span>
             {% endif %}
           </td>
-          <td class="text-xs opacity-70">{{ user.created_at[:TIMESTAMP_DISPLAY_LENGTH] }}</td>
-          <td class="text-right tabular-nums">{{ job_counts.get(user.id, 0) }}</td>
-          <td class="text-right">
+          <td data-label="{{ labels.ADMIN_USER_COL_CREATED }}" class="text-xs opacity-70">{{ user.created_at[:TIMESTAMP_DISPLAY_LENGTH] }}</td>
+          <td data-label="{{ labels.ADMIN_USER_COL_JOBS }}" class="text-right tabular-nums">{{ job_counts.get(user.id, 0) }}</td>
+          <td data-label="{{ labels.ADMIN_USER_COL_ACTIONS }}" class="text-right at2-user-actions">
             {% if user.id != current_admin_id %}
             <div class="flex flex-wrap gap-1 justify-end">
               {% if user.is_active %}
@@ -104,19 +104,19 @@
 </div>
 
 </section>
-<section class="at2-panel at2-admin-create">
+<section id="new-account" class="at2-panel at2-admin-create">
   <div>
     <span class="at2-kicker">02 / ACCOUNT</span><h2>{{ labels.ADMIN_ADD_USER_HEADER }}</h2><p>Crea un accesso sicuro e assegna i privilegi necessari.</p>
     <form method="post" action="/admin/users" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
       <div class="sm:col-span-1">
         <label class="label" for="new-username"><span class="label-text">{{ labels.AUTH_USERNAME }}</span></label>
-        <input id="new-username" name="username" type="text" required
+        <input id="new-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required
                minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]{3,32}"
                class="input input-bordered input-sm w-full">
       </div>
       <div class="sm:col-span-1">
         <label class="label" for="new-password"><span class="label-text">{{ labels.AUTH_PASSWORD }}</span></label>
-        <input id="new-password" name="password" type="password" required minlength="8"
+        <input id="new-password" name="password" type="password" autocomplete="new-password" required minlength="8"
                class="input input-bordered input-sm w-full">
       </div>
       <div class="sm:col-span-1 flex items-center">
@@ -136,7 +136,7 @@
     <div class="modal-box">
       <h3 class="text-lg font-bold mb-3" x-text="header"></h3>
       <form x-ref="form" :action="action" method="post" class="space-y-3">
-        <input type="password" name="new_password" required minlength="8"
+        <input type="password" name="new_password" aria-label="Nuova password" autocomplete="new-password" required minlength="8"
                class="input input-bordered w-full"
                placeholder="{{ labels.AUTH_PASSWORD }}">
         <div class="modal-action">
