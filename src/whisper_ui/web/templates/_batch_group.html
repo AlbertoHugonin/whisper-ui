@@ -1,0 +1,86 @@
+{% from "_icons.html" import icon_folder_open, icon_download, icon_check %}
+{% set bi = batch_info[group_key] %}
+{% set batch_title = group_jobs[0].batch_title if group_jobs else none %}
+{% set title = batch_title or 'Caricamento multiplo' %}
+{% set remaining = bi.total - bi.completed - bi.failed %}
+{% set default_open = not bi.all_done or bi.total <= 4 %}
+{% set preview = group_jobs[:2]|map(attribute='filename')|join(' · ') %}
+{% set search_text = (group_jobs|map(attribute='filename')|join(' ')) + ' ' + (group_jobs|map(attribute='source_url')|select|join(' ')) + ' ' + title %}
+<section id="job-group-{{ group_key }}" class="at2-batch-group"
+         data-job-batch data-batch-title="{{ title }}" data-job-name="{{ title }}" data-job-search="{{ search_text }}"
+         aria-labelledby="batch-title-{{ group_key }}" x-data="{groupKey:'{{ group_key }}'}">
+  <header class="at2-batch-head">
+    <span class="at2-batch-icon" aria-hidden="true">{{ icon_folder_open('w-5 h-5') }}</span>
+    <div class="at2-batch-heading">
+      <span class="at2-batch-eyebrow">FILE RAGGRUPPATI</span>
+      <h3 id="batch-title-{{ group_key }}">{{ title }}</h3>
+      <p>{{ bi.total }} file <span aria-hidden="true">·</span> {{ group_jobs[0].created_at|relative_time }}</p>
+    </div>
+    <div class="at2-batch-head-actions">
+      <span class="at2-batch-state {{ 'is-review' if bi.failed and bi.all_done else 'is-ready' if bi.all_done else 'is-active' }}">
+        {% if bi.all_done and not bi.failed %}{{ icon_check('w-3 h-3') }} Tutto pronto
+        {% elif bi.all_done %}Da controllare
+        {% else %}<i aria-hidden="true"></i> In corso{% endif %}
+      </span>
+      {% if bi.completed > 0 and bi.all_done %}
+      <button type="button" class="at2-batch-download" @click="$dispatch('open-batch-download', {batchId:'{{ group_key }}'})"
+              title="Scarica le {{ bi.completed }} trascrizioni completate">
+        {{ icon_download('w-4 h-4') }} Scarica gruppo
+      </button>
+      {% endif %}
+    </div>
+  </header>
+  {% if not bi.all_done or bi.failed %}
+  <div class="at2-batch-progress">
+    <div class="at2-batch-counts">
+      <span class="at2-batch-count-ready"><i aria-hidden="true"></i>{{ bi.completed }} {{ 'pronto' if bi.completed == 1 else 'pronti' }}</span>
+      {% if bi.failed %}<span class="at2-batch-count-failed"><i aria-hidden="true"></i>{{ bi.failed }} {{ 'non riuscito' if bi.failed == 1 else 'non riusciti' }}</span>{% endif %}
+      {% if remaining %}<span>{{ remaining }} da completare</span>{% endif %}
+      {% if group_jobs|length < bi.total %}<span class="at2-batch-partial">{{ group_jobs|length }} di {{ bi.total }} file in questa pagina{% if status %} · filtro attivo{% endif %}</span>{% endif %}
+    </div>
+    <div class="at2-batch-meter" role="progressbar" aria-label="File elaborati nel gruppo"
+         aria-valuemin="0" aria-valuemax="{{ bi.total }}" aria-valuenow="{{ bi.completed + bi.failed }}"
+         aria-valuetext="{{ bi.completed }} {{ 'pronto' if bi.completed == 1 else 'pronti' }}, {{ bi.failed }} {{ 'non riuscito' if bi.failed == 1 else 'non riusciti' }}, {{ remaining }} da completare"
+         style="--batch-ready:{{ (100 * bi.completed / bi.total)|round(1) }}%;--batch-failed:{{ (100 * bi.failed / bi.total)|round(1) }}%">
+      <span class="at2-batch-meter-ready"></span><span class="at2-batch-meter-failed"></span>
+    </div>
+  </div>
+  {% endif %}
+  <details id="batch-files-{{ group_key }}" class="at2-batch-details" data-batch-details
+           data-batch-key="{{ group_key }}" data-default-open="{{ 'true' if default_open else 'false' }}"
+           data-morph-skip-open {% if default_open %}open{% endif %}
+           :open="$store.batchCollapse.isOpen(groupKey, {{ 'true' if default_open else 'false' }})"
+           @toggle="if (!$el.closest('[data-job-batch]').hasAttribute('data-search-active')) $store.batchCollapse.set(groupKey,$el.open)">
+    <summary class="at2-batch-toggle" aria-controls="batch-items-{{ group_key }}">
+      <span class="at2-batch-toggle-open">File del gruppo</span>
+      <span class="at2-batch-preview at2-batch-toggle-closed">{{ preview }}{% if group_jobs|length > 2 %} · +{{ group_jobs|length - 2 }} altri{% endif %}</span>
+      <span class="at2-batch-toggle-label"><span class="at2-batch-toggle-open">Nascondi</span><span class="at2-batch-toggle-closed">Mostra {{ group_jobs|length }} file</span><span class="at2-batch-chevron" aria-hidden="true">⌄</span></span>
+    </summary>
+    <div id="batch-items-{{ group_key }}" class="at2-batch-files">
+      {% for job in group_jobs %}{% include "_batch_job_row.html" %}{% endfor %}
+    </div>
+    {% if bi.failed or bi.all_done %}
+    <footer class="at2-batch-footer">
+      <span>{{ bi.total }} file nello stesso caricamento</span>
+      <div>
+        {% if bi.failed %}
+        <button type="button" class="at2-batch-retry"
+                data-title="{{ labels.JOBS_BATCH_RETRY_ALL }}" data-message="{{ labels.JOBS_BATCH_RETRY_ALL_CONFIRM }}"
+                data-confirm="{{ labels.JOBS_BATCH_RETRY_ALL_CONFIRM_BUTTON }}"
+                @click="$dispatch('open-confirm',{title:$el.dataset.title,message:$el.dataset.message,confirmText:$el.dataset.confirm,url:'/jobs/batch/{{ group_key }}/retry',method:'POST'})">
+          Riprova {{ bi.failed }} {{ 'file' if bi.failed == 1 else 'file non riusciti' }}
+        </button>
+        {% endif %}
+        {% if bi.all_done %}
+        <button type="button" class="at2-batch-delete"
+                data-title="{{ labels.JOBS_BATCH_DELETE_ALL }}" data-message="{{ labels.JOBS_BATCH_DELETE_ALL_CONFIRM }}"
+                data-confirm="{{ labels.JOBS_BATCH_DELETE_ALL_CONFIRM_BUTTON }}"
+                @click="$dispatch('open-confirm',{title:$el.dataset.title,message:$el.dataset.message,confirmText:$el.dataset.confirm,url:'/jobs/batch/{{ group_key }}',method:'DELETE'})">
+          Elimina gruppo
+        </button>
+        {% endif %}
+      </div>
+    </footer>
+    {% endif %}
+  </details>
+</section>

@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=pages-r1">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v=batches-r1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier.css') }}?v=atelier-r1">
   <link rel="stylesheet" href="{{ url_for('static', path='atelier-v2.css') }}?v=at2-r3">
-  <link rel="stylesheet" href="{{ url_for('static', path='atelier-workspaces.css') }}?v=workspaces-r3">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-workspaces.css') }}?v=workspaces-r4">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
@@ -41,9 +41,10 @@
   <script nonce="{{ csp_nonce }}">
   // Idiomorph's syncBooleanAttribute always re-syncs `checked` (ignoreActiveValue
   // only protects `value`), so anything that needs to keep the user's local
-  // toggle state across a morph must opt out via data-morph-skip-checked.
+  // toggle state across a morph must opt out via data-morph-skip-checked.\n  // Native disclosures use data-morph-skip-open for the same reason.
   window.__whisperUiMorphCallbacks = {
     beforeAttributeUpdated: function(attributeName, node, mutationType) {
+      if (attributeName === 'open' && node?.matches('[data-morph-skip-open]')) return false;
       if (
         attributeName === 'checked' &&
         node &&

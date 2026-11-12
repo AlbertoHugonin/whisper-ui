@@ -39,5 +39,6 @@ navigation errors, expired sessions, mobile account actions, transcript edits
 and preset saves. They also exercise search clearing, account filtering,
 single-file selection, folded audio settings and unsaved edits in the mobile Studio. The viewer workflow checks real audio playback, seeking,
 source switching, text search/copy/export and a 1 kHz signal through the live
-frequency analyser. Integration checks preserve MP3/AAC waveform amplitudes. Screenshots are a diagnostic tool, not a growing repository
+frequency analyser. A focused batch workflow checks disclosure state across
+live updates, filtered file lists, selection and ZIP downloads. Integration checks preserve MP3/AAC waveform amplitudes. Screenshots are a diagnostic tool, not a growing repository
 of implementation snapshots.

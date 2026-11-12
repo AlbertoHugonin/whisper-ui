@@ -1,0 +1,63 @@
+{% from "_icons.html" import icon_file_audio %}
+<article id="job-{{ job.id }}" class="at2-job-row at2-batch-file"
+         data-job-name="{{ job.filename }}"
+         data-job-search="{{ job.filename }}{% if job.source_url %} {{ job.source_url }}{% endif %}">
+  <div class="at2-batch-file-main">
+    {% if job.status.value in ('completed','failed') %}
+    <label class="at2-batch-file-select">
+      <input type="checkbox" class="checkbox checkbox-sm" aria-label="Seleziona {{ job.filename }}" data-morph-skip-checked
+             :checked="$store.jobSelection.has('{{ job.id }}')"
+             @change="$store.jobSelection.toggle('{{ job.id }}','{{ job.status.value }}')">
+    </label>
+    {% else %}<span class="at2-batch-file-select at2-batch-file-symbol" aria-hidden="true">{{ icon_file_audio('w-4 h-4') }}</span>{% endif %}
+    <div class="at2-batch-file-copy">
+      {% if job.status.value == 'completed' %}<a class="at2-batch-file-name" href="/viewer/{{ job.id }}" title="{{ job.filename }}">{{ job.filename }}</a>
+      {% else %}<strong class="at2-batch-file-name" title="{{ job.filename }}">{{ job.filename }}</strong>{% endif %}
+      <p class="at2-batch-file-meta">
+        {% if owner_usernames is defined %}<span>{{ owner_usernames.get(job.owner_id, labels.ADMIN_JOBS_OWNER_UNKNOWN) }}</span><span aria-hidden="true">·</span>{% endif %}
+        {% if job.duration %}<span>{{ job.duration|format_time }}</span><span aria-hidden="true">·</span>{% endif %}
+        <span>{{ job.language|upper }}</span><span aria-hidden="true">·</span><span>{{ job.model_name }}</span>
+      </p>
+    </div>
+    <div class="at2-batch-file-status">{% include "_job_state_badge.html" %}</div>
+    <div class="at2-batch-file-primary">
+      {% if job.status.value == 'completed' %}<a href="/viewer/{{ job.id }}" class="at2-batch-open" aria-label="Apri {{ job.filename }}">Apri <span aria-hidden="true">↗</span></a>
+      {% elif job.status.value == 'failed' %}
+      <button type="button" class="at2-batch-open at2-batch-open-retry"
+              data-title="{{ labels.JOBS_RETRY }}" data-message="{{ labels.JOBS_RETRY_CONFIRM }}" data-confirm="{{ labels.JOBS_RETRY_CONFIRM_BUTTON }}"
+              @click="$dispatch('open-confirm',{title:$el.dataset.title,message:$el.dataset.message,confirmText:$el.dataset.confirm,url:'/jobs/{{ job.id }}/retry',method:'POST'})">Riprova</button>
+      {% endif %}
+    </div>
+  </div>
+  {% if job.status.value in ('queued','processing') %}
+  {% set pd = progress_data.get(job.id, {}) %}
+  {% set progress_val = pd.get('progress','0')|float %}
+  <div class="at2-batch-file-progress">
+    <progress class="progress progress-primary" value="{{ (progress_val * 100)|int }}" max="100" aria-label="Avanzamento di {{ job.filename }}"></progress>
+    <span>{{ pd.get('message', labels.JOBS_WAITING) }}</span><span>{{ (progress_val * 100)|int }}%</span>
+  </div>
+  {% endif %}
+  {% if job.status.value == 'failed' and job.error %}<p class="at2-batch-file-error">{{ job.error[:200] }}</p>{% endif %}
+  {% if job.status.value == 'completed' and job.quality_warning %}<p class="at2-batch-file-warning">{{ job.quality_warning[:200] }}</p>{% endif %}
+  {% if job.status.value in ('completed','failed') %}
+  <details id="job-tools-{{ job.id }}" class="at2-batch-file-tools" data-morph-skip-open>
+    <summary aria-label="Altre azioni per {{ job.filename }}" title="Altre azioni"><span aria-hidden="true">···</span></summary>
+    <div class="at2-batch-file-toolbox">
+      {% if job.status.value == 'completed' %}
+      <div class="at2-batch-formats"><span>Esporta</span>{% for fmt in export_formats %}<a href="/viewer/{{ job.id }}/export/{{ fmt }}" download>{{ fmt|upper }}</a>{% endfor %}</div>
+      <div class="at2-batch-file-links">
+        <a href="/studio/{{ job.id }}">Modifica in Studio ↗</a>
+        {% if not admin_view %}<a href="/upload?source_job={{ job.id }}">Ritrascrivi</a>{% endif %}
+        {% if media_available_map.get(job.id) %}<a href="/viewer/{{ job.id }}/media" download>Scarica registrazione</a>{% endif %}
+        {% if job.source_url %}<a href="{{ job.source_url }}" target="_blank" rel="noopener noreferrer">Apri sorgente ↗</a>{% endif %}
+      </div>
+      {% endif %}
+      <button type="button" class="at2-batch-delete"
+              data-title="{{ labels.JOBS_DELETE }}" data-message="{{ labels.JOBS_DELETE_CONFIRM }}" data-confirm="{{ labels.JOBS_DELETE_CONFIRM_BUTTON }}"
+              @click="$dispatch('open-confirm',{title:$el.dataset.title,message:$el.dataset.message,confirmText:$el.dataset.confirm,url:'/jobs/{{ job.id }}',method:'DELETE'})">
+        Elimina file
+      </button>
+    </div>
+  </details>
+  {% endif %}
+</article>

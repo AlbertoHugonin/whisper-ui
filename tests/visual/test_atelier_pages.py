@@ -414,3 +414,157 @@ def test_viewer_audio_reading_and_frequency_spectrum(atelier_page, atelier_app, 
     page.get_by_role("button", name="Metti in pausa", exact=True).click()
     page.screenshot(path=f".qa-artifacts/viewer-{browser_name}-390-reading.png")
     assert not errors, errors
+
+
+def test_batch_upload_collection_and_polling(atelier_page, atelier_app, browser_name):
+    """Exercise native disclosures, live refresh, search, selection and ZIP export."""
+    from datetime import UTC, datetime, timedelta
+    from zipfile import ZipFile
+
+    from playwright.sync_api import expect
+
+    from whisper_ui.ui import labels
+
+    page, _, errors = atelier_page
+    db = atelier_app["db"]
+    files = atelier_app["client"].app.state.filestore
+    owner = db.get_job(atelier_app["job"]).owner_id
+    now = datetime.now(UTC)
+    baseline = db.get_job(atelier_app["job"])
+    baseline.created_at = (now - timedelta(days=1)).isoformat()
+    db.update_job(baseline)
+
+    def add_batch(key, names, statuses, title=None, age=0):
+        jobs = []
+        for index, (name, status) in enumerate(zip(names, statuses, strict=True)):
+            job = Job(
+                filename=name,
+                owner_id=owner,
+                batch_id=key,
+                batch_title=title,
+                status=status,
+                language="it",
+                duration=4,
+                created_at=(now - timedelta(seconds=age, microseconds=index)).isoformat(),
+                error="Formato audio non leggibile. Riprova con il file originale."
+                if status == JobStatus.FAILED
+                else None,
+            )
+            if status == JobStatus.COMPLETED:
+                job.result_path = str(
+                    files.save_result(
+                        job.id,
+                        TranscriptResult(
+                            segments=[Segment(0, 4, "Testo sintetico del caricamento.", "S1")],
+                            duration=4,
+                            language="it",
+                        ),
+                    )
+                )
+            db.insert_job(job)
+            jobs.append(job)
+        return jobs
+
+    small_id, mixed_id, large_id = "b" * 32, "c" * 32, "d" * 32
+    small = add_batch(
+        small_id,
+        ["01 - Apertura riunione.wav", "02 - Decisioni del team.wav", "03 - Prossimi passi.wav"],
+        [JobStatus.COMPLETED] * 3,
+    )
+    mixed = add_batch(
+        mixed_id,
+        ["Intervista pronta.wav", "Intervista da recuperare.wav", "Intervista in corso.wav"],
+        [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.PROCESSING],
+        title='Interviste <team> & revisione "finale"',
+        age=2,
+    )
+    add_batch(
+        large_id,
+        [f"{i:02d} - Lezione e approfondimento della registrazione.wav" for i in range(1, 9)],
+        [JobStatus.COMPLETED] * 8,
+        title="Corso completo",
+        age=4,
+    )
+
+    page.goto(ORIGIN + "/jobs")
+    small_group = page.locator("#job-group-" + small_id)
+    small_details = page.locator("#batch-files-" + small_id)
+    mixed_group = page.locator("#job-group-" + mixed_id)
+    mixed_details = page.locator("#batch-files-" + mixed_id)
+    large_details = page.locator("#batch-files-" + large_id)
+    first = page.locator("#job-" + small[0].id)
+    second = page.locator("#job-" + small[1].id)
+    expect(first.get_by_role("link", name=small[0].filename, exact=True)).to_be_visible()
+    assert not large_details.evaluate("el=>el.open")
+    first.get_by_role("checkbox").check()
+    second.get_by_role("checkbox").check()
+    expect(page.get_by_role("button", name="Unisci trascrizioni", exact=True)).to_be_enabled()
+    first.locator("details > summary").click()
+    expect(first.get_by_role("link", name="Modifica in Studio ↗", exact=True)).to_be_visible()
+    small_details.locator(":scope > summary").click()
+    expect(first.get_by_role("link", name=small[0].filename, exact=True)).to_be_hidden()
+
+    small[0].filename = "Note aggiornate dopo il polling.wav"
+    db.update_job(small[0])
+    with page.expect_response(lambda response: urlsplit(response.url).path == "/jobs/list"):
+        page.evaluate("htmx.trigger(document.body,'refreshJobList')")
+    expect(page.locator("#job-" + small[0].id)).to_have_attribute("data-job-name", small[0].filename)
+    assert not small_details.evaluate("el=>el.open")
+    search = page.get_by_role("searchbox")
+    search.fill("Note aggiornate")
+    expect(first.get_by_role("link", name=small[0].filename, exact=True)).to_be_visible()
+    assert small_details.evaluate("el=>el.open")
+    expect(page.locator(".at2-job-row:visible")).to_have_count(1)
+    page.get_by_role("button", name="Cancella ricerca", exact=True).click()
+    expect(first.get_by_role("link", name=small[0].filename, exact=True)).to_be_hidden()
+    small_details.locator(":scope > summary").click()
+    expect(first.get_by_role("checkbox")).to_be_checked()
+    expect(second.get_by_role("checkbox")).to_be_checked()
+    expect(first.get_by_role("link", name="Modifica in Studio ↗", exact=True)).to_be_visible()
+    first.locator("details > summary").click()
+    first.get_by_role("checkbox").uncheck()
+    second.get_by_role("checkbox").uncheck()
+
+    mixed_details.locator(":scope > summary").click()
+    mixed[2].status = JobStatus.COMPLETED
+    mixed[2].result_path = str(files.save_result(mixed[2].id, files.load_result(small[1].id)))
+    db.update_job(mixed[2])
+    with page.expect_response(lambda response: urlsplit(response.url).path == "/jobs/list"):
+        page.evaluate("htmx.trigger(document.body,'refreshJobList')")
+    expect(mixed_group.get_by_role("button", name="Scarica gruppo", exact=True)).to_be_visible()
+    assert not mixed_details.evaluate("el=>el.open")
+
+    page.get_by_role("button", name=re.compile("^" + re.escape(labels.STATUS_LABELS["failed"]))).click()
+    expect(mixed_group.get_by_text("1 di 3 file in questa pagina · filtro attivo", exact=True)).to_be_visible()
+    expect(mixed_group.get_by_role("progressbar", name="File elaborati nel gruppo")).to_have_attribute(
+        "aria-valuemax", "3"
+    )
+    page.get_by_role("button", name=re.compile("^" + re.escape(labels.JOBS_FILTER_ALL))).click()
+    expect(small_group.get_by_role("button", name="Scarica gruppo", exact=True)).to_be_visible()
+    small_group.get_by_role("button", name="Scarica gruppo", exact=True).click()
+    dialog = page.locator("dialog[open]")
+    dialog.locator("select").select_option("txt")
+    with page.expect_download() as exported:
+        dialog.locator('a[href*="/jobs/batch/"]').click()
+    with ZipFile(exported.value.path()) as archive:
+        assert len(archive.namelist()) == 3
+        assert all(name.endswith(".txt") for name in archive.namelist())
+
+    page.evaluate("AtelierNavigation.navigate('/admin/jobs')")
+    page.wait_for_url(ORIGIN + "/admin/jobs")
+    row = page.locator("#job-" + small[0].id)
+    row.locator("details > summary").click()
+    expect(row.get_by_role("link", name="Ritrascrivi", exact=True)).to_have_count(0)
+    expect(row.get_by_text("qa-admin", exact=True)).to_be_visible()
+    page.evaluate("AtelierNavigation.navigate('/jobs')")
+    page.wait_for_url(ORIGIN + "/jobs")
+
+    for width in (1440, 768, 390, 320):
+        page.set_viewport_size({"width": width, "height": 950 if width > 390 else 844})
+        for theme in ("whisper-light", "whisper-dark"):
+            page.evaluate("theme=>Alpine.$data(document.documentElement).theme=theme", theme)
+            page.wait_for_timeout(120)
+            assert page.evaluate("document.documentElement.scrollWidth<=innerWidth+2"), (width, theme)
+            page.evaluate("scrollTo(0,0);document.querySelector('.jobs-scroll-panel').scrollTop=0")
+            page.screenshot(path=f".qa-batches/{browser_name}-{width}-{theme}.png", animations="disabled")
+    assert not errors, errors

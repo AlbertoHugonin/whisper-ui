@@ -265,10 +265,32 @@ function batchDownloadDialog() {
 // every htmx swap (3s poll / filter change), since a morph drops the inline
 // display styles a one-shot @input filter would have set.
 function filterJobs(query) {
-  const q = (query || '').toLowerCase();
-  document.querySelectorAll('#job-list-wrapper [data-job-search]').forEach(el => {
-    el.style.display = !q || el.dataset.jobSearch.toLowerCase().includes(q) ? '' : 'none';
+  const q = (query || '').trim().toLowerCase();
+  let matches = 0;
+  document.querySelectorAll('#job-list-wrapper [data-job-batch]').forEach(group => {
+    const byTitle = q && group.dataset.batchTitle.toLowerCase().includes(q);
+    let count = 0;
+    group.querySelectorAll('.at2-job-row[data-job-search]').forEach(row => {
+      const visible = !q || byTitle || row.dataset.jobSearch.toLowerCase().includes(q);
+      row.style.display = visible ? '' : 'none';
+      if (visible) count++;
+    });
+    group.style.display = count ? '' : 'none';
+    const details = group.querySelector('[data-batch-details]');
+    group.toggleAttribute('data-search-active', !!q);
+    if (q) {
+      details.open = count > 0;
+    } else {
+      details.open = Alpine.store('batchCollapse').isOpen(details.dataset.batchKey, details.dataset.defaultOpen === 'true');
+    }
+    matches += count;
   });
-  return Array.from(document.querySelectorAll('#job-list-wrapper .at2-job-row')).filter(el => el.offsetParent !== null).length;
+  document.querySelectorAll('#job-list-wrapper .at2-job-row').forEach(row => {
+    if (row.closest('[data-job-batch]')) return;
+    const visible = !q || row.dataset.jobSearch.toLowerCase().includes(q);
+    row.style.display = visible ? '' : 'none';
+    if (visible) matches++;
+  });
+  return matches;
 }
 </script>
