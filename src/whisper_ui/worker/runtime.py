@@ -89,6 +89,7 @@ def build_worker_runtime(job_id: str, *, generation: int | None = None) -> Itera
     )
     if os.environ.get("WHISPER_DB_API_URL"):
         from whisper_ui.storage.remote_job_database import RemoteJobDatabase
+
         db = RemoteJobDatabase(os.environ["WHISPER_DB_API_URL"], os.environ.get("WHISPER_WORKER_TOKEN", ""))
     else:
         db = JobDatabase(settings.database_path)

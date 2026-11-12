@@ -1,5 +1,5 @@
 {# Reusable job card fragment — expects `job` and `progress_data` in context #}
-<div class="flex items-center justify-between gap-2">
+<div class="at2-job-header">
   {% if job.status.value in ('completed', 'failed') %}
   <label class="cursor-pointer flex-shrink-0 inline-flex items-center"
          :aria-label="$store.jobSelection.has('{{ job.id }}') ? '{{ labels.JOBS_BULK_CLEAR_SELECTION }}' : '{{ labels.JOBS_SELECT_ROW }}'">
@@ -9,7 +9,7 @@
     <span class="sr-only">{{ labels.JOBS_SELECT_ROW }}</span>
   </label>
   {% endif %}
-  <strong class="truncate flex-1 min-w-0 text-sm">{{ job.filename }}</strong>
+  <strong class="at2-job-title">{{ job.filename }}</strong>
   <span class="badge badge-sm gap-1
     {% if job.status.value == 'queued' %}badge-info
     {% elif job.status.value == 'processing' %}badge-warning
@@ -31,7 +31,7 @@
 </div>
 {% endif %}
 
-<div class="flex items-center justify-between gap-2 mt-1">
+<div class="at2-job-footer">
   <span class="text-xs opacity-50">
     {# owner_usernames is only passed on the admin jobs view, so this badge
        is invisible on the user-facing /jobs page. Legacy NULL-owner jobs and
@@ -48,7 +48,7 @@
     {{ job.language }} | {{ job.model_name }} | {{ job.created_at|relative_time }}
     {% if job.source_job_id %}<span class="badge badge-ghost badge-xs ml-1">{{ labels.JOBS_VERSION_BADGE }}</span>{% endif %}
   </span>
-  <div class="flex gap-1 flex-shrink-0">
+  <div class="at2-job-actions">
     {% if job.status.value == 'completed' %}
     <a href="/viewer/{{ job.id }}" class="btn btn-primary btn-xs">{{ labels.JOBS_VIEW }}</a>
     <a href="/studio/{{ job.id }}" class="btn btn-outline btn-xs">Confronta / Modifica</a>

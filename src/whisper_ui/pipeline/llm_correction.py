@@ -142,15 +142,18 @@ class HttpxRouterClient:
     def __init__(self, base_url: str, timeout: float) -> None:
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
 
-    def chat_json(self, *, model: str, system: str, user: str,
-                  temperature: float, keep_alive: str, think: bool) -> str:
-        response = self._client.post("/v1/chat/completions", json={
-            "model": model, "stream": False,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "temperature": temperature,
-            "max_tokens": 2048,
-            "reasoning_effort": "none",
-        })
+    def chat_json(self, *, model: str, system: str, user: str, temperature: float, keep_alive: str, think: bool) -> str:
+        response = self._client.post(
+            "/v1/chat/completions",
+            json={
+                "model": model,
+                "stream": False,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "temperature": temperature,
+                "max_tokens": 2048,
+                "reasoning_effort": "none",
+            },
+        )
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"].get("content") or ""
@@ -314,7 +317,9 @@ class LLMCorrectionStage:
         if self._context_prompt:
             user_prompt = (
                 "Meeting context and technical vocabulary (not transcript content; never invent missing words):\n"
-                + self._context_prompt + "\n\n" + user_prompt
+                + self._context_prompt
+                + "\n\n"
+                + user_prompt
             )
         raw_response = client.chat_json(
             model=self._model,

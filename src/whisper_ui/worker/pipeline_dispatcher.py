@@ -280,6 +280,7 @@ def enqueue_pipeline(
         initial_context["input_path"] = job.filepath or ""
         if job.filepath:
             from whisper_ui.pipeline.merge_audio import MANIFEST_NAME
+
             merge_manifest = filestore.get_upload_path(job.id, MANIFEST_NAME)
             if isinstance(merge_manifest, Path) and merge_manifest.is_file():
                 initial_context["merge_manifest_path"] = str(merge_manifest)
@@ -445,16 +446,24 @@ def _persist_completion(
             job.quality_warning = context.get("quality_warning")
             runtime.db.update_job(job)
             try:
-                runtime.filestore.archive_job(job.id, job.created_at, {
-                    "job_id": job.id, "filename": job.filename, "created_at": job.created_at,
-                    "language": job.language, "model": job.model_name,
-                    "audio_processing": context.get("audio_analysis", {}).get("processing", {}),
-                    "audio_analysis": context.get("audio_analysis", {}),
-                })
+                runtime.filestore.archive_job(
+                    job.id,
+                    job.created_at,
+                    {
+                        "job_id": job.id,
+                        "filename": job.filename,
+                        "created_at": job.created_at,
+                        "language": job.language,
+                        "model": job.model_name,
+                        "audio_processing": context.get("audio_analysis", {}).get("processing", {}),
+                        "audio_analysis": context.get("audio_analysis", {}),
+                    },
+                )
             except Exception:
                 logger.warning(
                     "NAS archive failed for completed job %s; local artifacts are intact",
-                    job.id, exc_info=True,
+                    job.id,
+                    exc_info=True,
                 )
         except Exception as exc:
             # Persisting the finished transcript failed (e.g. disk full writing
@@ -586,16 +595,14 @@ def finalize_success(rq_job, connection, _result) -> None:
         ):
             try:
                 from whisper_ui.worker.standalone_correction import enqueue_correction
+
                 enqueue_correction(runtime.redis, job.id)
             except Exception:
                 logger.exception("Could not enqueue optional standalone correction for %s", job.id)
-        if (
-            job.status == JobStatus.COMPLETED
-            and job.summary_enabled
-            and runtime.settings.llm_correction_available
-        ):
+        if job.status == JobStatus.COMPLETED and job.summary_enabled and runtime.settings.llm_correction_available:
             try:
                 from whisper_ui.worker.standalone_summary import enqueue_summary
+
                 enqueue_summary(runtime.redis, job.id, job.summary_prompt)
             except Exception:
                 logger.exception("Could not enqueue optional standalone summary for %s", job.id)

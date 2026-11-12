@@ -1,168 +1,42 @@
 {% extends "base.html" %}
-{% from "_icons.html" import icon_eye, icon_upload, icon_file_audio, icon_folder_open, icon_link %}
-
 {% block content %}
-{# Time-aware greeting — hour is read on the client so the user's local
-   timezone is respected without a server-side TZ assumption. The username is
-   passed through a data attribute (HTML-autoescaped) and read via dataset,
-   not interpolated with |tojson: tojson would wrap it in literal double
-   quotes and terminate this double-quoted x-data attribute early. This
-   mirrors the data-raw pattern in viewer.html. #}
-<div x-data="{
-       greetingHour: new Date().getHours(),
-       morningLabel: '{{ labels.DASHBOARD_GREETING_MORNING }}',
-       afternoonLabel: '{{ labels.DASHBOARD_GREETING_AFTERNOON }}',
-       eveningLabel: '{{ labels.DASHBOARD_GREETING_EVENING }}',
-       get greeting() {
-         if (this.greetingHour < 12) return this.morningLabel;
-         if (this.greetingHour < 18) return this.afternoonLabel;
-         return this.eveningLabel;
-       },
-       get heading() {
-         const name = $el.dataset.username || '';
-         const template = name
-           ? '{{ labels.DASHBOARD_GREETING_WITH_NAME }}'
-           : '{{ labels.DASHBOARD_GREETING_GUEST }}';
-         return template.replace('{greeting}', this.greeting).replace('{name}', name);
-       }
-     }"
-     data-username="{{ request.state.user.username if request.state and request.state.user else '' }}"
-     class="mb-6">
-  <h1 class="text-2xl font-medium" x-text="heading">{{ labels.DASHBOARD_HEADER }}</h1>
-</div>
-
-{# Quick-action grid — replaces the cold 3-stat tiles. Each card is a
-   full-card click target (Fitts) leading to the matching upload tab. #}
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-  <a href="/upload?mode=files"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
-    <div class="card-body p-4">
-      <div class="flex items-center gap-3">
-        <span class="quick-tile">{{ icon_file_audio("w-5 h-5") }}</span>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium">{{ labels.DASHBOARD_QUICK_ACTION_FILE }}</div>
-          <div class="text-xs opacity-60 truncate">{{ labels.DASHBOARD_QUICK_ACTION_FILE_DESC }}</div>
-        </div>
-      </div>
-    </div>
-  </a>
-  <a href="/upload?mode=folder"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
-    <div class="card-body p-4">
-      <div class="flex items-center gap-3">
-        <span class="quick-tile">{{ icon_folder_open("w-5 h-5") }}</span>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium">{{ labels.DASHBOARD_QUICK_ACTION_FOLDER }}</div>
-          <div class="text-xs opacity-60 truncate">{{ labels.DASHBOARD_QUICK_ACTION_FOLDER_DESC }}</div>
-        </div>
-      </div>
-    </div>
-  </a>
-  <a href="/upload?mode=url"
-     class="card bg-base-200 border border-line hover:border-primary/40 hover:bg-base-300 focus-visible:border-primary transition-colors card-hover-lift">
-    <div class="card-body p-4">
-      <div class="flex items-center gap-3">
-        <span class="quick-tile">{{ icon_link("w-5 h-5") }}</span>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium">{{ labels.DASHBOARD_QUICK_ACTION_URL }}</div>
-          <div class="text-xs opacity-60 truncate">{{ labels.DASHBOARD_QUICK_ACTION_URL_DESC }}</div>
-        </div>
-      </div>
-    </div>
-  </a>
-</div>
-
-{# Active Jobs polling area. The fragment owns its own wrapper and hx-trigger
-   so the poll interval is recomputed after every swap (see _dashboard_active.html). #}
-{% include "_dashboard_active.html" %}
-
-{# 7-day completed sparkline — quick "is anything getting done?" signal. #}
-{% if completed_by_day and completed_by_day|sum > 0 %}
-{%- set _max = completed_by_day|max -%}
-{%- set _width = 140 -%}
-{%- set _height = 36 -%}
-{%- set _step = (_width // (completed_by_day|length - 1)) if completed_by_day|length > 1 else 0 -%}
-<section class="mb-8">
-  <div class="flex items-center justify-between mb-2">
-    <h2 class="text-lg font-medium">{{ labels.DASHBOARD_SPARKLINE_TITLE }}</h2>
-    <span class="text-sm opacity-60">{{ completed_by_day|sum }}</span>
+<section class="atelier-dashboard-heading">
+  <div><div class="atelier-eyebrow"><span class="atelier-eyebrow-line"></span> YOUR AUDIO WORKSPACE</div>
+    <h1>Le idee diventano <em>parole.</em></h1>
+    <p>Un unico spazio per trasformare audio, video e conversazioni in contenuti pronti da usare.</p>
   </div>
-  <svg viewBox="0 0 {{ _width }} {{ _height }}" width="{{ _width }}" height="{{ _height }}"
-       preserveAspectRatio="none" aria-hidden="true"
-       class="text-primary">
-    <polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
-              points="
-              {%- for value in completed_by_day -%}
-              {{ loop.index0 * _step }},{{ _height - ((value / _max) * (_height - 4) if _max > 0 else 0) - 2 }}
-              {%- if not loop.last %} {% endif -%}
-              {%- endfor -%}" />
-    {% for value in completed_by_day %}
-    <circle cx="{{ loop.index0 * _step }}"
-            cy="{{ _height - ((value / _max) * (_height - 4) if _max > 0 else 0) - 2 }}"
-            r="1.5" fill="currentColor" />
-    {% endfor %}
-  </svg>
-  <ul class="sr-only">
-    {% for value in completed_by_day %}
-    <li>{{ value }}</li>
-    {% endfor %}
-  </ul>
+  <div class="atelier-date-marker" aria-hidden="true"><span>WHISPER</span><strong>STUDIO / 01</strong></div>
 </section>
-{% endif %}
-
-{# Recent Completed #}
+<section class="atelier-home-hero" aria-labelledby="start-work-title">
+  <div class="atelier-hero-copy"><span class="atelier-hero-kicker">INIZIA DA QUI <span class="atelier-hero-star">✦</span></span>
+    <h2 id="start-work-title">Cosa vuoi<br><i>trascrivere?</i></h2>
+    <p>Scegli da dove partire: penseremo noi a tutto il resto.</p>
+    <a class="atelier-hero-cta" href="/upload">Apri lo studio <span aria-hidden="true">↗</span></a>
+  </div>
+  <div class="atelier-wave-art" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="atelier-hero-index" aria-hidden="true">AT — 001 / AUDIO INTELLIGENCE</div>
+</section>
+<div class="atelier-section-heading"><div><span class="atelier-eyebrow">ACCESSO RAPIDO</span><h2>Il tuo prossimo passo</h2></div></div>
+<section class="atelier-action-grid" aria-label="Azioni rapide">
+ <a class="atelier-action-card" href="/upload?mode=files"><span class="atelier-action-num">01 /</span><span class="atelier-action-icon">↥</span><h3>Carica file</h3><p>Audio e video dal tuo dispositivo.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
+ <a class="atelier-action-card" href="/upload?mode=folder"><span class="atelier-action-num">02 /</span><span class="atelier-action-icon">▤</span><h3>Importa cartella</h3><p>Più file insieme, un solo flusso.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
+ <a class="atelier-action-card" href="/upload?mode=url"><span class="atelier-action-num">03 /</span><span class="atelier-action-icon">⌁</span><h3>Incolla un link</h3><p>Video online, playlist e URL supportati.</p><span class="atelier-action-arrow" aria-hidden="true">↗</span></a>
+</section>
+<section class="atelier-insights" aria-label="Il tuo riepilogo">
+ <div class="atelier-stat"><span>Lavori totali</span><strong>{{ total_jobs }}</strong><small>nel tuo workspace</small></div>
+ <div class="atelier-stat"><span>In elaborazione</span><strong>{{ active_count }}</strong><small>monitoraggio in tempo reale</small></div>
+ <div class="atelier-stat"><span>Completati oggi</span><strong>{{ completed_today }}</strong><small>pronti per la revisione</small></div>
+</section>
+<div class="atelier-section-heading atelier-activity-heading"><div><span class="atelier-eyebrow">ACTIVITY FEED</span><h2>In questo momento</h2></div><a href="/jobs" class="atelier-text-link">Tutti i lavori ↗</a></div>
+<div class="atelier-live-section">{% include "_dashboard_active.html" %}</div>
+<div class="atelier-section-heading"><div><span class="atelier-eyebrow">LA TUA LIBRERIA</span><h2>Ultime trascrizioni</h2></div><a href="/jobs" class="atelier-text-link">Esplora archivio ↗</a></div>
 {% if recent_completed %}
-<section class="mb-8">
-  <h2 class="text-lg font-medium mb-3">{{ labels.DASHBOARD_RECENT_SECTION }}</h2>
-  <div class="flex flex-col gap-2">
-    {% for job in recent_completed %}
-    <a href="/viewer/{{ job.id }}" class="card bg-base-200 border border-line hover:border-primary/30 transition-colors card-hover-lift">
-      <div class="card-body p-4">
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex-1 min-w-0">
-            <div class="font-medium truncate">{{ job.filename }}</div>
-            <div class="text-sm opacity-60">
-              {% if job.duration %}{{ labels.DASHBOARD_DURATION_SHORT.format(minutes=(job.duration // 60)|int, seconds=(job.duration % 60)|int) }}{% endif %}
-              <span class="mx-1">|</span>
-              {{ job.created_at|relative_time }}
-            </div>
-          </div>
-          <div class="flex-shrink-0">
-            {{ icon_eye("w-4 h-4 opacity-40") }}
-          </div>
-        </div>
-      </div>
-    </a>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
-{# Onboarding — first-run guidance replaces the lonely empty-state glyph. #}
-{% if total_jobs == 0 %}
-<section class="card bg-base-200 border border-line mb-8">
-  <div class="card-body p-6">
-    <h2 class="text-lg font-medium mb-4">{{ labels.DASHBOARD_ONBOARDING_TITLE }}</h2>
-    <ol class="space-y-3">
-      <li class="flex gap-3">
-        <span class="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-content text-sm font-medium flex items-center justify-center">1</span>
-        <span class="pt-0.5">{{ labels.DASHBOARD_ONBOARDING_STEP1 }}</span>
-      </li>
-      <li class="flex gap-3">
-        <span class="flex-shrink-0 w-7 h-7 rounded-full bg-base-300 text-sm font-medium flex items-center justify-center opacity-80">2</span>
-        <span class="pt-0.5 opacity-80">{{ labels.DASHBOARD_ONBOARDING_STEP2 }}</span>
-      </li>
-      <li class="flex gap-3">
-        <span class="flex-shrink-0 w-7 h-7 rounded-full bg-base-300 text-sm font-medium flex items-center justify-center opacity-80">3</span>
-        <span class="pt-0.5 opacity-80">{{ labels.DASHBOARD_ONBOARDING_STEP3 }}</span>
-      </li>
-    </ol>
-    <a href="/upload?mode=files"
-       class="btn btn-primary gap-2 mt-6 w-full sm:w-auto">
-      {{ icon_upload("w-4 h-4") }}
-      {{ labels.DASHBOARD_ONBOARDING_CTA }}
-    </a>
-  </div>
-</section>
+<div class="atelier-recent-list">
+ {% for job in recent_completed %}
+ <a href="/viewer/{{ job.id }}" class="atelier-recent-row"><span class="atelier-recent-symbol" aria-hidden="true">◧</span><span class="atelier-recent-meta"><strong>{{ job.filename }}</strong><small>{{ job.created_at|relative_time }}{% if job.duration %} · {{ (job.duration // 60)|int }}m {{ (job.duration % 60)|int }}s{% endif %}</small></span><span class="atelier-recent-status">Completato</span><span class="atelier-recent-arrow" aria-hidden="true">↗</span></a>
+ {% endfor %}
+</div>
+{% else %}
+<div class="atelier-empty-state"><span>✳</span><h3>Il tuo prossimo progetto comincia qui.</h3><p>Le trascrizioni completate appariranno in questa sezione.</p><a href="/upload" class="atelier-text-link">Crea la prima trascrizione ↗</a></div>
 {% endif %}
 {% endblock %}

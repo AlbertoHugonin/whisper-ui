@@ -75,8 +75,13 @@ async def viewer_redirect():
 
 @router.get("/viewer/{job_id}", response_class=HTMLResponse)
 async def viewer_page(
-    request: Request, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep,
-    job_id: str, settings: SettingsDep, redis: RedisDep,
+    request: Request,
+    db: DbDep,
+    filestore: FileStoreDep,
+    user: CurrentUserDep,
+    job_id: str,
+    settings: SettingsDep,
+    redis: RedisDep,
 ):
     validate_hex_id(job_id, "job_id")
 
@@ -108,16 +113,22 @@ async def viewer_page(
             if idx < len(segs):
                 prev, cur = segs[idx - 1], segs[idx]
                 current_text = " ".join(s.text for s in segs[first:idx])
-                stop = (prev.speaker != cur.speaker or cur.start - prev.end > 3
-                        or len(current_text) + len(cur.text) > 360
-                        or (len(current_text) > 165 and current_text.rstrip().endswith((".", "?", "!"))))
+                stop = (
+                    prev.speaker != cur.speaker
+                    or cur.start - prev.end > 3
+                    or len(current_text) + len(cur.text) > 360
+                    or (len(current_text) > 165 and current_text.rstrip().endswith((".", "?", "!")))
+                )
                 if not stop:
                     continue
             block = segs[first:idx]
             if block:
                 original = " ".join(s.text.strip() for s in block if s.text.strip())
-                corrected = (" ".join(s.text.strip() for s in corrected_result.segments[first:idx] if s.text.strip())
-                             if corrected_result else original)
+                corrected = (
+                    " ".join(s.text.strip() for s in corrected_result.segments[first:idx] if s.text.strip())
+                    if corrected_result
+                    else original
+                )
                 reading_paragraphs.append((block[0].start, block[0].speaker, original, corrected))
             first = idx
     search_disabled = result is not None and len(result.segments) > VIEWER_SEARCH_SEGMENT_LIMIT
@@ -144,6 +155,7 @@ async def viewer_page(
     correction_state = {"status": "not_requested"}
     if job and settings.llm_correction_available:
         from whisper_ui.worker.standalone_correction import correction_status
+
         correction_state = correction_status(redis, job_id)
 
     return templates.TemplateResponse(
@@ -171,8 +183,14 @@ async def viewer_page(
 
 
 @router.post("/viewer/{job_id}/correct")
-async def request_correction(job_id: str, db: DbDep, redis: RedisDep, settings: SettingsDep,
-                             user: CurrentUserDep, llm_context_prompt: Annotated[str, Form()] = ""):
+async def request_correction(
+    job_id: str,
+    db: DbDep,
+    redis: RedisDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
+    llm_context_prompt: Annotated[str, Form()] = "",
+):
     validate_hex_id(job_id, "job_id")
     job = db.get_job(job_id, owner_id=owner_filter(user))
     if job is None or job.status != JobStatus.COMPLETED:
@@ -180,6 +198,7 @@ async def request_correction(job_id: str, db: DbDep, redis: RedisDep, settings: 
     if not settings.llm_correction_available:
         raise HTTPException(status_code=503, detail="LLM correction unavailable")
     from whisper_ui.worker.standalone_correction import correction_status, enqueue_correction
+
     status = correction_status(redis, job_id)
     if status["status"] in {"queued", "started", "deferred", "scheduled"}:
         # Never insert a duplicate LLM task: the first request is waiting.
@@ -198,13 +217,18 @@ async def get_correction_status(job_id: str, db: DbDep, redis: RedisDep, user: C
     if db.get_job(job_id, owner_id=owner_filter(user)) is None:
         raise HTTPException(status_code=404)
     from whisper_ui.worker.standalone_correction import correction_status
+
     return JSONResponse(correction_status(redis, job_id))
 
 
 @router.get("/viewer/{job_id}/export/{format_name}")
 async def export_download(
-    job_id: str, format_name: str, db: DbDep, filestore: FileStoreDep,
-    user: CurrentUserDep, version: str = "original",
+    job_id: str,
+    format_name: str,
+    db: DbDep,
+    filestore: FileStoreDep,
+    user: CurrentUserDep,
+    version: str = "original",
 ):
     validate_hex_id(job_id, "job_id")
     job = db.get_job(job_id, owner_id=owner_filter(user))
@@ -259,11 +283,12 @@ async def media_download(job_id: str, db: DbDep, filestore: FileStoreDep, user: 
     )
 
 
-
-
 @router.get("/viewer/{job_id}/waveform")
 async def media_waveform(
-    job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep,
+    job_id: str,
+    db: DbDep,
+    filestore: FileStoreDep,
+    user: CurrentUserDep,
     source: str = "original",
 ):
     """Authenticated peaks of the SELECTED audio track (never both at once)."""
@@ -296,7 +321,11 @@ async def media_waveform(
 
 @router.get("/viewer/{job_id}/processed-audio")
 async def processed_audio(
-    job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep, download: bool = False,
+    job_id: str,
+    db: DbDep,
+    filestore: FileStoreDep,
+    user: CurrentUserDep,
+    download: bool = False,
 ):
     validate_hex_id(job_id, "job_id")
     job = db.get_job(job_id, owner_id=owner_filter(user))

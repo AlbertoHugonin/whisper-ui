@@ -29,7 +29,7 @@ def _zip_entry_base(job: Job) -> str:
     """
     if job.source_url:
         return job.id
-    base = Path(job.filename).stem.replace("\\", "_").replace("/", "_").lstrip(". ")
+    base = Path(job.filename).name.rsplit(".", 1)[0].replace("\\", "_").replace("/", "_").lstrip(". ")
     return base or job.id
 
 

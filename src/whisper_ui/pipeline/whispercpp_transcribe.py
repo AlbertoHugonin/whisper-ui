@@ -207,12 +207,19 @@ class WhisperCppTranscribeStage:
                 cmd += ["-t", str(self._threads)]
             if vad_model_path is not None:
                 cmd += [
-                    "--vad", "-vm", vad_model_path,
-                    "-vt", str(self._vad_threshold),
-                    "-vspd", str(self._vad_min_speech_ms),
-                    "-vsd", str(self._vad_min_silence_ms),
-                    "-vp", str(self._vad_speech_pad_ms),
-                    "-vo", str(self._vad_samples_overlap),
+                    "--vad",
+                    "-vm",
+                    vad_model_path,
+                    "-vt",
+                    str(self._vad_threshold),
+                    "-vspd",
+                    str(self._vad_min_speech_ms),
+                    "-vsd",
+                    str(self._vad_min_silence_ms),
+                    "-vp",
+                    str(self._vad_speech_pad_ms),
+                    "-vo",
+                    str(self._vad_samples_overlap),
                 ]
             if self._initial_prompt.strip():
                 cmd += ["--prompt", self._initial_prompt.strip()[:1500]]
@@ -248,10 +255,15 @@ class WhisperCppTranscribeStage:
                     before, after = int(match.group(1)), int(match.group(2))
                     logger.info(
                         "whisper.cpp VAD coverage: retained %d/%d samples (%.1f%%), excluded %.1f%%",
-                        after, before, 100 * after / before if before else 0.0,
+                        after,
+                        before,
+                        100 * after / before if before else 0.0,
                         float(match.group(3)),
-                        extra={"event": "whispercpp_vad_coverage", "vad_retained_samples": after,
-                               "vad_input_samples": before},
+                        extra={
+                            "event": "whispercpp_vad_coverage",
+                            "vad_retained_samples": after,
+                            "vad_input_samples": before,
+                        },
                     )
             if proc.returncode != 0:
                 # Some builds emit diagnostics on stdout; fall back to it.

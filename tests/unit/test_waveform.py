@@ -1,7 +1,8 @@
 """Peak extraction must work for multi-hour audio without buffering the media."""
+
+import wave
 from array import array
 from pathlib import Path
-import wave
 
 import pytest
 
@@ -10,8 +11,8 @@ from whisper_ui.web.waveform import cached_peaks, peaks
 
 def test_waveform_real_pcm_amplitude_and_cache(tmp_path: Path):
     p = tmp_path / "processed.wav"
-    frames = array('h', [0] * 2000 + [16000] * 2000 + [-24000] * 2000 + [0] * 2000)
-    with wave.open(str(p), 'wb') as w:
+    frames = array("h", [0] * 2000 + [16000] * 2000 + [-24000] * 2000 + [0] * 2000)
+    with wave.open(str(p), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(16000)
@@ -27,4 +28,4 @@ def test_waveform_real_pcm_amplitude_and_cache(tmp_path: Path):
 
 def test_waveform_rejects_invalid_request(tmp_path: Path):
     with pytest.raises(ValueError):
-        peaks(tmp_path / 'missing.wav', 3000)
+        peaks(tmp_path / "missing.wav", 3000)

@@ -1,6 +1,6 @@
 {# Native dialog in the browser top layer: retains focus, Escape dismissal,
    and works in the viewport-locked transcript editor and on small screens. #}
-<dialog class="viewer-export-dialog" id="viewer-export-dialog" x-ref="exportDialog"
+<dialog class="viewer-export-dialog at2-export-dialog" id="viewer-export-dialog" x-ref="exportDialog"
         aria-labelledby="viewer-export-title"
         @click="if ($event.target === $el) $el.close()">
   <div class="viewer-export-surface" x-data="{ copied: false, linkCopied: false }">

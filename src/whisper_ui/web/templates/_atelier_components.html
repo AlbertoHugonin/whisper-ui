@@ -1,0 +1,16 @@
+{# Atelier v2: semantic presentation primitives; business controls stay in page templates. #}
+{% macro heading(section, title, description='', action_href='', action_label='') -%}
+<header class="at2-page-heading">
+  <div class="at2-heading-copy"><p class="at2-kicker"><span class="at2-kicker-dash"></span>{{ section }}</p>
+    <h1>{{ title }}</h1>{% if description %}<p class="at2-description">{{ description }}</p>{% endif %}
+  </div>
+  {% if action_href and action_label %}<a class="at2-button at2-button-primary" href="{{ action_href }}"><span aria-hidden="true">＋</span>{{ action_label }}</a>{% endif %}
+</header>
+{%- endmacro %}
+{% macro section_header(kicker, title, description='') -%}
+<div class="at2-section-heading"><div><span class="at2-kicker">{{ kicker }}</span><h2>{{ title }}</h2>{% if description %}<p>{{ description }}</p>{% endif %}</div></div>
+{%- endmacro %}
+{% macro empty_state(title, description, href='', label='') -%}
+<div class="at2-empty"><div class="at2-empty-illustration" aria-hidden="true">✳</div><h3>{{ title }}</h3><p>{{ description }}</p>
+{% if href %}<a class="at2-button at2-button-primary" href="{{ href }}">{{ label }} <span aria-hidden="true">↗</span></a>{% endif %}</div>
+{%- endmacro %}

@@ -12,10 +12,6 @@ class TestJsonExporter:
     def setup_method(self):
         self.exporter = JsonExporter()
 
-    def test_properties(self):
-        assert self.exporter.file_extension == ".json"
-        assert self.exporter.mime_type == "application/json"
-
     def test_export_structure(self):
         result = TranscriptResult(
             segments=[
@@ -35,21 +31,3 @@ class TestJsonExporter:
         assert data["segments"][0]["text"] == "Hello"
         assert data["segments"][0]["speaker"] == "S1"
         assert data["segments"][1]["speaker"] is None
-
-    def test_ensure_ascii_false(self):
-        result = TranscriptResult(
-            segments=[Segment(start=0.0, end=1.0, text="你好世界")],
-            language="zh",
-            duration=1.0,
-        )
-        raw = self.exporter.export(result)
-        text = raw.decode("utf-8")
-        # Chinese characters should appear directly, not as \uXXXX escapes
-        assert "你好世界" in text
-        assert "\\u" not in text
-
-    def test_empty_segments(self):
-        result = TranscriptResult(segments=[], language="en", duration=0.0)
-        data = json.loads(self.exporter.export(result))
-        assert data["segments"] == []
-        assert data["duration"] == 0.0

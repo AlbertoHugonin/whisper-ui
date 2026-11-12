@@ -4,6 +4,7 @@ SQLite stays on the frontend host. Remote ROCm workers retrieve and update
 jobs through this narrow API instead of opening a SQLite file over NFS.
 The bearer token is mandatory and never passed through browser cookies.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -12,6 +13,7 @@ import re
 import secrets
 
 from fastapi import APIRouter, HTTPException, Request
+
 from whisper_ui.core.models import Job, JobStatus
 
 router = APIRouter(prefix="/internal/worker", include_in_schema=False)
@@ -72,11 +74,13 @@ async def write_progress(request: Request, job_id: str):
     payload = await request.json()
     if not isinstance(payload, dict) or set(payload) != {"progress", "message"}:
         raise HTTPException(status_code=400, detail="Invalid progress payload")
-    if (not isinstance(payload["progress"], (int, float))
-            or isinstance(payload["progress"], bool)
-            or not 0 <= payload["progress"] <= 100
-            or not isinstance(payload["message"], str)
-            or len(payload["message"]) > 4000):
+    if (
+        not isinstance(payload["progress"], (int, float))
+        or isinstance(payload["progress"], bool)
+        or not 0 <= payload["progress"] <= 100
+        or not isinstance(payload["message"], str)
+        or len(payload["message"]) > 4000
+    ):
         raise HTTPException(status_code=400, detail="Invalid progress")
     request.app.state.db.update_job_progress(job_id, float(payload["progress"]), payload["message"])
     return {"ok": True}
@@ -86,6 +90,8 @@ async def write_progress(request: Request, job_id: str):
 async def pending_jobs(request: Request):
     _authorize(request)
     db = request.app.state.db
-    return {"pending": db.count_jobs(status=JobStatus.PENDING.value),
-            "queued": db.count_jobs(status=JobStatus.QUEUED.value),
-            "processing": db.count_jobs(status=JobStatus.PROCESSING.value)}
+    return {
+        "pending": db.count_jobs(status=JobStatus.PENDING.value),
+        "queued": db.count_jobs(status=JobStatus.QUEUED.value),
+        "processing": db.count_jobs(status=JobStatus.PROCESSING.value),
+    }

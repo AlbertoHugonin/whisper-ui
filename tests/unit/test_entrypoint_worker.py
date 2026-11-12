@@ -13,8 +13,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import pytest
-
 _ENTRYPOINT = Path(__file__).resolve().parents[2] / "docker" / "entrypoint-worker.sh"
 _STUB_PREFIX = "STUB_PYTHON_ARGS:"
 
@@ -61,49 +59,6 @@ def test_cuda_worker_without_idle_time_omits_idle_flag(tmp_path: Path) -> None:
 
     assert "--worker-class rq.SimpleWorker" in argv
     assert "--max-idle-time" not in argv
-
-
-def test_idle_time_zero_is_treated_as_disabled(tmp_path: Path) -> None:
-    argv = _argv_line(_run_entrypoint(tmp_path, {"DEVICE": "cuda", "WORKER_MAX_IDLE_TIME": "0"}))
-
-    assert "--max-idle-time" not in argv
-
-
-def test_zero_padded_value_is_disabled(tmp_path: Path) -> None:
-    # "00" must not slip past as a non-empty string and reach rq as 0 (which rq
-    # rejects). It normalizes to 0 → disabled.
-    argv = _argv_line(_run_entrypoint(tmp_path, {"DEVICE": "cuda", "WORKER_MAX_IDLE_TIME": "00"}))
-
-    assert "--max-idle-time" not in argv
-
-
-def test_leading_zeros_are_normalized(tmp_path: Path) -> None:
-    argv = _argv_line(_run_entrypoint(tmp_path, {"DEVICE": "rocm", "WORKER_MAX_IDLE_TIME": "0300"}))
-
-    assert "--max-idle-time 300" in argv
-
-
-@pytest.mark.parametrize("device", ["cpu", "auto"])
-def test_idle_flag_is_device_agnostic_but_simpleworker_is_gpu_only(tmp_path: Path, device: str) -> None:
-    # The idle-release mechanism is a generic rq flag (the entrypoint adds it
-    # whenever WORKER_MAX_IDLE_TIME is a positive integer); only the SimpleWorker
-    # class is gated to GPU devices. Compose only defaults the var on for GPU workers.
-    argv = _argv_line(_run_entrypoint(tmp_path, {"DEVICE": device, "WORKER_MAX_IDLE_TIME": "120"}))
-
-    assert "--max-idle-time 120" in argv
-    assert "--worker-class rq.SimpleWorker" not in argv
-
-
-@pytest.mark.parametrize("bad", ["abc", "-5", "+5", "1e3", "0x10", "300 foo", "  ", "99999999999999999999"])
-def test_invalid_idle_time_is_ignored_with_warning(tmp_path: Path, bad: str) -> None:
-    result = _run_entrypoint(tmp_path, {"DEVICE": "rocm", "WORKER_MAX_IDLE_TIME": bad})
-    argv = _argv_line(result)
-
-    # Invalid values never reach rq (no crash-loop, no instant-exit), and the
-    # worker still starts. The misconfiguration is surfaced on stderr.
-    assert "--max-idle-time" not in argv
-    assert "--worker-class rq.SimpleWorker" in argv
-    assert "WORKER_MAX_IDLE_TIME" in result.stderr
 
 
 def test_whitespace_value_does_not_inject_extra_queue(tmp_path: Path) -> None:

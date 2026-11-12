@@ -3,10 +3,10 @@
    bulk refresh) so the filter survives list re-renders. Depends on
    filterJobs() from _job_interactions.html. #}
 {% from "_icons.html" import icon_search %}
-<div class="relative max-w-sm" x-data="{ query: '' }"
+<div class="at2-job-search relative" x-data="{ query: '' }"
      @htmx:after-swap.window="filterJobs(query)">
   <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-40">{{ icon_search("w-4 h-4") }}</span>
   <input type="search" x-model="query" @input="filterJobs(query)"
-         placeholder="{{ labels.JOBS_SEARCH_PLACEHOLDER }}"
+         placeholder="{{ labels.JOBS_SEARCH_PLACEHOLDER }}" aria-label="Cerca nelle trascrizioni e negli URL di origine"
          class="input input-sm w-full pl-9">
 </div>

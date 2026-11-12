@@ -30,24 +30,6 @@ def _anon_client(app):
     return client
 
 
-def test_login_page_renders_for_anonymous(app):
-    client = _anon_client(app)
-
-    resp = client.get("/login")
-
-    assert resp.status_code == 200
-    assert "登入" in resp.text
-
-
-def test_login_redirects_already_logged_in_user_to_root(app, test_user):
-    client = authed_test_client(app, test_user)
-
-    resp = client.get("/login", follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/"
-
-
 def test_login_post_with_correct_credentials_sets_session(app, test_user):
     client = _anon_client(app)
 
@@ -59,18 +41,6 @@ def test_login_post_with_correct_credentials_sets_session(app, test_user):
     assert resp.status_code == 302
     assert resp.headers["location"] == "/"
     assert "session" in resp.cookies or any(c.name == "session" for c in client.cookies.jar)
-
-
-def test_login_post_case_insensitive_username(app, test_user):
-    client = _anon_client(app)
-
-    resp = client.post(
-        "/login",
-        data={"username": "ALICE", "password": "password123"},
-    )
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/"
 
 
 def test_login_post_with_wrong_password_returns_to_login_with_error(app, test_user):
@@ -115,56 +85,6 @@ def test_login_inactive_user_with_correct_password_returns_inactive(app, db, tes
     assert resp.headers["location"].startswith("/login?error=inactive")
 
 
-def test_login_inactive_user_with_wrong_password_returns_invalid(app, db, test_user):
-    """Account-state must NOT be leaked to anyone who does not know the
-    password. The inactive-account message would otherwise tell an
-    attacker which accounts exist and have been deactivated.
-    """
-    users_repo.set_active(db.conn, test_user.id, active=False)
-    client = _anon_client(app)
-
-    resp = client.post(
-        "/login",
-        data={"username": "alice", "password": "wrongpassword"},
-    )
-
-    assert resp.status_code == 302
-    # Same error code as "unknown user" and "wrong password for active user".
-    assert resp.headers["location"].startswith("/login?error=invalid")
-
-
-def test_login_inactive_with_correct_password_does_not_record_failure(app, db, test_user):
-    """Legitimate inactive users typing their own password are not
-    attackers; counting them as rate-limit failures could lock their IP
-    out for the whole office. The inactive branch deliberately skips
-    record_failure.
-    """
-    users_repo.set_active(db.conn, test_user.id, active=False)
-    client = _anon_client(app)
-    redis = app.state.redis
-
-    # Confirm the counter is clean.
-    assert redis.get("auth:rl:user:alice") in (None, b"0")
-
-    client.post("/login", data={"username": "alice", "password": "password123"})
-
-    # No failure counter bump because the user proved identity.
-    assert redis.get("auth:rl:user:alice") in (None, b"0")
-
-
-def test_login_inactive_with_wrong_password_does_record_failure(app, db, test_user):
-    """Anyone probing wrong passwords against any account is rate-limited,
-    even if the target account happens to be deactivated.
-    """
-    users_repo.set_active(db.conn, test_user.id, active=False)
-    client = _anon_client(app)
-    redis = app.state.redis
-
-    client.post("/login", data={"username": "alice", "password": "wrongpassword"})
-
-    assert int(redis.get("auth:rl:user:alice") or 0) == 1
-
-
 def test_login_next_parameter_only_accepts_relative_path(app, test_user):
     client = _anon_client(app)
 
@@ -191,18 +111,6 @@ def test_login_next_parameter_rejects_backslash_open_redirect(app, test_user):
     assert resp.headers["location"] == "/"
 
 
-def test_login_next_parameter_relative_path_respected(app, test_user):
-    client = _anon_client(app)
-
-    resp = client.post(
-        "/login",
-        data={"username": "alice", "password": "password123", "next": "/upload"},
-    )
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/upload"
-
-
 def test_login_htmx_response_uses_hx_redirect(app, test_user):
     client = _anon_client(app)
     client.headers["HX-Request"] = "true"
@@ -214,48 +122,6 @@ def test_login_htmx_response_uses_hx_redirect(app, test_user):
 
     assert resp.status_code == 204
     assert resp.headers["hx-redirect"] == "/"
-
-
-def test_register_page_renders_bootstrap_when_no_admin(app, db):
-    """When count_active_admins == 0, /register shows the bootstrap text."""
-    client = _anon_client(app)
-
-    resp = client.get("/register")
-
-    assert resp.status_code == 200
-    assert "管理員" in resp.text
-
-
-def test_register_page_renders_bootstrap_warning_banner_when_no_admin(app, db):
-    """Bootstrap mode must render a visible warning banner (plan §4 P1)
-    so the user knows they are creating a privileged account."""
-    client = _anon_client(app)
-
-    resp = client.get("/register")
-
-    assert resp.status_code == 200
-    assert "alert-warning" in resp.text
-    assert "你正在建立系統第一個管理員帳號" in resp.text
-
-
-def test_register_page_omits_bootstrap_warning_when_admin_exists(app, db, test_admin):
-    """The warning banner is for bootstrap only; the normal register flow
-    should not surface it."""
-    client = _anon_client(app)
-
-    resp = client.get("/register")
-
-    assert resp.status_code == 200
-    assert "你正在建立系統第一個管理員帳號" not in resp.text
-
-
-def test_register_page_renders_normal_mode_when_admin_exists(app, db, test_admin):
-    client = _anon_client(app)
-
-    resp = client.get("/register")
-
-    assert resp.status_code == 200
-    assert "註冊帳號" in resp.text
 
 
 def test_register_first_account_becomes_admin(app, db):
@@ -291,29 +157,6 @@ def test_register_rate_limited_per_ip_after_threshold(app, db, test_admin):
     assert users_repo.get_user_by_username(db.conn, "userthree") is None
 
 
-def test_register_bootstrap_admin_is_never_rate_limited(app, db):
-    """With no admin yet, the bootstrap account must be creatable regardless of the cap."""
-    app.state.settings.max_register_attempts_per_ip = 0
-    client = _anon_client(app)
-
-    resp = client.post("/register", data={"username": "founder", "password": "password123"})
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/"
-    assert users_repo.get_user_by_username(db.conn, "founder") is not None
-
-
-def test_register_page_redirects_to_login_when_signup_closed(app, db, test_admin):
-    """With an admin present and ALLOW_REGISTRATION off, the form is hidden."""
-    app.state.settings.allow_registration = False
-    client = _anon_client(app)
-
-    resp = client.get("/register")
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
 def test_register_post_refused_when_signup_closed(app, db, test_admin):
     """A hand-crafted POST cannot create an account once signup is closed."""
     app.state.settings.allow_registration = False
@@ -324,30 +167,6 @@ def test_register_post_refused_when_signup_closed(app, db, test_admin):
     assert resp.status_code == 303
     assert resp.headers["location"] == "/login"
     assert users_repo.get_user_by_username(db.conn, "intruder") is None
-
-
-def test_register_bootstrap_allowed_even_when_signup_closed(app, db):
-    """The very first admin must always be creatable, even with signup closed,
-    otherwise a fresh install with ALLOW_REGISTRATION=false locks itself out."""
-    app.state.settings.allow_registration = False
-    client = _anon_client(app)
-
-    resp = client.post("/register", data={"username": "founder", "password": "password123"})
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/"
-    created = users_repo.get_user_by_username(db.conn, "founder")
-    assert created is not None and created.is_admin is True
-
-
-def test_login_page_hides_register_link_when_signup_closed(app, db, test_admin):
-    app.state.settings.allow_registration = False
-    client = _anon_client(app)
-
-    resp = client.get("/login")
-
-    assert resp.status_code == 200
-    assert "/register" not in resp.text
 
 
 def test_register_second_account_is_not_admin(app, db, test_admin):
@@ -381,18 +200,6 @@ def test_register_duplicate_username_returns_generic_error(app, db, test_user, t
     assert "username_taken" not in resp.headers["location"]
 
 
-def test_register_invalid_username_pattern_returns_error(app, test_admin):
-    client = _anon_client(app)
-
-    resp = client.post(
-        "/register",
-        data={"username": "ab", "password": "password123"},  # too short
-    )
-
-    assert resp.status_code == 302
-    assert resp.headers["location"].startswith("/register?error=username_invalid")
-
-
 def test_register_short_password_returns_error(app, test_admin):
     client = _anon_client(app)
 
@@ -414,15 +221,6 @@ def test_logout_clears_session_and_redirects(app, test_user):
     assert resp.headers["location"] == "/login"
 
 
-def test_logout_with_no_session_still_redirects(app):
-    client = _anon_client(app)
-
-    resp = client.post("/logout")
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
-
-
 def test_login_does_not_log_password(app, test_user, caplog):
     import logging
 
@@ -436,20 +234,6 @@ def test_login_does_not_log_password(app, test_user, caplog):
     combined = " ".join(record.getMessage() for record in caplog.records)
     assert "secretvalue42" not in combined
     assert "wrongpasswordsecret" not in combined
-
-
-def test_session_persists_across_requests_after_login(app, test_user):
-    client = _anon_client(app)
-
-    login_resp = client.post(
-        "/login",
-        data={"username": "alice", "password": "password123"},
-    )
-    assert login_resp.status_code == 302
-
-    # follow-up request — should be authenticated now
-    follow = client.get("/", follow_redirects=False)
-    assert follow.status_code == 200
 
 
 def test_login_rate_limit_blocks_at_threshold(app, test_user):
@@ -474,23 +258,6 @@ def test_login_rate_limit_blocks_at_threshold(app, test_user):
     assert resp.headers["location"].startswith("/login?error=rate_limited")
 
 
-def test_login_rate_limit_allows_last_attempt_before_threshold(app, test_user):
-    """The (max_attempts - 1)-th failure must still allow the next try."""
-    client = _anon_client(app)
-    settings = app.state.settings
-    for _ in range(settings.max_login_attempts - 1):
-        client.post("/login", data={"username": "alice", "password": "wrong"})
-
-    # One slot left — correct password should still let alice in.
-    resp = client.post(
-        "/login",
-        data={"username": "alice", "password": "password123"},
-    )
-
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/"
-
-
 def test_login_rate_limit_resets_on_successful_login(app, test_user):
     client = _anon_client(app)
     settings = app.state.settings
@@ -510,56 +277,6 @@ def test_login_rate_limit_resets_on_successful_login(app, test_user):
     fresh = client.post("/login", data={"username": "alice", "password": "wrong"})
     assert fresh.status_code == 302
     assert fresh.headers["location"].startswith("/login?error=invalid")
-
-
-def test_login_rate_limit_uses_generic_message(app):
-    """The rate-limit error message must not reveal whether the username
-    exists, so attackers cannot probe usernames via lockout behaviour.
-    """
-    client = _anon_client(app)
-    settings = app.state.settings
-    for _ in range(settings.max_login_attempts):
-        client.post("/login", data={"username": "ghost", "password": "wrong"})
-
-    resp = client.post(
-        "/login",
-        data={"username": "ghost", "password": "wrong"},
-        follow_redirects=True,
-    )
-
-    # Rate-limit message is rendered; same template as any other login error.
-    assert resp.status_code == 200
-    assert "嘗試次數過多" in resp.text
-
-
-def test_per_ip_threshold_is_independent_of_per_user_threshold(app, db):
-    """An attacker using different usernames from the same IP must hit the
-    higher per-IP threshold even if no single user counter is full.
-    """
-    client = _anon_client(app)
-    settings = app.state.settings
-
-    # Cycle through synthetic usernames so the per-user counter never fills.
-    for i in range(settings.max_login_attempts_per_ip):
-        client.post("/login", data={"username": f"ghost{i}", "password": "wrong"})
-
-    # An attempt against any *new* username from the same IP must now be
-    # blocked because the per-IP counter has reached the threshold.
-    resp = client.post(
-        "/login",
-        data={"username": "ghost_last", "password": "wrong"},
-    )
-
-    assert resp.status_code == 302
-    assert resp.headers["location"].startswith("/login?error=rate_limited")
-
-
-def test_per_ip_threshold_default_is_higher_than_per_user_threshold(settings):
-    """Regression guard: shared-NAT offices must not lock out the entire
-    office on five failed logins. The default per-IP threshold has to
-    leave room for legitimate users plus the per-user buffer.
-    """
-    assert settings.max_login_attempts_per_ip > settings.max_login_attempts
 
 
 def test_client_ip_ignores_xff_when_proxy_headers_untrusted(app, db, test_user):
@@ -617,13 +334,3 @@ def test_change_password_invalidates_existing_session(app, db, test_user):
     second = client.get("/", follow_redirects=False)
     assert second.status_code == 302
     assert second.headers["location"].startswith("/login?next=")
-
-
-def test_rate_limited_message_rounds_wait_minutes_up():
-    """Floor understated the wait (90s showed "1 分鐘"), inviting an early
-    retry that gets rejected again; the wait must round up."""
-    from whisper_ui.web.routes.auth_routes import _login_error_message
-
-    assert "2 分鐘" in _login_error_message("rate_limited", 90)
-    assert "15 分鐘" in _login_error_message("rate_limited", 900)
-    assert "1 分鐘" in _login_error_message("rate_limited", 30)

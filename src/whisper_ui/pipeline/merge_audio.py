@@ -4,6 +4,7 @@ Runs on an I/O worker, not in the web process or browser. ffmpeg streams
 input audio and normalises to mono 16 kHz PCM so timestamps are continuous.
 The source parts and manifest remain on disk for reproducible retries.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,16 +59,28 @@ class AudioMergeStage:
             f"[{idx}:a:0]aresample=16000,aformat=sample_fmts=s16:channel_layouts=mono[a{idx}]"
             for idx in range(len(paths))
         ]
-        filters.append(
-            "".join(f"[a{idx}]" for idx in range(len(paths)))
-            + f"concat=n={len(paths)}:v=0:a=1[combined]"
-        )
+        filters.append("".join(f"[a{idx}]" for idx in range(len(paths))) + f"concat=n={len(paths)}:v=0:a=1[combined]")
         temp = output.with_name(f".{output.stem}-{uuid.uuid4().hex}.wav")
         try:
             result = subprocess.run(
-                [*argv, "-filter_complex", ";".join(filters), "-map", "[combined]",
-                        "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(temp)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=7200, check=False,
+                [
+                    *argv,
+                    "-filter_complex",
+                    ";".join(filters),
+                    "-map",
+                    "[combined]",
+                    "-ar",
+                    "16000",
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(temp),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=7200,
+                check=False,
             )
             if result.returncode != 0 or not temp.is_file() or temp.stat().st_size < 44:
                 logger.warning("ffmpeg audio merge failed: %s", result.stderr[-1200:].decode("utf-8", "replace"))

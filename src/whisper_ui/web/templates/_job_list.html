@@ -35,7 +35,7 @@
   {% set batch_title = group_jobs[0].batch_title if group_jobs else none %}
   {%- set _batch_search = (group_jobs|map(attribute='filename')|join(' ')) + ' ' + (group_jobs|map(attribute='source_url')|select|join(' ')) + ' ' + (batch_title or '') -%}
   <div id="job-group-{{ group_key }}"
-       class="collapse collapse-arrow bg-base-200 border border-line"
+       class="at2-batch-group collapse collapse-arrow bg-base-200 border border-line"
        data-job-name="{{ group_jobs[0].filename if group_jobs else '' }}"
        data-job-search="{{ _batch_search }}"
        x-data="{ groupKey: '{{ group_key }}' }">
@@ -91,7 +91,7 @@
       </div>
       {% for job in group_jobs %}
       <div id="job-{{ job.id }}"
-           class="border-l-3 pl-3 py-2 mb-2 border-status-{{ job.status.value }}"
+           class="at2-job-row at2-batch-job border-l-3 pl-3 py-2 mb-2 border-status-{{ job.status.value }}"
            data-job-name="{{ job.filename }}"
            data-job-search="{{ job.filename }}{% if job.source_url %} {{ job.source_url }}{% endif %}">
         {% include "_job_card.html" %}
@@ -104,7 +104,7 @@
   {# Single job #}
   {% set job = group_jobs[0] %}
   <div id="job-{{ job.id }}"
-       class="card bg-base-200 border border-line border-l-3 border-status-{{ job.status.value }}"
+       class="at2-job-row card bg-base-200 border border-line border-l-3 border-status-{{ job.status.value }}"
        data-job-name="{{ job.filename }}"
        data-job-search="{{ job.filename }}{% if job.source_url %} {{ job.source_url }}{% endif %}">
     <div class="card-body p-4">

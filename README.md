@@ -1,4 +1,4 @@
-# Whisper-UI
+# Whisper UI · Atelier
 
 Speech-to-text system using [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
 (large-v3, int8_float16 on GPU) with speaker diarization via
@@ -7,6 +7,22 @@ a [FastAPI](https://fastapi.tiangolo.com/) + [htmx](https://htmx.org/) + [Alpine
 and Docker deployment (NVIDIA GPU / CPU / AMD ROCm).
 
 > **Interface language:** English is the default. Set `UI_LANGUAGE=zh` to keep the upstream Traditional Chinese interface.
+
+## Interface and homelab deployment
+
+Atelier is the only application interface on `main`. The former classic
+navigation templates and parallel preview deployment have been retired.
+
+The homelab frontend is served at <https://whisper.home.albertohugonin.it>.
+The previous Atelier hostname redirects there. The always-on frontend,
+Redis and wake supervisor live on apps-server; existing ROCm/LLM workers
+remain on the AI server. Users, history, uploads and outputs are preserved.
+Versioned deployment configuration is in `AlbertoHugonin/homelab-infra`,
+`hosts/apps-server/stacks/whisper-hub/`.
+
+Atelier provides desktop, tablet and phone layouts, light/dark themes,
+client-side navigation, transcription review and editing, presets, and the
+per-job choice of standard Silero VAD or direct transcription without VAD.
 
 ## Features
 
@@ -162,7 +178,7 @@ All settings are configured via environment variables (`.env` file):
 | `DEVICE`                      | `auto`                              | Inference device; compose profiles set `cuda` (GPU) / `rocm` (AMD) / `cpu` (CPU)                                                                                                                   |
 | `TRANSCRIBE_BACKEND`          | `whisperx`                          | `whisperx` (CTranslate2, CUDA/CPU) or `whispercpp` (whisper.cpp HIP; set by the rocm profile)                                                                                                      |
 | `BATCH_SIZE`                  | `4`                                 | Transcription batch size (whisperx backend only)                                                                                                                                                   |
-| `LANGUAGE`                    | `auto`                                | Default language code                                                                                                                                                                              |
+| `LANGUAGE`                    | `auto`                              | Default language code                                                                                                                                                                              |
 | `UI_LANGUAGE`                 | `en`                                | Interface and worker progress language: `en` or `zh`                                                                                                                                               |
 | `HF_TOKEN`                    | (empty)                             | HuggingFace token for speaker diarization                                                                                                                                                          |
 | `DIARIZATION_DEFAULT_ENABLED` | `true`                              | Initial state of the upload-form diarization toggle (only when `HF_TOKEN` is set). Set `false` so new uploads default to no diarization — the slowest stage — with per-job opt-in still available. |

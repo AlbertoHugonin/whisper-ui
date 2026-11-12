@@ -1,43 +1,38 @@
 {% extends "base.html" %}
+{% from "_atelier_components.html" import heading, section_header, empty_state %}
+{% block title %}I tuoi preset · Atelier{% endblock %}
 {% block content %}
-<div class="flex flex-wrap justify-between gap-3 items-center mb-6">
-  <div><h1 class="text-2xl font-semibold">Preset di trascrizione</h1>
-    <p class="text-sm opacity-65 mt-1">Salva tutte le impostazioni, inclusi prompt, audio, VAD e correzione LLM. Ogni preset è privato.</p></div>
-  <a class="btn btn-primary" href="/presets/new">+ Nuovo preset da zero</a>
-</div>
-<section aria-label="Preset predefiniti" class="mb-8">
-  <h2 class="text-base font-semibold mb-3">Parti da un preset esistente</h2>
-  <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+<div class="at2-screen at2-presets-screen">
+  {{ heading('IL TUO STUDIO / PRESET', 'Un setup per ogni idea.', 'Crea una configurazione riutilizzabile per lingua, modello, VAD, audio e correzione AI. I tuoi preset restano privati.', '/presets/new', 'Crea preset') }}
+  <section class="at2-panel at2-feature-panel" aria-label="Preset predefiniti">
+    <div class="at2-panel-header"><div><span class="at2-kicker">01 / ISPIRAZIONI</span><h2>Parti da un punto di forza</h2><p>Quattro profili pronti da personalizzare per il tuo lavoro.</p></div><span class="at2-count">{{ builtins|length }} profili</span></div>
+    <div class="at2-preset-grid at2-preset-grid-builtins">
     {% for key, item in builtins.items() %}
-    <div class="card border border-base-300 bg-base-200"><div class="card-body p-4 gap-2">
-      <h3 class="font-semibold">{{ item.name }}</h3><p class="text-sm opacity-65 flex-1">{{ item.description }}</p>
-      <a class="btn btn-outline btn-sm" href="/presets/new?source={{ key }}">Duplica e personalizza</a>
-    </div></div>
+      <article class="at2-preset-card at2-preset-builtin">
+        <div class="at2-preset-top"><span class="at2-preset-monogram" aria-hidden="true">{{ '%02d'|format(loop.index) }}</span><span class="at2-meta-label">PREDEFINITO</span></div>
+        <div class="at2-preset-body"><h3>{{ item.name }}</h3><p>{{ item.description }}</p></div>
+        <a href="/presets/new?source={{ key }}" class="at2-preset-action">Usa come base <span aria-hidden="true">↗</span></a>
+      </article>
     {% endfor %}
-  </div>
-</section>
-<section aria-label="Preset personali">
-  <h2 class="text-base font-semibold mb-3">I tuoi preset <span class="badge badge-ghost">{{ presets|length }}</span></h2>
-  {% if presets %}
-  <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-  {% for item in presets %}
-    <div class="card border border-base-300 bg-base-100"><div class="card-body p-4 gap-2">
-      <div><h3 class="font-semibold break-words">{{ item.name }}</h3>
-        {% if item.description %}<p class="text-sm opacity-65 mt-1 break-words">{{ item.description }}</p>{% endif %}</div>
-      <div class="text-xs opacity-65">{{ item.settings.language|upper }} · {{ item.settings.model_name }} · VAD {{ '%.2f'|format(item.settings.vad_threshold) }}{% if item.settings.llm_correction_enabled %} · Correzione LLM{% endif %}</div>
-      <div class="flex gap-2 flex-wrap mt-2">
-        <a class="btn btn-primary btn-sm" href="/upload?preset={{ item.id }}">Usa per trascrivere</a>
-        <a class="btn btn-outline btn-sm" href="/presets/{{ item.id }}/edit">Modifica</a>
-        <a class="btn btn-ghost btn-sm" href="/presets/new?source={{ item.id }}">Duplica</a>
-      </div>
-      <form action="/presets/{{ item.id }}/delete" method="post" class="mt-1" @submit="if (!confirm('Eliminare questo preset? Le trascrizioni precedenti resteranno intatte.')) $event.preventDefault()">
-        <button class="btn btn-ghost btn-xs text-error" type="submit">Elimina preset</button>
-      </form>
-    </div></div>
-  {% endfor %}
-  </div>
-  {% else %}
-  <p class="rounded-box bg-base-200 p-5 text-sm opacity-70">Non hai ancora preset personali. Duplica “Meeting” oppure creane uno da zero.</p>
-  {% endif %}
-</section>
+    </div>
+  </section>
+  <section class="at2-panel at2-library-panel" aria-label="Preset personali">
+    <div class="at2-panel-header"><div><span class="at2-kicker">02 / LA TUA RACCOLTA</span><h2>Creati da te</h2><p>Configurazioni a portata di mano, sempre modificabili.</p></div><span class="at2-count">{{ presets|length }} salvati</span></div>
+    {% if presets %}
+    <div class="at2-preset-grid">
+      {% for item in presets %}
+      <article class="at2-preset-card at2-preset-personal">
+        <div class="at2-preset-top"><span class="at2-preset-monogram" aria-hidden="true">{{ '%02d'|format(loop.index) }}</span><span class="at2-meta-label">PERSONALE</span></div>
+        <div class="at2-preset-body"><h3>{{ item.name }}</h3>{% if item.description %}<p>{{ item.description }}</p>{% else %}<p>La tua configurazione su misura.</p>{% endif %}</div>
+        <div class="at2-tags"><span>{{ item.settings.language|upper }}</span><span>{{ item.settings.model_name }}</span><span>VAD {{ '%.2f'|format(item.settings.vad_threshold) }}</span>{% if item.settings.llm_correction_enabled %}<span>AI attiva</span>{% endif %}</div>
+        <div class="at2-preset-links"><a href="/upload?preset={{ item.id }}" class="at2-button at2-button-primary">Trascrivi <span aria-hidden="true">↗</span></a><a href="/presets/{{ item.id }}/edit" class="at2-button at2-button-quiet">Modifica</a><a href="/presets/new?source={{ item.id }}" class="at2-icon-link" title="Duplica preset" aria-label="Duplica {{ item.name }}">⧉</a></div>
+        <form action="/presets/{{ item.id }}/delete" method="post" class="at2-danger-action" @submit="if (!confirm('Eliminare questo preset? Le trascrizioni precedenti resteranno intatte.')) $event.preventDefault()"><button type="submit">Elimina preset</button></form>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state('Pronto per il primo preset?', 'Duplica un profilo predefinito o crea da zero le impostazioni giuste per te.', '/presets/new', 'Crea il primo preset') }}
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

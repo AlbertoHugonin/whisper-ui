@@ -46,7 +46,7 @@
 {# Confirm dialog — driven by `open-confirm` events from row/batch actions. #}
 <div x-data="confirmDialog()" @open-confirm.window="show($event.detail)">
   <dialog x-ref="dialog" class="modal">
-    <div class="modal-box">
+    <div class="modal-box at2-action-dialog">
       <h3 class="text-lg font-bold" x-text="title"></h3>
       <p class="py-4" x-text="message"></p>
       <div class="modal-action">
@@ -61,7 +61,7 @@
 {# Batch download dialog #}
 <div x-data="batchDownloadDialog()" @open-batch-download.window="show($event.detail)">
   <dialog x-ref="dlDialog" class="modal">
-    <div class="modal-box">
+    <div class="modal-box at2-action-dialog">
       <h3 class="text-lg font-bold">{{ labels.JOBS_BATCH_DOWNLOAD }}</h3>
       <div class="py-4">
         <fieldset class="fieldset w-full">

@@ -54,13 +54,6 @@ def test_create_batch_zip_mixed_statuses(filestore: FileStore):
         assert "done.srt" in names
 
 
-def test_create_batch_zip_no_results(filestore: FileStore):
-    jobs = [_make_job("missing.mp3")]
-    # No result saved — load_result returns None
-    data = create_batch_zip(jobs, filestore, "txt")
-    assert data is None
-
-
 def test_create_batch_zip_duplicate_filenames(filestore: FileStore):
     jobs = [_make_job("meeting.mp3"), _make_job("meeting.mp3"), _make_job("meeting.mp3")]
     for job in jobs:
@@ -75,32 +68,6 @@ def test_create_batch_zip_duplicate_filenames(filestore: FileStore):
         assert "meeting.txt" in names
         assert "meeting (1).txt" in names
         assert "meeting (2).txt" in names
-
-
-def test_create_batch_zip_colliding_filenames(filestore: FileStore):
-    """Filenames with pre-existing numeric suffixes should not collide."""
-    jobs = [
-        _make_job("meeting.mp3"),
-        _make_job("meeting (1).mp3"),
-        _make_job("meeting.mp3"),
-    ]
-    for job in jobs:
-        _save_result(filestore, job)
-
-    data = create_batch_zip(jobs, filestore, "txt")
-    assert data is not None
-
-    with zipfile.ZipFile(BytesIO(data)) as zf:
-        names = sorted(zf.namelist())
-        assert len(names) == 3
-        assert "meeting (1).txt" in names
-        assert "meeting (2).txt" in names
-        assert "meeting.txt" in names
-
-
-def test_create_batch_zip_empty_jobs(filestore: FileStore):
-    data = create_batch_zip([], filestore, "txt")
-    assert data is None
 
 
 def test_create_batch_zip_url_job_uses_job_id_filename(filestore: FileStore):

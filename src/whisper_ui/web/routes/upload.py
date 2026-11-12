@@ -148,8 +148,13 @@ _UPLOAD_TABS = frozenset({"files", "folder", "url"})
 
 @router.get("/upload", response_class=HTMLResponse)
 async def upload_page(
-    request: Request, settings: SettingsDep, db: DbDep, user: CurrentUserDep,
-    mode: str = "files", source_job: str = "", preset: str = "",
+    request: Request,
+    settings: SettingsDep,
+    db: DbDep,
+    user: CurrentUserDep,
+    mode: str = "files",
+    source_job: str = "",
+    preset: str = "",
 ):
     # `mode` is a UX hint from the dashboard quick-action cards
     # (/upload?mode=folder|url), not a security boundary — an unknown
@@ -159,6 +164,7 @@ async def upload_page(
     if source_job:
         try:
             from whisper_ui.web.validation import validate_hex_id
+
             validate_hex_id(source_job, "source_job")
             candidate = db.get_job(source_job, owner_id=owner_filter(user))
             if candidate is not None and candidate.status == JobStatus.COMPLETED:
@@ -308,7 +314,8 @@ async def upload_submit(
         # invalid file and shift the subsequent recording timestamps.
         if len(valid_files) != len([f for f in files or [] if f.filename]) or len(valid_files) < 2:
             return _error_redirect_or_fragment(
-                request, "/upload?error=merge_invalid",
+                request,
+                "/upload?error=merge_invalid",
                 "Per unire i file scegli almeno due audio supportati e rimuovi quelli non validi.",
             )
         if merge_order.strip():
@@ -335,9 +342,7 @@ async def upload_submit(
                 # Bound the *aggregate*, not just each part, to protect disk.
                 allowed = await _stream_to_file(item, dest, max(0, settings.max_upload_size - total_bytes))
                 if not allowed:
-                    raise ValueError(
-                        f"Il totale dei file supera il limite di {_format_size(settings.max_upload_size)}"
-                    )
+                    raise ValueError(f"Il totale dei file supera il limite di {_format_size(settings.max_upload_size)}")
                 total_bytes += dest.stat().st_size
                 manifest_parts.append({"filename": filename, "original_name": source_name})
             # The manifest itself is also a record of the exact join order.
@@ -351,7 +356,9 @@ async def upload_submit(
         except (OSError, ValueError) as error:
             shutil.rmtree(upload_dir, ignore_errors=True)
             return _error_redirect_or_fragment(
-                request, "/upload?error=merge_invalid", str(error),
+                request,
+                "/upload?error=merge_invalid",
+                str(error),
             )
         except BaseException:
             shutil.rmtree(upload_dir, ignore_errors=True)

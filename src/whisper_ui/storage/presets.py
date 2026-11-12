@@ -1,4 +1,5 @@
 """Private, SQLite-backed transcription presets on the existing web DB."""
+
 from __future__ import annotations
 
 import json
@@ -26,9 +27,13 @@ class SavedPreset:
 
 def _preset(row: sqlite3.Row) -> SavedPreset:
     return SavedPreset(
-        id=row['id'], owner_id=row['owner_id'], name=row['name'],
-        description=row['description'], settings=json.loads(row['settings_json']),
-        created_at=row['created_at'], updated_at=row['updated_at'],
+        id=row["id"],
+        owner_id=row["owner_id"],
+        name=row["name"],
+        description=row["description"],
+        settings=json.loads(row["settings_json"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
     )
 
 
@@ -38,14 +43,14 @@ class PresetRepository:
 
     def list_for_owner(self, owner_id: int) -> list[SavedPreset]:
         rows = self.conn.execute(
-            'SELECT * FROM transcription_presets WHERE owner_id=? ORDER BY name COLLATE NOCASE',
+            "SELECT * FROM transcription_presets WHERE owner_id=? ORDER BY name COLLATE NOCASE",
             (owner_id,),
         ).fetchall()
         return [_preset(row) for row in rows]
 
     def get(self, preset_id: str, owner_id: int) -> SavedPreset | None:
         row = self.conn.execute(
-            'SELECT * FROM transcription_presets WHERE id=? AND owner_id=?',
+            "SELECT * FROM transcription_presets WHERE id=? AND owner_id=?",
             (preset_id, owner_id),
         ).fetchone()
         return _preset(row) if row else None
@@ -54,8 +59,8 @@ class PresetRepository:
         now = datetime.now(UTC).isoformat()
         pid = uuid.uuid4().hex
         self.conn.execute(
-            'INSERT INTO transcription_presets (id,owner_id,name,description,settings_json,created_at,updated_at) '
-            'VALUES (?,?,?,?,?,?,?)',
+            "INSERT INTO transcription_presets (id,owner_id,name,description,settings_json,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
             (pid, owner_id, name, description, settings.model_dump_json(), now, now),
         )
         self.conn.commit()
@@ -63,8 +68,8 @@ class PresetRepository:
 
     def update(self, preset_id: str, owner_id: int, name: str, description: str, settings: PresetSettings) -> bool:
         result = self.conn.execute(
-            'UPDATE transcription_presets SET name=?,description=?,settings_json=?,updated_at=? '
-            'WHERE id=? AND owner_id=?',
+            "UPDATE transcription_presets SET name=?,description=?,settings_json=?,updated_at=? "
+            "WHERE id=? AND owner_id=?",
             (name, description, settings.model_dump_json(), datetime.now(UTC).isoformat(), preset_id, owner_id),
         )
         self.conn.commit()
@@ -72,7 +77,7 @@ class PresetRepository:
 
     def delete(self, preset_id: str, owner_id: int) -> bool:
         result = self.conn.execute(
-            'DELETE FROM transcription_presets WHERE id=? AND owner_id=?',
+            "DELETE FROM transcription_presets WHERE id=? AND owner_id=?",
             (preset_id, owner_id),
         )
         self.conn.commit()

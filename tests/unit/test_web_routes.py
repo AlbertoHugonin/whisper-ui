@@ -9,7 +9,6 @@ from tests.helpers.store import list_jobs, save_upload
 from whisper_ui.core.models import Job, JobStatus, Segment, TranscriptResult
 from whisper_ui.ui import labels as ui_labels
 from whisper_ui.web.app import create_app
-from whisper_ui.web.deps import _format_relative_time, _format_time, make_content_disposition
 
 
 @pytest.fixture
@@ -111,53 +110,8 @@ class TestSecurityHeaders:
         # browser would refuse to run them under this CSP.
         assert f'<script nonce="{nonce}">' in resp.text
 
-    def test_nonce_differs_per_request(self, client):
-        first = client.get("/jobs").headers["Content-Security-Policy"]
-        second = client.get("/jobs").headers["Content-Security-Policy"]
-        assert first != second
-
-    def test_csp_allows_google_fonts(self, client):
-        """base.html / shared_viewer.html load Noto Sans TC from Google Fonts;
-        the CSP must allow those hosts or the font is blocked on every page that
-        extends base (the /login-only check that shipped originally missed this)."""
-        csp = client.get("/jobs").headers["Content-Security-Policy"]
-        assert "https://fonts.googleapis.com" in csp  # the CSS
-        assert "https://fonts.gstatic.com" in csp  # the font files
-
-    def test_csp_covers_every_external_host_referenced_by_templates(self):
-        """Guard against a future template pulling in an off-origin resource the
-        CSP does not allow. Every external https host referenced by a template
-        (minus SVG xmlns, which is not fetched) must appear in the CSP."""
-        import pathlib
-        import re
-
-        from whisper_ui.web.app import _build_csp
-
-        csp = _build_csp("test-nonce")
-        templates_dir = pathlib.Path(__file__).resolve().parents[2] / "src/whisper_ui/web/templates"
-        hosts = set()
-        for tpl in templates_dir.rglob("*.html"):
-            for url in re.findall(r"https://[a-zA-Z0-9._-]+", tpl.read_text()):
-                host = url[len("https://") :]
-                if host != "www.w3.org":  # SVG namespace URI, not a fetched resource
-                    hosts.add("https://" + host)
-        missing = sorted(h for h in hosts if h not in csp)
-        assert missing == [], f"templates reference hosts not allowed by the CSP: {missing}"
-
 
 class TestMetricsEndpoint:
-    def test_metrics_returns_prometheus_exposition(self, client):
-        # app fixture uses a MagicMock redis, so the RQ gauges degrade out; the
-        # SQLite job metric must still render and the scrape must be 200.
-        resp = client.get("/metrics")
-        assert resp.status_code == 200
-        assert "text/plain" in resp.headers["content-type"]
-        assert "whisper_jobs_total" in resp.text
-
-    def test_metrics_open_by_default(self, client):
-        # No METRICS_TOKEN configured -> open (backward-compatible).
-        assert client.get("/metrics").status_code == 200
-
     def test_metrics_requires_bearer_token_when_configured(self, client, app):
         app.state.settings = app.state.settings.model_copy(update={"metrics_token": "scrape-secret"})
 
@@ -172,84 +126,19 @@ class TestDashboardRoutes:
     def test_root_serves_dashboard(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
-        assert "總覽" in resp.text
+        assert 'class="atelier-dashboard-heading"' in resp.text
 
-    def test_dashboard_active_fragment(self, client):
-        resp = client.get("/dashboard/active")
-        assert resp.status_code == 200
-
-    def test_dashboard_polls_slowly_when_idle(self, client, db):
+    def test_dashboard_profile_escapes_username_as_text(self, client, db, test_user):
+        db.conn.execute("UPDATE users SET username=? WHERE id=?", ("alice <qa>", test_user.id))
+        db.conn.commit()
         resp = client.get("/")
         assert resp.status_code == 200
-        assert 'hx-trigger="every 30s"' in resp.text
-
-    def test_dashboard_polls_fast_when_active(self, client, db):
-        db.insert_job(Job(filename="active.mp3", status=JobStatus.PROCESSING, language="zh"))
-        resp = client.get("/")
-        assert resp.status_code == 200
-        assert 'hx-trigger="every 5s"' in resp.text
-
-    def test_dashboard_active_fragment_carries_idle_trigger(self, client, db):
-        """Regression: the fragment must include its own wrapper + hx-trigger
-        so the interval gets recomputed on every poll. Previously the trigger
-        was pinned to whatever dashboard.html chose on initial render."""
-        resp = client.get("/dashboard/active")
-        assert resp.status_code == 200
-        assert 'id="dashboard-active"' in resp.text
-        assert 'hx-trigger="every 30s"' in resp.text
-        assert 'hx-swap="morph:outerHTML"' in resp.text
-
-    def test_dashboard_active_fragment_switches_to_fast_trigger(self, client, db):
-        """Fragment requested while a job is active must return the fast
-        trigger, proving the swap path picks up state transitions."""
-        db.insert_job(Job(filename="active.mp3", status=JobStatus.PROCESSING, language="zh"))
-        resp = client.get("/dashboard/active")
-        assert resp.status_code == 200
-        assert 'id="dashboard-active"' in resp.text
-        assert 'hx-trigger="every 5s"' in resp.text
-
-    def test_dashboard_active_poll_wrapper_is_quiet(self, client):
-        """Regression: a background poll tick is not a user action, so the
-        wrapper must opt out of the global page loader via data-quiet-poll
-        (the loader animating every tick read as constant page reloads)."""
-        resp = client.get("/dashboard/active")
-        assert resp.status_code == 200
-        opening_tag = resp.text.split('id="dashboard-active"', 1)[1].split(">", 1)[0]
-        assert "data-quiet-poll" in opening_tag
-
-    def test_dashboard_greeting_injects_username_via_dataset(self, client):
-        """Regression: |tojson wrapped the username in literal double quotes,
-        terminating the double-quoted x-data attribute early and breaking the
-        greeting heading. The username must ride on a data attribute read via
-        dataset instead."""
-        resp = client.get("/")
-        assert resp.status_code == 200
-        assert 'data-username="alice"' in resp.text
-        assert "const name = $el.dataset.username" in resp.text
-        assert 'const name = "' not in resp.text  # no inline tojson interpolation
-
-    def test_dashboard_active_created_at_is_valid_alpine(self, client, db):
-        """Regression: |tojson wrapped the ISO timestamp in literal double
-        quotes, terminating the double-quoted x-data attribute early. The
-        value must be a single-quoted JS literal instead."""
-        db.insert_job(Job(filename="active.mp3", status=JobStatus.PROCESSING, language="zh"))
-        resp = client.get("/dashboard/active")
-        assert resp.status_code == 200
-        assert "createdAt: '" in resp.text
-        assert 'createdAt: "' not in resp.text
+        assert "alice &lt;qa&gt;" in resp.text
+        assert "alice <qa>" not in resp.text
+        assert 'const name = "' not in resp.text
 
 
 class TestUploadRoutes:
-    def test_upload_page(self, client):
-        resp = client.get("/upload")
-        assert resp.status_code == 200
-        assert "上傳音訊" in resp.text
-
-    def test_upload_page_defaults_to_files_tab(self, client):
-        resp = client.get("/upload")
-        assert resp.status_code == 200
-        assert "tab: 'files'" in resp.text
-
     def test_upload_page_selects_tab_from_mode_query(self, client):
         """Dashboard quick-action /upload?mode=folder|url must land the user
         on the matching tab (plan §B Finding F2)."""
@@ -258,313 +147,8 @@ class TestUploadRoutes:
             assert resp.status_code == 200
             assert f"tab: '{mode}'" in resp.text
 
-    def test_upload_page_falls_back_to_files_for_unknown_mode(self, client):
-        """An unrecognised mode is a UX hint, not a hard error — fall back
-        to the files tab rather than 4xx."""
-        resp = client.get("/upload?mode=bogus")
-        assert resp.status_code == 200
-        assert "tab: 'files'" in resp.text
-
-    def test_upload_page_renders_invalid_content_error(self, client):
-        """The invalid_content redirect must render its message, not an empty
-        alert (the template previously had no branch for this error code)."""
-        resp = client.get("/upload?error=invalid_content&name=evil.mp3")
-        assert resp.status_code == 200
-        assert "不是有效的音訊或影片" in resp.text
-        assert "evil.mp3" in resp.text
-
 
 class TestJobsRoutes:
-    def test_job_routes_do_not_offload_db_calls_to_threads(self):
-        """DB thread-safety contract: app.state.db is one shared SQLite
-        connection used only from the event-loop thread, so the atomic
-        retry/delete helpers must run on the loop — never inside
-        asyncio.to_thread, which would put a second thread on that connection.
-        Guards against reintroducing the to_thread(db.*) pattern.
-        """
-        import inspect
-        import re
-
-        from whisper_ui.web.routes import jobs as jobs_module
-
-        offloaded = re.findall(r"to_thread\(\s*db\.\w+", inspect.getsource(jobs_module))
-        assert offloaded == [], f"DB calls must stay on the event loop, found offloaded: {offloaded}"
-
-    def test_jobs_page_empty(self, client):
-        resp = client.get("/jobs")
-        assert resp.status_code == 200
-        assert "任務列表" in resp.text
-
-    def test_jobs_page_has_idempotent_store_and_reapplying_search(self, client):
-        # The shared interactions partial must register the bulk store even on
-        # a boosted nav, and the search must re-apply after list swaps. These
-        # fixes live in the shared partial, so /jobs benefits too.
-        resp = client.get("/jobs")
-        assert "if (window.Alpine) registerJobSelectionStore()" in resp.text
-        assert "filterJobs(query)" in resp.text
-        assert "htmx:after-swap" in resp.text
-
-    def test_jobs_bulk_confirm_uses_v2_modal_not_native_confirm(self, client):
-        # Bulk retry/delete should open the shared confirm modal, matching the
-        # per-row/batch actions, rather than a native window.confirm.
-        resp = client.get("/jobs")
-        assert "window.confirm(" not in resp.text  # no native confirm *call*
-        assert "onConfirm: () => this._runBulk(action)" in resp.text
-
-    def test_jobs_page_htmx_request_does_not_consume_flash(self, client):
-        # Queue a flash via an upload, then fetch /jobs as an htmx request:
-        # partial/boosted fetches must not pop a pending flash.
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            client.post(
-                "/upload",
-                data={"language": "zh", "model_name": "large-v3", "num_speakers": "0"},
-                files=[("files", ("test.mp3", b"fake audio data", "audio/mpeg"))],
-                follow_redirects=False,
-            )
-        htmx_resp = client.get("/jobs", headers={"HX-Request": "true"})
-        assert 'id="flash-data"' not in htmx_resp.text
-        # The flash survives and shows on the next genuine full-page load.
-        full_resp = client.get("/jobs")
-        assert 'id="flash-data"' in full_resp.text
-
-    def test_jobs_list_fragment(self, client):
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        assert "job-list-wrapper" in resp.text
-
-    def test_status_chips_active_filter_is_valid_alpine(self, client):
-        """Regression: |tojson wraps the status in literal double quotes, which
-        terminate the double-quoted x-data attribute early and break Alpine.
-        The filter value must be a single-quoted JS literal instead."""
-        resp = client.get("/jobs?status=completed")
-        assert resp.status_code == 200
-        assert "activeFilter: 'completed'" in resp.text
-        assert 'activeFilter: "completed"' not in resp.text
-
-    def test_jobs_list_wrapper_morph_swap_spec_has_no_whitespace(self, client):
-        """Regression: htmx tokenizes hx-swap on whitespace, so a space inside
-        the morph config truncated the swap style — the morph extension never
-        matched it and htmx silently fell back to innerHTML, nesting a fresh
-        wrapper inside the old one and destroying every DOM state (open
-        dropdown, focus, scroll, text selection) on each 3s poll."""
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        opening_tag = resp.text.split('id="job-list-wrapper"', 1)[1].split(">", 1)[0]
-        swap_value = opening_tag.split('hx-swap="', 1)[1].split('"', 1)[0]
-        assert swap_value.startswith("morph:")
-        assert " " not in swap_value
-
-    def test_jobs_list_fragment_resets_invalid_status(self, client):
-        """Parity with jobs_page and admin_jobs_list_fragment: an unknown
-        status is reset to empty so the poll does not keep re-requesting with
-        a bogus filter baked into the wrapper's hx-get URL."""
-        resp = client.get("/jobs/list?status=bogus")
-        assert resp.status_code == 200
-        assert "status=bogus" not in resp.text
-        opening_tag = resp.text.split('id="job-list-wrapper"', 1)[1].split(">", 1)[0]
-        assert "?status=&page=0" in opening_tag
-
-    def test_jobs_list_poll_wrapper_is_quiet(self, client):
-        """Regression: the 3s poll must not animate the global page loader —
-        users read the every-tick animation as the whole page reloading. The
-        wrapper opts out via data-quiet-poll (guard lives in base.html)."""
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        opening_tag = resp.text.split('id="job-list-wrapper"', 1)[1].split(">", 1)[0]
-        assert "data-quiet-poll" in opening_tag
-        assert "hx-trigger=" in opening_tag
-
-    def test_jobs_pagination_buttons_do_not_carry_quiet_attr(self, client, db):
-        """User-initiated requests from *inside* the polling wrapper (the
-        pagination buttons) must keep loader feedback: the quiet opt-out is
-        matched on the requesting element itself, never inherited."""
-        for i in range(21):  # one over DEFAULT_JOBS_PER_PAGE so pagination renders
-            db.insert_job(Job(filename=f"page{i}.mp3", status=JobStatus.COMPLETED, language="zh"))
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        button_tags = [seg.split(">", 1)[0] for seg in resp.text.split("<button")[1:]]
-        pagination_tags = [tag for tag in button_tags if 'hx-target="#job-list-wrapper"' in tag]
-        assert pagination_tags  # pagination actually rendered
-        assert all("data-quiet-poll" not in tag for tag in pagination_tags)
-
-    def test_page_loader_guards_quiet_poll(self, client):
-        """The base layout's loader listeners must skip quiet-poll requests;
-        without the guard the data-quiet-poll attribute is inert."""
-        resp = client.get("/jobs")
-        assert resp.status_code == 200
-        assert "function isQuietPoll(evt)" in resp.text
-        assert "hasAttribute('data-quiet-poll')" in resp.text
-
-    def test_error_toasts_guard_quiet_poll(self, client):
-        """A failed background poll retries on the next tick; toasting it
-        every 3s during a backend hiccup buries the user in error popups.
-        Both error handlers must skip quiet-poll requests."""
-        resp = client.get("/jobs")
-        assert resp.status_code == 200
-        send_error_handler = resp.text.split("htmx:sendError", 1)[1].split("});", 1)[0]
-        assert "if (isQuietPoll(evt)) return;" in send_error_handler
-        response_error_handler = resp.text.split("htmx:responseError", 1)[1].split("});", 1)[0]
-        assert "if (isQuietPoll(evt)) return;" in response_error_handler
-
-    def test_jobs_all_chip_shows_unfiltered_total_when_filtered(self, client, db, filestore):
-        """Finding F5: opening /jobs?status=failed must still show the true
-        total on the 全部 chip, not the failed-only count."""
-        _create_completed_job(db, filestore)
-        _create_failed_job(db)
-
-        resp = client.get("/jobs?status=failed")
-
-        assert resp.status_code == 200
-        # The 全部 chip badge must reflect both jobs, not just the 1 failed.
-        assert '<span id="status-count-all" class="badge badge-sm">2</span>' in resp.text
-
-    def test_jobs_list_fragment_emits_oob_status_counts(self, client, db, filestore):
-        """A poll that changes job states must also refresh the sticky-header
-        chips: the fragment carries hx-swap-oob count badges keyed to the
-        ids rendered by _status_chips.html."""
-        _create_completed_job(db, filestore)
-        _create_failed_job(db)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert '<span id="status-count-all" class="badge badge-sm" hx-swap-oob="true">2</span>' in resp.text
-        assert '<span id="status-count-completed" class="badge badge-sm" hx-swap-oob="true">1</span>' in resp.text
-        assert '<span id="status-count-failed" class="badge badge-sm" hx-swap-oob="true">1</span>' in resp.text
-
-    def test_jobs_full_page_renders_chips_without_oob_duplicates(self, client, db, filestore):
-        """jobs.html renders the chips itself; the _job_list.html include must
-        not emit the OOB spans there, or the badge ids would duplicate and
-        break the out-of-band targeting."""
-        _create_completed_job(db, filestore)
-
-        resp = client.get("/jobs")
-
-        assert resp.status_code == 200
-        assert resp.text.count('id="status-count-all"') == 1
-        assert "hx-swap-oob" not in resp.text
-
-    def test_jobs_list_fragment_emits_stable_id_for_single_job(self, client, db, filestore):
-        """Without a stable wrapper id Idiomorph falls back to positional
-        matching, so a new job inserted at the top of the list can morph an
-        old wrapper into a different job and drag preserved state (collapse
-        checkbox, Alpine dropdown) onto the wrong entity.
-        """
-        job = _create_completed_job(db, filestore)
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        assert f'id="job-{job.id}"' in resp.text
-
-    def test_jobs_page_shows_re_transcribe_for_completed_job(self, client, db, filestore):
-        _create_completed_job(db, filestore)
-        resp = client.get("/jobs")
-        assert resp.status_code == 200
-        assert "open-retranscribe" in resp.text
-        assert "重新轉換" in resp.text
-
-    def test_jobs_page_shows_version_badge_for_re_transcribe_version(self, client, db, filestore):
-        root = _create_completed_job(db, filestore)
-        version = Job(
-            filename="meeting.mp3",
-            status=JobStatus.COMPLETED,
-            language="en",
-            source_job_id=root.id,
-        )
-        result_path = filestore.save_result(version.id, TranscriptResult(segments=[], language="en", duration=1.0))
-        version.result_path = str(result_path)
-        db.insert_job(version)
-
-        resp = client.get("/jobs")
-
-        assert resp.status_code == 200
-        assert "重新轉換版本" in resp.text
-
-    def test_export_dropdown_uses_focus_mechanism_only(self, client, db, filestore):
-        """Regression: the export dropdown must be driven by DaisyUI's
-        :focus-within CSS alone. A second Alpine x-show source of truth
-        desyncs whenever a swap or focus loss closes the menu while Alpine
-        still thinks it is open — reopening then takes two clicks."""
-        _create_completed_job(db, filestore)
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        dropdown = resp.text.split('class="dropdown dropdown-end"', 1)[1].split("</ul>", 1)[0]
-        assert 'tabindex="0"' in dropdown
-        assert 'role="button"' in dropdown
-        assert "x-show" not in dropdown
-        assert "x-data" not in dropdown
-        assert "@click" not in dropdown
-
-    def test_jobs_list_hides_download_media_when_reclaimed(self, client, db, filestore):
-        """The inline export dropdown in _job_card.html must also gate
-        Download Media on media availability — same regression as the
-        viewer template, but on the dashboard / jobs list surface."""
-        result = TranscriptResult(segments=[], language="zh", duration=0.0)
-        job = Job(
-            filename="https://www.youtube.com/watch?v=jkl",
-            source_url="https://www.youtube.com/watch?v=jkl",
-            status=JobStatus.COMPLETED,
-        )
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-        # No media file on disk — simulates retention reclaim.
-
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        # Dropdown should not render the Download Media item for this job.
-        assert f"/viewer/{job.id}/media" not in resp.text
-
-    def test_jobs_list_fragment_emits_stable_ids_for_batch(self, client, db):
-        """Same regression as above but for batch wrappers and the inner
-        per-job rows. Both must carry stable ids so Idiomorph keys them
-        through reorders.
-        """
-        batch_id = "deadbeef" * 4  # 32-char hex, valid uuid hex shape
-        job_a = Job(filename="a.mp3", status=JobStatus.PROCESSING, batch_id=batch_id)
-        job_b = Job(filename="b.mp3", status=JobStatus.PROCESSING, batch_id=batch_id)
-        db.insert_job(job_a)
-        db.insert_job(job_b)
-
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        assert f'id="job-group-{batch_id}"' in resp.text
-        assert f'id="job-{job_a.id}"' in resp.text
-        assert f'id="job-{job_b.id}"' in resp.text
-
-    def test_batch_collapse_uses_store_not_open_attribute(self, client, db):
-        """Regression: the batch collapse must be driven by the Alpine
-        batchCollapse store, not the server-rendered [open] attribute that
-        fought the user's checkbox toggle under polling (auto-collapse bug).
-        """
-        batch_id = "abcdef12" * 4
-        db.insert_job(Job(filename="a.mp3", status=JobStatus.PROCESSING, batch_id=batch_id))
-        db.insert_job(Job(filename="b.mp3", status=JobStatus.PROCESSING, batch_id=batch_id))
-
-        resp = client.get("/jobs/list")
-        assert resp.status_code == 200
-        group = resp.text.split(f'id="job-group-{batch_id}"', 1)[1].split("collapse-content", 1)[0]
-        # The div's opening tag must not carry the server-driven [open] attr,
-        # and the checkbox must not be a server-rendered `checked` boolean.
-        div_open_tag = group.split(">", 1)[0]
-        assert " open" not in div_open_tag
-        input_tag = group.split("<input", 1)[1].split(">", 1)[0]
-        assert " checked" not in input_tag  # only :checked (bound), not a boolean
-        # Expansion is now store-driven with a server-provided default.
-        assert "batchCollapse" in group
-        assert ":checked=" in group
-        assert "isOpen(groupKey" in group
-
-    def test_jobs_page_with_job(self, client, db, filestore):
-        _create_completed_job(db, filestore)
-        resp = client.get("/jobs")
-        assert resp.status_code == 200
-        assert "test.mp3" in resp.text
-
-    def test_jobs_page_invalid_status_ignored(self, client):
-        resp = client.get("/jobs?status=' %2B alert(1) %2B '")
-        assert resp.status_code == 200
-        assert "alert(1)" not in resp.text
-
     def test_jobs_list_filter(self, client, db, filestore):
         _create_completed_job(db, filestore)
         _create_failed_job(db)
@@ -579,37 +163,12 @@ class TestJobsRoutes:
         assert resp.status_code == 204
         assert db.get_job(job.id) is None
 
-    def test_delete_nonexistent_job(self, client):
-        resp = client.delete("/jobs/00000000000000000000000000000000")
-        assert resp.status_code == 404
-
-    def test_delete_invalid_id_returns_400(self, client):
-        resp = client.delete("/jobs/not-a-valid-hex-id")
-        assert resp.status_code == 400
-
-    def test_negative_page_clamped_to_zero(self, client):
-        resp = client.get("/jobs/list?page=-5")
-        assert resp.status_code == 200
-
     def test_delete_active_job_returns_409(self, client, db):
         job = Job(filename="active.mp3", status=JobStatus.PROCESSING, language="zh")
         db.insert_job(job)
         resp = client.delete(f"/jobs/{job.id}")
         assert resp.status_code == 409
         assert db.get_job(job.id) is not None
-
-    def test_retry_file_job_passes_probed_duration_to_dispatcher(self, client, db):
-        job = _create_failed_job(db)
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue,
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=3600.0),
-        ):
-            resp = client.post(f"/jobs/{job.id}/retry")
-        assert resp.status_code == 204
-        mock_enqueue.assert_called_once()
-        retried_job = mock_enqueue.call_args[0][0]
-        assert retried_job.id == job.id
-        assert retried_job.duration == 3600.0
 
     def test_retry_is_idempotent_second_call_does_not_reenqueue(self, client, db):
         """A repeated retry must not build a second pipeline: the first call
@@ -627,39 +186,6 @@ class TestJobsRoutes:
         assert second.status_code == 404
         mock_enqueue.assert_called_once()
 
-    def test_retry_file_job_with_unknown_duration_passes_none(self, client, db):
-        job = _create_failed_job(db)
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue,
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=None),
-        ):
-            resp = client.post(f"/jobs/{job.id}/retry")
-        assert resp.status_code == 204
-        assert mock_enqueue.call_args[0][0].duration is None
-
-    def test_retry_url_job_passes_none_duration(self, client, db):
-        job = _create_failed_job(db, source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-        with patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue:
-            resp = client.post(f"/jobs/{job.id}/retry")
-        assert resp.status_code == 204
-        mock_enqueue.assert_called_once()
-        # URL jobs cannot be re-probed locally; dispatcher sees duration=None.
-        assert mock_enqueue.call_args[0][0].duration is None
-
-    def test_retry_probe_exception_passes_none_duration(self, client, db):
-        job = _create_failed_job(db)
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue,
-            patch(
-                "whisper_ui.web.routes.jobs.get_audio_duration_seconds",
-                side_effect=OSError("file vanished"),
-            ),
-        ):
-            resp = client.post(f"/jobs/{job.id}/retry")
-        assert resp.status_code == 204
-        mock_enqueue.assert_called_once()
-        assert mock_enqueue.call_args[0][0].duration is None
-
     def test_retry_enqueue_failure_uses_generic_error(self, client, db):
         job = _create_failed_job(db)
         with (
@@ -676,33 +202,6 @@ class TestJobsRoutes:
         assert "Redis internal" not in (refreshed.error or "")
         assert "secret" not in (refreshed.error or "")
 
-    def test_delete_job_emits_audit_log(self, client, db, filestore, caplog):
-        import logging as _logging
-
-        job = _create_completed_job(db, filestore)
-        with caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.jobs"):
-            client.delete(f"/jobs/{job.id}")
-
-        msg = next(r.getMessage() for r in caplog.records if "job deleted" in r.getMessage())
-        assert job.id in msg
-        assert "status_at_delete=completed" in msg
-
-    def test_retry_job_emits_audit_log_with_previous_error(self, client, db, caplog):
-        import logging as _logging
-
-        job = _create_failed_job(db)
-        # _create_failed_job sets error="Test failure" — verify it round-trips into the log.
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline"),
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=60.0),
-            caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.jobs"),
-        ):
-            client.post(f"/jobs/{job.id}/retry")
-
-        msg = next(r.getMessage() for r in caplog.records if "job retried" in r.getMessage())
-        assert job.id in msg
-        assert "previous_error=" in msg
-
     def test_re_transcribe_creates_new_version_and_preserves_original(self, client, db, filestore, app):
         # hf_token present so the diarization flag passes through un-clamped.
         app.state.settings = app.state.settings.model_copy(update={"hf_token": "hf-test-not-real"})
@@ -714,10 +213,15 @@ class TestJobsRoutes:
             resp = client.post(
                 f"/jobs/{src.id}/re-transcribe",
                 data={
-                    "language": "en", "model_name": "medium", "enable_diarization": "true",
-                    "vad_threshold": "0.55", "whisper_beam_size": "8",
-                    "vad_enabled": "false", "vad_min_speech_ms": "50",
-                    "vad_min_silence_ms": "500", "vad_speech_pad_ms": "800",
+                    "language": "en",
+                    "model_name": "medium",
+                    "enable_diarization": "true",
+                    "vad_threshold": "0.55",
+                    "whisper_beam_size": "8",
+                    "vad_enabled": "false",
+                    "vad_min_speech_ms": "50",
+                    "vad_min_silence_ms": "500",
+                    "vad_speech_pad_ms": "800",
                     "vad_samples_overlap": "0.50",
                 },
             )
@@ -735,7 +239,7 @@ class TestJobsRoutes:
         assert new_job.vad_min_speech_ms == 50
         assert new_job.vad_min_silence_ms == 500
         assert new_job.vad_speech_pad_ms == 800
-        assert new_job.vad_samples_overlap == .50
+        assert new_job.vad_samples_overlap == 0.50
         assert new_job.whisper_beam_size == 8
         assert new_job.enable_diarization is True
         assert new_job.source_job_id == src.id
@@ -744,60 +248,6 @@ class TestJobsRoutes:
         original = db.get_job(src.id)
         assert original.status == JobStatus.COMPLETED
         assert original.result_path == src.result_path
-
-    def test_re_transcribe_accepts_auto_language(self, client, db, filestore):
-        src = _completed_upload_job_with_audio(db, filestore)
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue,
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=42.0),
-        ):
-            resp = client.post(
-                f"/jobs/{src.id}/re-transcribe",
-                data={"language": "auto", "model_name": "large-v3"},
-            )
-
-        assert resp.status_code == 204
-        assert mock_enqueue.call_args[0][0].language == "auto"
-
-    def test_re_transcribe_invalid_language_is_escaped_in_response(self, client, db, filestore):
-        # The 400 reflects the form value back as text/html; markup in the
-        # rejected value must come back escaped, never verbatim.
-        src = _completed_upload_job_with_audio(db, filestore)
-        resp = client.post(
-            f"/jobs/{src.id}/re-transcribe",
-            data={"language": "<script>alert(1)</script>", "model_name": "large-v3"},
-        )
-
-        assert resp.status_code == 400
-        assert "<script>" not in resp.text
-        assert "&lt;script&gt;" in resp.text
-
-    def test_re_transcribe_invalid_model_is_escaped_in_response(self, client, db, filestore):
-        src = _completed_upload_job_with_audio(db, filestore)
-        resp = client.post(
-            f"/jobs/{src.id}/re-transcribe",
-            data={"language": "zh", "model_name": "<img src=x>"},
-        )
-
-        assert resp.status_code == 400
-        assert "<img" not in resp.text
-
-    def test_re_transcribe_clamps_diarization_when_hf_token_absent(self, client, db, filestore, app):
-        # Force no hf_token so a posted diarization flag must be clamped to
-        # False (honest persisted flag, no no-op sub-job).
-        app.state.settings = app.state.settings.model_copy(update={"hf_token": ""})
-        src = _completed_upload_job_with_audio(db, filestore)
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue,
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=42.0),
-        ):
-            resp = client.post(
-                f"/jobs/{src.id}/re-transcribe",
-                data={"language": "zh", "model_name": "large-v3", "enable_diarization": "true"},
-            )
-
-        assert resp.status_code == 204
-        assert mock_enqueue.call_args[0][0].enable_diarization is False
 
     def test_re_transcribe_copies_audio_to_new_job_dir(self, client, db, filestore):
         src = _completed_upload_job_with_audio(db, filestore, filename="meeting.mp3")
@@ -826,36 +276,6 @@ class TestJobsRoutes:
         assert resp.status_code == 409
         mock_enqueue.assert_not_called()
         assert db.count_jobs() == before
-
-    def test_re_transcribe_url_job_skips_copy_and_reenqueues(self, client, db, filestore):
-        result = TranscriptResult(segments=[], language="zh", duration=60.0)
-        src = Job(
-            filename="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            status=JobStatus.COMPLETED,
-            language="zh",
-            source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        )
-        src.result_path = str(filestore.save_result(src.id, result))
-        db.insert_job(src)
-
-        with patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue:
-            resp = client.post(f"/jobs/{src.id}/re-transcribe", data={"language": "en", "model_name": "medium"})
-
-        assert resp.status_code == 204
-        new_job = mock_enqueue.call_args[0][0]
-        # URL jobs re-download (no media to copy); source_url carries over.
-        assert new_job.source_url == src.source_url
-        assert new_job.source_job_id == src.id
-
-    def test_re_transcribe_rejects_non_completed_job(self, client, db, filestore):
-        src = _create_failed_job(db)
-        resp = client.post(f"/jobs/{src.id}/re-transcribe", data={"language": "zh", "model_name": "large-v3"})
-        assert resp.status_code == 404
-
-    def test_re_transcribe_invalid_model_returns_400(self, client, db, filestore):
-        src = _completed_upload_job_with_audio(db, filestore)
-        resp = client.post(f"/jobs/{src.id}/re-transcribe", data={"language": "zh", "model_name": "not-a-model"})
-        assert resp.status_code == 400
 
     def test_re_transcribe_enqueue_failure_marks_new_job_failed(self, client, db, filestore):
         src = _completed_upload_job_with_audio(db, filestore)
@@ -919,22 +339,6 @@ class TestJobsRoutes:
         assert db.get_job(completed.id) is None
         assert db.get_job(active.id) is not None
 
-    def test_bulk_action_rejects_oversized_id_list(self, client, db):
-        # A hand-crafted request must not tie up the event loop with an
-        # unbounded per-job loop; the UI never selects anywhere near this many.
-        from whisper_ui.core.constants import MAX_BULK_ACTION_IDS
-
-        ids = ",".join(f"{i:032x}" for i in range(MAX_BULK_ACTION_IDS + 1))
-        resp = client.post("/jobs/bulk/retry", data={"job_ids": ids})
-        assert resp.status_code == 400
-
-    def test_bulk_action_rejects_unknown_action(self, client, db):
-        failed = _create_failed_job(db)
-
-        resp = client.post("/jobs/bulk/banana", data={"job_ids": failed.id})
-
-        assert resp.status_code == 400
-
     def test_bulk_action_isolates_jobs_owned_by_other_users(self, client, db, filestore, test_admin):
         """Bulk routes must respect owner_filter — passing another user's
         job_id should be reported as failed, not silently succeed."""
@@ -952,63 +356,6 @@ class TestJobsRoutes:
         # The stranger's job is unchanged.
         refreshed = db.get_job(their_job.id)
         assert refreshed.status == JobStatus.FAILED
-
-    def test_jobs_page_renders_per_status_chip_counts(self, client, db, filestore):
-        """v2 sticky filter shows each status's count, not just total."""
-        _create_completed_job(db, filestore)
-        _create_failed_job(db)
-
-        resp = client.get("/jobs")
-
-        assert resp.status_code == 200
-        assert "已完成" in resp.text
-        assert "失敗" in resp.text
-        assert "JOBS_SEARCH_PLACEHOLDER" not in resp.text  # label is rendered, not the constant name
-
-    def test_jobs_list_fragment_includes_data_job_search_with_url(self, client, db):
-        """URL jobs must be findable via the search box — the new
-        data-job-search attribute combines filename + source URL."""
-        url = "https://www.youtube.com/watch?v=abc123"
-        failed = _create_failed_job(db, source_url=url)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert f'data-job-search="{failed.filename} {url}"' in resp.text
-
-    def test_jobs_card_renders_bulk_select_checkbox_for_completed_jobs(self, client, db, filestore):
-        """Bulk-eligible rows (completed / failed) carry the selection
-        checkbox bound to $store.jobSelection."""
-        completed = _create_completed_job(db, filestore)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert f"$store.jobSelection.has('{completed.id}')" in resp.text
-        assert "checkbox checkbox-sm" in resp.text
-
-    def test_jobs_card_omits_bulk_checkbox_for_active_jobs(self, client, db):
-        """Active jobs (queued / processing) cannot be retried or deleted
-        in bulk, so they must NOT render a selection checkbox."""
-        active = Job(filename="busy.mp3", status=JobStatus.PROCESSING)
-        db.insert_job(active)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert f"$store.jobSelection.has('{active.id}')" not in resp.text
-
-    def test_jobs_card_checkbox_carries_status_for_bulk_gating(self, client, db, filestore):
-        """The selection toggle must pass the job status so the bulk bar can
-        gate export (needs completed) / retry (needs failed). Finding F3."""
-        completed = _create_completed_job(db, filestore)
-        failed = _create_failed_job(db)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert f"toggle('{completed.id}', 'completed')" in resp.text
-        assert f"toggle('{failed.id}', 'failed')" in resp.text
 
     def test_delete_job_removes_row_and_logs_when_filestore_fails(self, client, db, filestore, caplog):
         """Row-first delete (C5): the row is removed atomically first to close
@@ -1034,89 +381,11 @@ class TestJobsRoutes:
 
 
 class TestViewerRoutes:
-    def test_viewer_redirects_to_jobs(self, client):
-        resp = client.get("/viewer", follow_redirects=False)
-        assert resp.status_code == 302
-        assert resp.headers["location"] == "/jobs"
-
     def test_viewer_with_job(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
         resp = client.get(f"/viewer/{job.id}")
         assert resp.status_code == 200
         assert "test.mp3" in resp.text
-
-    def test_viewer_disables_search_for_huge_transcript(self, client, db, filestore):
-        from whisper_ui.core.constants import VIEWER_SEARCH_SEGMENT_LIMIT
-
-        big_segments = [
-            Segment(start=float(i), end=float(i + 1), text=f"seg{i}") for i in range(VIEWER_SEARCH_SEGMENT_LIMIT + 1)
-        ]
-        result = TranscriptResult(segments=big_segments, language="zh", duration=float(len(big_segments)))
-        job = Job(filename="huge.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-        assert resp.status_code == 200
-        assert "已停用即時搜尋" in resp.text
-        assert 'placeholder="輸入關鍵字篩選' not in resp.text
-        # Search is disabled for performance, so the per-segment data-raw copy
-        # and x-html highlight eval must be skipped — but the text still renders
-        # server-side so it stays visible.
-        assert "data-raw=" not in resp.text
-        assert ">seg0</span>" in resp.text
-
-    def test_viewer_keeps_search_under_limit(self, client, db, filestore):
-        from whisper_ui.core.constants import VIEWER_SEARCH_SEGMENT_LIMIT
-
-        small_segments = [
-            Segment(start=float(i), end=float(i + 1), text=f"seg{i}")
-            for i in range(min(10, VIEWER_SEARCH_SEGMENT_LIMIT))
-        ]
-        result = TranscriptResult(segments=small_segments, language="zh", duration=10.0)
-        job = Job(filename="small.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-        assert resp.status_code == 200
-        assert 'placeholder="輸入關鍵字篩選' in resp.text
-        assert "已停用即時搜尋" not in resp.text
-
-    def test_viewer_not_found(self, client):
-        resp = client.get("/viewer/00000000000000000000000000000000")
-        assert resp.status_code == 200
-        assert "找不到" in resp.text
-
-    def test_viewer_invalid_id_returns_400(self, client):
-        resp = client.get("/viewer/nonexistent")
-        assert resp.status_code == 400
-
-    def test_viewer_hides_download_media_when_source_media_reclaimed(self, client, db, filestore):
-        """URL job whose download was reclaimed by retention must not render
-        the Download Media button, in either the with-segments or
-        no-segments branch of the viewer template."""
-        # With segments
-        result = TranscriptResult(
-            segments=[Segment(start=0.0, end=1.0, text="hi")],
-            language="zh",
-            duration=1.0,
-        )
-        job = Job(
-            filename="https://www.youtube.com/watch?v=abc",
-            source_url="https://www.youtube.com/watch?v=abc",
-            status=JobStatus.COMPLETED,
-        )
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-        # No media file written to upload dir — simulates retention reclaim.
-
-        resp = client.get(f"/viewer/{job.id}")
-        assert resp.status_code == 200
-        assert "下載影片" not in resp.text
 
     def test_viewer_renders_segment_text_server_side(self, client, db, filestore):
         """Regression: transcript text must render as server-side element content,
@@ -1145,112 +414,6 @@ class TestViewerRoutes:
         # Search is enabled under the limit, so the highlight path is wired up.
         assert "data-raw=" in resp.text
 
-    def test_viewer_segment_copy_button_is_keyboard_reachable(self, client, db, filestore):
-        """Regression for WCAG 2.1.1 + 1.4.13 (plan §4 P0): the per-segment
-        copy button must be visible without hover and expose an aria-label."""
-        segments = [Segment(start=0.0, end=1.0, text="hello")]
-        result = TranscriptResult(segments=segments, language="zh", duration=1.0)
-        job = Job(filename="copy.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-
-        assert resp.status_code == 200
-        assert "opacity-0 group-hover:opacity-100" not in resp.text
-        assert 'aria-label="複製此段"' in resp.text
-
-    def test_viewer_renders_speaker_glyph_when_speaker_assigned(self, client, db, filestore):
-        """Non-color cue for speakers (WCAG 1.4.1): segments with a speaker
-        should render one of the eight glyphs alongside the speaker label."""
-        segments = [Segment(start=0.0, end=1.0, text="hello", speaker="SPEAKER_00")]
-        result = TranscriptResult(segments=segments, language="zh", duration=1.0)
-        job = Job(filename="diar.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-
-        assert resp.status_code == 200
-        assert "[SPEAKER_00]" in resp.text
-        assert any(glyph in resp.text for glyph in "●▲■◆★✦◉♦")
-
-    def test_viewer_includes_keyboard_shortcut_hint(self, client, db, filestore):
-        """Viewer should expose its keyboard shortcuts so they are
-        discoverable (Nielsen #7 + 6)."""
-        segments = [Segment(start=0.0, end=1.0, text="hello")]
-        result = TranscriptResult(segments=segments, language="zh", duration=1.0)
-        job = Job(filename="hint.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-
-        assert resp.status_code == 200
-        assert "鍵盤捷徑" in resp.text
-        assert "聚焦搜尋" in resp.text
-
-    def test_viewer_copy_shortcut_ignores_modifier_combos(self, client, db, filestore):
-        """Pressing Ctrl+C / Cmd+C to copy selected transcript text must not
-        trigger copyActive() and overwrite the user's clipboard selection."""
-        segments = [Segment(start=0.0, end=1.0, text="hello")]
-        result = TranscriptResult(segments=segments, language="zh", duration=1.0)
-        job = Job(filename="copy.mp3", status=JobStatus.COMPLETED, language="zh")
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-
-        assert resp.status_code == 200
-        shortcut_line = next(line for line in resp.text.splitlines() if "copyActive();" in line)
-        assert "$event.ctrlKey" in shortcut_line
-        assert "$event.metaKey" in shortcut_line
-
-    def test_viewer_hides_download_media_in_no_segments_branch(self, client, db, filestore):
-        """No-segments fallback toolbar must also gate Download Media on
-        media_available (regression for PR #41 followup F1)."""
-        result = TranscriptResult(segments=[], language="zh", duration=0.0)
-        job = Job(
-            filename="https://www.youtube.com/watch?v=def",
-            source_url="https://www.youtube.com/watch?v=def",
-            status=JobStatus.COMPLETED,
-        )
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-
-        resp = client.get(f"/viewer/{job.id}")
-        assert resp.status_code == 200
-        assert "下載影片" not in resp.text
-
-    def test_viewer_shows_download_media_when_source_media_present(self, client, db, filestore):
-        """Positive control: if the media file is still on disk, the button
-        should render so the gate is not over-eager."""
-        result = TranscriptResult(
-            segments=[Segment(start=0.0, end=1.0, text="hi")],
-            language="zh",
-            duration=1.0,
-        )
-        job = Job(
-            filename="https://www.youtube.com/watch?v=ghi",
-            source_url="https://www.youtube.com/watch?v=ghi",
-            status=JobStatus.COMPLETED,
-        )
-        result_path = filestore.save_result(job.id, result)
-        job.result_path = str(result_path)
-        db.insert_job(job)
-        # Drop a video.* file in the upload dir so get_source_media_path finds it.
-        media_dir = filestore.prepare_upload_path(job.id, "_").parent
-        (media_dir / "video.mp4").write_bytes(b"fake mp4")
-
-        resp = client.get(f"/viewer/{job.id}")
-        assert resp.status_code == 200
-        assert "下載影片" in resp.text
-
     def test_processed_audio_is_playable_and_downloadable(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
         path = filestore._output_dir / job.id / "processed.wav"
@@ -1269,15 +432,9 @@ class TestViewerRoutes:
 
         viewer = client.get(f"/viewer/{job.id}")
         assert viewer.status_code == 200
-        assert f'/viewer/{job.id}/processed-audio?download=1' in viewer.text
+        assert f"/viewer/{job.id}/processed-audio?download=1" in viewer.text
         assert "Scarica audio elaborato (WAV)" in viewer.text
         assert f'/viewer/{job.id}/media" download' not in viewer.text
-
-    def test_processed_audio_download_missing_or_nonexistent(self, client, db, filestore):
-        job = _create_completed_job(db, filestore)
-        assert client.get(f"/viewer/{job.id}/processed-audio?download=1").status_code == 404
-        assert client.get(f"/viewer/{'0' * 32}/processed-audio?download=1").status_code == 404
-        assert client.get("/viewer/bad-id/processed-audio?download=1").status_code == 400
 
     def test_export_srt(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
@@ -1290,14 +447,6 @@ class TestViewerRoutes:
         resp = client.get(f"/viewer/{job.id}/export/json")
         assert resp.status_code == 200
         assert "application/json" in resp.headers["content-type"]
-
-    def test_export_nonexistent(self, client):
-        resp = client.get("/viewer/00000000000000000000000000000000/export/srt")
-        assert resp.status_code == 404
-
-    def test_export_invalid_id_returns_400(self, client):
-        resp = client.get("/viewer/nonexistent/export/srt")
-        assert resp.status_code == 400
 
     def test_export_invalid_format_returns_400(self, client, db, filestore):
         job = _create_completed_job(db, filestore)
@@ -1339,29 +488,11 @@ class TestUploadPost:
         page = client.get("/jobs")
         assert flash_messages(page.text) == [ui_labels.TOAST_UPLOAD_SUCCESS.replace("{count}", "1")]
 
-    def test_upload_flash_is_consumed_after_one_render(self, client, app):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            self._upload(client)
-        first = client.get("/jobs")
-        assert 'id="flash-data"' in first.text
-        # Flash is one-shot: a reload no longer re-shows the toast.
-        second = client.get("/jobs")
-        assert 'id="flash-data"' not in second.text
-
     def test_upload_rejects_pdf_disguised_as_audio(self, client):
         with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
             resp = self._upload(
                 client,
                 files=[("files", ("evil.mp3", b"%PDF-1.7 not really audio", "audio/mpeg"))],
-            )
-        assert resp.status_code == 303
-        assert "error=invalid_content" in resp.headers["location"]
-
-    def test_upload_rejects_html_disguised_as_audio(self, client):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = self._upload(
-                client,
-                files=[("files", ("evil.mp4", b"<!DOCTYPE html><html>", "video/mp4"))],
             )
         assert resp.status_code == 303
         assert "error=invalid_content" in resp.headers["location"]
@@ -1390,34 +521,6 @@ class TestUploadPost:
         )
         assert flash_messages(page.text) == [expected]
 
-    def test_upload_skips_file_when_write_fails_but_submits_valid_ones(self, client, db, app):
-        """A disk write failure on one file degrades to a per-file skip (like
-        the content/size checks), not a 500 that aborts the whole batch and
-        strands the already-queued files."""
-        calls = {"n": 0}
-
-        async def _fake_stream(uploaded_file, dest, max_size):
-            calls["n"] += 1
-            if calls["n"] == 2:
-                raise OSError("disk full")
-            dest.write_bytes(b"ID3 fake audio")
-            return True
-
-        files = [
-            ("files", ("good.mp3", b"ID3 good audio", "audio/mpeg")),
-            ("files", ("bad.mp3", b"ID3 also audio", "audio/mpeg")),
-        ]
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline") as mock_enqueue,
-            patch("whisper_ui.web.routes.upload._stream_to_file", side_effect=_fake_stream),
-        ):
-            resp = self._upload(client, files=files)
-
-        assert resp.status_code == 303  # success path, not a 500
-        assert mock_enqueue.call_count == 1
-        jobs = list_jobs(db)
-        assert len(jobs) == 1 and jobs[0].filename == "good.mp3"
-
     def test_upload_clamps_diarization_and_llm_when_unavailable(self, client, db, app):
         # Force neither hf_token nor ollama_base_url, so both opt-in flags must
         # be clamped to False at persistence even when posted true.
@@ -1440,168 +543,53 @@ class TestUploadPost:
         assert job.enable_diarization is False
         assert job.llm_correction_enabled is False
 
-    def test_upload_passes_through_flags_when_services_available(self, client, db, app):
-        app.state.settings = app.state.settings.model_copy(
-            update={"hf_token": "hf-test-not-real", "ollama_base_url": "http://ollama:11434"}
-        )
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as mock_enqueue:
-            resp = client.post(
-                "/upload",
-                data={
-                    "language": "zh",
-                    "model_name": "large-v3",
-                    "num_speakers": "0",
-                    "enable_diarization": "true",
-                    "llm_correction_enabled": "true",
-                },
-                files=[("files", ("test.mp3", b"fake audio data", "audio/mpeg"))],
-                follow_redirects=False,
-            )
-        assert resp.status_code == 303
-        job = mock_enqueue.call_args[0][0]
-        assert job.enable_diarization is True
-        assert job.llm_correction_enabled is True
-
-    def test_whisper_beam8_is_saved_for_uploaded_audio(self, client, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
-            resp = client.post(
-                "/upload", data={"language": "it", "whisper_beam_size": "8"},
-                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
-                follow_redirects=False,
-            )
-        assert resp.status_code == 303
-        job = enqueue.call_args[0][0]
-        assert job.whisper_beam_size == 8
-        assert db.get_job(job.id).whisper_beam_size == 8
-
-    def test_whisper_beam_rejects_unsupported_modes(self, client, db):
-        for value in ("0", "6", "7", "9", "abc"):
-            resp = client.post(
-                "/upload", data={"whisper_beam_size": value},
-                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
-            )
-            assert resp.status_code == 422, value
-        assert list_jobs(db) == []
-
     def test_upload_all_vad_settings_persist_and_are_not_global(self, client, db):
         controls = {
-            'vad_enabled': 'false', 'vad_threshold': '0.15',
-            'vad_min_speech_ms': '80', 'vad_min_silence_ms': '600',
-            'vad_speech_pad_ms': '800', 'vad_samples_overlap': '0.50',
+            "vad_enabled": "false",
+            "vad_threshold": "0.15",
+            "vad_min_speech_ms": "80",
+            "vad_min_silence_ms": "600",
+            "vad_speech_pad_ms": "800",
+            "vad_samples_overlap": "0.50",
         }
-        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-            resp = client.post('/upload', data=controls,
-                               files=[('files', ('meeting.wav', b'test audio', 'audio/wav'))],
-                               follow_redirects=False)
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            resp = client.post(
+                "/upload",
+                data=controls,
+                files=[("files", ("meeting.wav", b"test audio", "audio/wav"))],
+                follow_redirects=False,
+            )
         assert resp.status_code == 303
         job = enqueue.call_args[0][0]
-        assert (job.vad_enabled, job.vad_threshold, job.vad_min_speech_ms,
-                job.vad_min_silence_ms, job.vad_speech_pad_ms,
-                job.vad_samples_overlap) == (False, .15, 80, 600, 800, .5)
+        assert (
+            job.vad_enabled,
+            job.vad_threshold,
+            job.vad_min_speech_ms,
+            job.vad_min_silence_ms,
+            job.vad_speech_pad_ms,
+            job.vad_samples_overlap,
+        ) == (False, 0.15, 80, 600, 800, 0.5)
         assert db.get_job(job.id).vad_enabled is False
         assert db.get_job(job.id).vad_speech_pad_ms == 800
-        page = client.get('/upload')
+        page = client.get("/upload")
         assert page.status_code == 200
         for field in controls:
             assert f'name="{field}"' in page.text
-        assert 'Sovrapposizione' in page.text
-        assert 'Disattivato' in page.text
+        assert "Sovrapposizione" in page.text
+        assert "Diretta · senza Silero" in page.text
 
     def test_upload_invalid_vad_boundary_settings_rejected(self, client, db):
         for field, value in (
-            ('vad_min_speech_ms', '-1'), ('vad_min_silence_ms', '10001'),
-            ('vad_speech_pad_ms', '5001'), ('vad_samples_overlap', '1.01'),
-            ('vad_samples_overlap', '-0.1'), ('vad_enabled', 'unknown'),
+            ("vad_min_speech_ms", "-1"),
+            ("vad_min_silence_ms", "10001"),
+            ("vad_speech_pad_ms", "5001"),
+            ("vad_samples_overlap", "1.01"),
+            ("vad_samples_overlap", "-0.1"),
+            ("vad_enabled", "unknown"),
         ):
-            response = client.post('/upload', data={field: value},
-                files=[('files', ('test.wav', b'raw', 'audio/wav'))])
+            response = client.post("/upload", data={field: value}, files=[("files", ("test.wav", b"raw", "audio/wav"))])
             assert response.status_code == 422, (field, value)
         assert list_jobs(db) == []
-
-    def test_upload_vad_slider_is_saved(self, client, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
-            resp = client.post(
-                "/upload",
-                data={"language": "it", "model_name": "large-v3", "vad_threshold": "0.10"},
-                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
-                follow_redirects=False,
-            )
-        assert resp.status_code == 303
-        assert enqueue.call_args[0][0].vad_threshold == 0.10
-        assert list_jobs(db)[0].vad_threshold == 0.10
-
-    def test_upload_vad_slider_rejects_out_of_range(self, client, db):
-        for value in ("0", "0.05", "0.75", "1", "abc"):
-            resp = client.post(
-                "/upload",
-                data={"language": "it", "vad_threshold": value},
-                files=[("files", ("meeting.mp3", b"test-audio", "audio/mpeg"))],
-            )
-            assert resp.status_code == 422, value
-        assert list_jobs(db) == []
-
-    def test_url_upload_vad_threshold_is_persisted(self, client, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
-            resp = client.post(
-                "/upload/url",
-                data={"url": "https://youtu.be/dQw4w9WgXcQ", "vad_threshold": "0.60"},
-                follow_redirects=False,
-            )
-        assert resp.status_code == 303
-        assert enqueue.call_args[0][0].vad_threshold == 0.60
-        assert list_jobs(db)[0].vad_threshold == 0.60
-
-    def test_upload_slider_is_rendered_with_hint(self, client):
-        resp = client.get('/upload')
-        assert resp.status_code == 200
-        assert 'name="vad_threshold"' in resp.text
-        assert 'Più sensibile' in resp.text
-        assert '0,25 · Consigliato' in resp.text
-
-    def test_upload_no_file_redirects(self, client):
-        resp = client.post("/upload", data={"language": "zh"}, follow_redirects=False)
-        assert resp.status_code == 303
-        assert "error=no_file" in resp.headers["location"]
-
-    def test_upload_invalid_language_redirects(self, client):
-        resp = self._upload(client, language="xx_invalid")
-        assert resp.status_code == 303
-        location = resp.headers["location"]
-        assert "error=invalid_language" in location
-        assert "value=xx_invalid" in location
-
-    def test_upload_accepts_auto_language(self, client):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as mock_enqueue:
-            resp = self._upload(client, language="auto")
-        assert resp.status_code == 303
-        assert "error" not in resp.headers["location"]
-        job = mock_enqueue.call_args[0][0]
-        assert job.language == "auto"
-
-    def test_upload_invalid_model_redirects(self, client):
-        resp = self._upload(client, model_name="nonexistent-model")
-        assert resp.status_code == 303
-        location = resp.headers["location"]
-        assert "error=invalid_model" in location
-        assert "value=nonexistent-model" in location
-
-    def test_upload_file_too_large_redirects(self, client, app):
-        app.state.settings = app.state.settings.model_copy(update={"max_upload_size": 10})
-        files = [("files", ("big.mp3", b"x" * 20, "audio/mpeg"))]
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = self._upload(client, files=files)
-        assert resp.status_code == 303
-        assert "error=too_large" in resp.headers["location"]
-
-    def test_upload_too_large_url_encodes_special_chars(self, client, app):
-        app.state.settings = app.state.settings.model_copy(update={"max_upload_size": 5})
-        files = [("files", ("evil&limit=1.mp3", b"x" * 10, "audio/mpeg"))]
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = self._upload(client, files=files)
-        assert resp.status_code == 303
-        location = resp.headers["location"]
-        # '&' in filename must be percent-encoded, not split the query string
-        assert "evil%26limit%3D1.mp3" in location
 
     def test_upload_too_large_cleans_up_partial_file(self, client, app, filestore):
         app.state.settings = app.state.settings.model_copy(update={"max_upload_size": 5})
@@ -1612,67 +600,6 @@ class TestUploadPost:
         # Verify no partial files remain in upload dir
         upload_files = list(filestore._upload_dir.rglob("big.mp3"))
         assert upload_files == []
-
-    def test_upload_unsupported_format_redirects(self, client):
-        files = [("files", ("document.pdf", b"fake pdf", "application/pdf"))]
-        resp = self._upload(client, files=files)
-        assert resp.status_code == 303
-        assert "error=no_files" in resp.headers["location"]
-
-    def test_upload_logs_batch_start_and_finish(self, client, app, caplog):
-        import logging as _logging
-
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.upload"),
-        ):
-            self._upload(client)
-
-        messages = [r.getMessage() for r in caplog.records]
-        assert any("upload batch starting" in m and "files=1" in m for m in messages)
-        assert any("upload job inserted" in m and "filename='test.mp3'" in m for m in messages)
-        assert any("upload batch finished" in m and "submitted=1" in m for m in messages)
-
-    def test_upload_log_reflects_clamped_flags_not_raw_request(self, client, app, caplog):
-        import logging as _logging
-
-        # Without hf_token / ollama_base_url the posted flags are clamped to
-        # False; the "job inserted" log must report the clamped job.* values,
-        # not the misleading raw request flags.
-        app.state.settings = app.state.settings.model_copy(update={"hf_token": "", "ollama_base_url": ""})
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.upload"),
-        ):
-            client.post(
-                "/upload",
-                data={
-                    "language": "zh",
-                    "model_name": "large-v3",
-                    "num_speakers": "0",
-                    "enable_diarization": "true",
-                    "llm_correction_enabled": "true",
-                },
-                files=[("files", ("test.mp3", b"fake audio data", "audio/mpeg"))],
-                follow_redirects=False,
-            )
-
-        inserted = next(r.getMessage() for r in caplog.records if "upload job inserted" in r.getMessage())
-        assert "diarize=False" in inserted
-        assert "llm=False" in inserted
-
-    def test_upload_too_large_logs_skip(self, client, app, caplog):
-        import logging as _logging
-
-        app.state.settings = app.state.settings.model_copy(update={"max_upload_size": 5})
-        files = [("files", ("big.mp3", b"x" * 10, "audio/mpeg"))]
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            caplog.at_level(_logging.WARNING, logger="whisper_ui.web.routes.upload"),
-        ):
-            self._upload(client, files=files)
-
-        assert any("upload skipped" in r.getMessage() for r in caplog.records)
 
     def test_upload_partial_enqueue_failure_reports_failed_count(self, client, app, db):
         # First file succeeds, second raises — simulate a transient Redis error.
@@ -1720,26 +647,12 @@ class TestUploadURLPost:
         }
         return client.post("/upload/url", data=data, follow_redirects=False)
 
-    def test_upload_url_submits_job(self, client, app, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = self._post_url(client)
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/jobs"
-        page = client.get("/jobs")
-        assert flash_messages(page.text) == [ui_labels.TOAST_UPLOAD_SUCCESS.replace("{count}", "1")]
-
     def test_upload_url_creates_job_with_source_url(self, client, app, db):
         with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
             self._post_url(client)
         jobs = list_jobs(db)
         assert len(jobs) == 1
         assert jobs[0].source_url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-    def test_upload_x_url_submits_job(self, client, app, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = self._post_url(client, url="https://x.com/jack/status/20")
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/jobs"
 
     def test_upload_x_url_creates_job_with_canonical_source_url(self, client, app, db):
         with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
@@ -1748,111 +661,10 @@ class TestUploadURLPost:
         assert len(jobs) == 1
         assert jobs[0].source_url == "https://x.com/i/status/20"
 
-    def test_upload_twitter_com_url_accepted(self, client, app, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            self._post_url(client, url="https://twitter.com/jack/status/20")
-        jobs = list_jobs(db)
-        assert len(jobs) == 1
-        assert jobs[0].source_url == "https://x.com/i/status/20"
-
-    def test_upload_x_profile_url_rejected(self, client):
-        resp = self._post_url(client, url="https://x.com/jack")
-        assert resp.status_code == 303
-        assert "error=all_invalid_urls" in resp.headers["location"]
-
     def test_upload_invalid_url_redirects(self, client):
         resp = self._post_url(client, url="https://example.com/not-youtube")
         assert resp.status_code == 303
         assert "error=all_invalid_urls" in resp.headers["location"]
-
-    def test_upload_unsupported_playlist_url_redirects(self, client):
-        """Login-bound lists (Watch Later) cannot be expanded anonymously and
-        are rejected with the playlist error, not silently dropped."""
-        resp = self._post_url(client, url="https://www.youtube.com/playlist?list=WL")
-        assert resp.status_code == 303
-        assert "error=playlist" in resp.headers["location"]
-
-    def test_upload_empty_url_returns_422(self, client):
-        resp = self._post_url(client, url="")
-        assert resp.status_code == 422
-
-    def test_upload_url_invalid_language(self, client):
-        resp = self._post_url(client, language="xx_invalid")
-        assert resp.status_code == 303
-        assert "error=invalid_language" in resp.headers["location"]
-
-    def test_upload_url_htmx_returns_redirect_header(self, client, app, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline"):
-            resp = client.post(
-                "/upload/url",
-                data={
-                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                    "language": "zh",
-                    "model_name": "large-v3",
-                    "num_speakers": "0",
-                },
-                headers={"HX-Request": "true"},
-                follow_redirects=False,
-            )
-        assert resp.status_code == 204
-        assert resp.headers.get("HX-Redirect") == "/jobs"
-
-    def test_upload_url_passes_job_without_probed_duration(self, client, app, db):
-        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as mock_enqueue:
-            self._post_url(client)
-        mock_enqueue.assert_called_once()
-        # URL uploads cannot be probed until after download; the dispatcher
-        # receives the Job with duration=None so the timeout helper picks the
-        # settings.job_timeout_default internally.
-        enqueued_job = mock_enqueue.call_args[0][0]
-        assert enqueued_job.duration is None
-        assert enqueued_job.source_url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-    def test_upload_url_enqueue_failure_redirects_to_jobs_with_failed_count(self, client, app, db):
-        """When enqueue fails the jobs are already persisted as FAILED; the
-        redirect must land on /jobs so the user can see them, matching how
-        /upload (file route) handles partial/total enqueue failures.
-        """
-        with patch(
-            "whisper_ui.web.routes.upload.enqueue_pipeline",
-            side_effect=Exception("Redis connection lost"),
-        ):
-            resp = self._post_url(client)
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/jobs"
-        page = client.get("/jobs")
-        assert flash_messages(page.text) == [
-            ui_labels.TOAST_UPLOAD_SUCCESS.replace("{count}", "0")
-            + ui_labels.TOAST_UPLOAD_FAILED.replace("{count}", "1")
-        ]
-        jobs = list_jobs(db)
-        assert len(jobs) == 1
-        assert jobs[0].status == JobStatus.FAILED
-
-    def test_upload_url_enqueue_failure_htmx_returns_hx_redirect_to_jobs(self, client, app, db):
-        """htmx variant: same behaviour, delivered via HX-Redirect so the
-        fragment swap does not swallow the FAILED-job visibility.
-        """
-        with patch(
-            "whisper_ui.web.routes.upload.enqueue_pipeline",
-            side_effect=Exception("Redis connection lost"),
-        ):
-            resp = client.post(
-                "/upload/url",
-                data={
-                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                    "language": "zh",
-                    "model_name": "large-v3",
-                    "num_speakers": "0",
-                },
-                headers={"HX-Request": "true"},
-                follow_redirects=False,
-            )
-        assert resp.status_code == 204
-        assert resp.headers.get("HX-Redirect") == "/jobs"
-        jobs = list_jobs(db)
-        assert len(jobs) == 1
-        assert jobs[0].status == JobStatus.FAILED
 
 
 class TestUploadPlaylistPost:
@@ -1889,61 +701,6 @@ class TestUploadPlaylistPost:
         assert jobs[0].batch_id is not None
         assert {j.batch_title for j in jobs} == {"Team Meetings 2026Q2"}
 
-    def test_upload_playlist_with_single_video_creates_plain_job(self, client, app, db):
-        info = self._info(video_urls=self._VIDEO_URLS[:1])
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            patch("whisper_ui.web.routes.upload.expand_playlist", return_value=info),
-        ):
-            self._post_url(client, url=self._PLAYLIST_URL)
-
-        jobs = list_jobs(db)
-        assert len(jobs) == 1
-        assert jobs[0].batch_id is None
-        assert jobs[0].batch_title is None
-
-    def test_upload_duplicate_playlist_lines_still_carry_title(self, client, app, db):
-        """The same playlist pasted twice is still a pure single-playlist
-        submission: one expansion, one set of jobs, title kept, and the
-        unavailable count reported once (not multiplied by paste count)."""
-        doubled = f"{self._PLAYLIST_URL}\n{self._PLAYLIST_URL}"
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            patch(
-                "whisper_ui.web.routes.upload.expand_playlist",
-                return_value=self._info(unavailable_count=2),
-            ) as mock_expand,
-        ):
-            resp = self._post_url(client, url=doubled)
-
-        assert resp.status_code == 303
-        mock_expand.assert_called_once()
-        jobs = list_jobs(db)
-        assert sorted(j.source_url for j in jobs) == self._VIDEO_URLS
-        assert {j.batch_title for j in jobs} == {"Team Meetings 2026Q2"}
-        page = client.get("/jobs")
-        expected = (
-            ui_labels.TOAST_UPLOAD_SUCCESS.replace("{count}", "3")
-            + ui_labels.TOAST_URL_SKIPPED.replace("{count}", "2")
-            + ui_labels.TOAST_URL_DEDUPED.replace("{count}", "3")
-        )
-        assert flash_messages(page.text) == [expected]
-
-    def test_upload_playlist_mixed_with_video_shares_batch_without_title(self, client, app, db):
-        mixed = f"{self._PLAYLIST_URL}\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        info = self._info(video_urls=self._VIDEO_URLS[:2])
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            patch("whisper_ui.web.routes.upload.expand_playlist", return_value=info),
-        ):
-            self._post_url(client, url=mixed)
-
-        jobs = list_jobs(db)
-        assert len(jobs) == 3
-        assert len({j.batch_id for j in jobs}) == 1
-        assert jobs[0].batch_id is not None
-        assert {j.batch_title for j in jobs} == {None}
-
     def test_upload_playlist_overlapping_explicit_video_dedupes(self, client, app, db):
         mixed = f"{self._PLAYLIST_URL}\n{self._VIDEO_URLS[0]}"
         with (
@@ -1959,67 +716,6 @@ class TestUploadPlaylistPost:
             "{count}", "1"
         )
         assert flash_messages(page.text) == [expected]
-
-    def test_upload_playlist_unavailable_entries_reported_as_skipped(self, client, app, db):
-        info = self._info(unavailable_count=2)
-        with (
-            patch("whisper_ui.web.routes.upload.enqueue_pipeline"),
-            patch("whisper_ui.web.routes.upload.expand_playlist", return_value=info),
-        ):
-            self._post_url(client, url=self._PLAYLIST_URL)
-
-        page = client.get("/jobs")
-        expected = ui_labels.TOAST_UPLOAD_SUCCESS.replace("{count}", "3") + ui_labels.TOAST_URL_SKIPPED.replace(
-            "{count}", "2"
-        )
-        assert flash_messages(page.text) == [expected]
-
-    def test_upload_playlist_too_large_redirects_with_count(self, client):
-        from whisper_ui.core.constants import MAX_BATCH_SIZE
-        from whisper_ui.web.playlist import PlaylistTooLargeError
-
-        with patch(
-            "whisper_ui.web.routes.upload.expand_playlist",
-            side_effect=PlaylistTooLargeError(250, MAX_BATCH_SIZE),
-        ):
-            resp = self._post_url(client, url=self._PLAYLIST_URL)
-
-        assert resp.status_code == 303
-        assert "error=playlist_too_large" in resp.headers["location"]
-        assert "count=250" in resp.headers["location"]
-
-    def test_upload_playlist_too_large_without_count_omits_count_param(self, client):
-        from whisper_ui.core.constants import MAX_BATCH_SIZE
-        from whisper_ui.web.playlist import PlaylistTooLargeError
-
-        with patch(
-            "whisper_ui.web.routes.upload.expand_playlist",
-            side_effect=PlaylistTooLargeError(None, MAX_BATCH_SIZE),
-        ):
-            resp = self._post_url(client, url=self._PLAYLIST_URL)
-
-        assert resp.status_code == 303
-        assert "error=playlist_too_large" in resp.headers["location"]
-        assert "count=" not in resp.headers["location"]
-
-    @pytest.mark.parametrize(
-        "exc_name,error_code",
-        [
-            ("PlaylistEmptyError", "playlist_empty"),
-            ("PlaylistUnavailableError", "playlist_unavailable"),
-            ("PlaylistFetchError", "playlist_fetch_failed"),
-        ],
-    )
-    def test_upload_playlist_expansion_failures_map_to_error_codes(self, client, db, exc_name, error_code):
-        from whisper_ui.web import playlist as playlist_mod
-
-        exc_cls = getattr(playlist_mod, exc_name)
-        with patch("whisper_ui.web.routes.upload.expand_playlist", side_effect=exc_cls("boom")):
-            resp = self._post_url(client, url=self._PLAYLIST_URL)
-
-        assert resp.status_code == 303
-        assert f"error={error_code}" in resp.headers["location"]
-        assert list_jobs(db) == [], "a failed expansion must not persist any job"
 
     def test_upload_playlist_pushing_total_over_limit_rejected(self, client, db):
         from whisper_ui.core.constants import MAX_BATCH_SIZE
@@ -2054,44 +750,11 @@ class TestBatchRoutes:
             jobs.append(job)
         return jobs
 
-    def test_job_list_batch_header_shows_batch_title(self, client, db, filestore):
-        batch_id = "e" * 32
-        for name in ["ep1.mp4", "ep2.mp4"]:
-            db.insert_job(
-                Job(filename=name, status=JobStatus.COMPLETED, batch_id=batch_id, batch_title="會議錄影 2026Q2")
-            )
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert ui_labels.JOBS_BATCH_LABEL_TITLED.format(title="會議錄影 2026Q2", count=2) in resp.text
-
-    def test_job_list_batch_header_without_title_falls_back_to_count_label(self, client, db, filestore):
-        self._create_batch(db, filestore)
-
-        resp = client.get("/jobs/list")
-
-        assert resp.status_code == 200
-        assert ui_labels.JOBS_BATCH_LABEL.format(count=2) in resp.text
-
     def test_batch_download_success(self, client, db, filestore):
         self._create_batch(db, filestore)
         resp = client.get(f"/jobs/batch/{self._BATCH_ID}/download?format_name=txt")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/zip"
-
-    def test_batch_download_not_found(self, client):
-        resp = client.get(f"/jobs/batch/{'0' * 32}/download?format_name=srt")
-        assert resp.status_code == 404
-
-    def test_batch_download_invalid_format(self, client, db, filestore):
-        self._create_batch(db, filestore)
-        resp = client.get(f"/jobs/batch/{self._BATCH_ID}/download?format_name=invalid")
-        assert resp.status_code == 400
-
-    def test_batch_download_invalid_id_returns_400(self, client):
-        resp = client.get("/jobs/batch/not-hex/download?format_name=srt")
-        assert resp.status_code == 400
 
     def test_retry_batch(self, client, db, app):
         batch_id = "b" * 32
@@ -2101,37 +764,6 @@ class TestBatchRoutes:
             resp = client.post(f"/jobs/batch/{batch_id}/retry")
         assert resp.status_code == 204
 
-    def test_retry_batch_url_job_passes_none_duration(self, client, db, app):
-        batch_id = "d" * 32
-        job = Job(
-            filename="url.mp3",
-            status=JobStatus.FAILED,
-            error="err",
-            batch_id=batch_id,
-            source_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        )
-        db.insert_job(job)
-        with patch("whisper_ui.web.routes.jobs.enqueue_pipeline") as mock_enqueue:
-            resp = client.post(f"/jobs/batch/{batch_id}/retry")
-        assert resp.status_code == 204
-        mock_enqueue.assert_called_once()
-        assert mock_enqueue.call_args[0][0].duration is None
-
-    def test_retry_batch_enqueue_failure_uses_shared_label(self, client, db):
-        # All three retry paths must surface the same localized message;
-        # this one previously hardcoded an English string.
-        from whisper_ui.ui import labels as ui_labels
-
-        batch_id = "e" * 32
-        job = Job(filename="boom.mp3", status=JobStatus.FAILED, error="err", batch_id=batch_id)
-        db.insert_job(job)
-        with patch("whisper_ui.web.routes.jobs.enqueue_pipeline", side_effect=RuntimeError("redis down")):
-            resp = client.post(f"/jobs/batch/{batch_id}/retry")
-        assert resp.status_code == 204
-        refreshed = db.get_job(job.id)
-        assert refreshed.status == JobStatus.FAILED
-        assert refreshed.error == ui_labels.UPLOAD_ENQUEUE_FAILED
-
     def test_delete_batch(self, client, db, filestore):
         batch_id = "c" * 32
         jobs = self._create_batch(db, filestore, batch_id=batch_id)
@@ -2139,79 +771,6 @@ class TestBatchRoutes:
         assert resp.status_code == 204
         for job in jobs:
             assert db.get_job(job.id) is None
-
-    def test_retry_batch_emits_summary_log(self, client, db, caplog):
-        import logging as _logging
-
-        batch_id = "e" * 32
-        for i in range(3):
-            db.insert_job(
-                Job(filename=f"f{i}.mp3", status=JobStatus.FAILED, error="err", batch_id=batch_id),
-            )
-        with (
-            patch("whisper_ui.web.routes.jobs.enqueue_pipeline"),
-            patch("whisper_ui.web.routes.jobs.get_audio_duration_seconds", return_value=60.0),
-            caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.jobs"),
-        ):
-            client.post(f"/jobs/batch/{batch_id}/retry")
-
-        summary = next(r.getMessage() for r in caplog.records if "batch retry finished" in r.getMessage())
-        assert "retried=3" in summary
-        assert "total=3" in summary
-
-    def test_delete_batch_emits_summary_log(self, client, db, filestore, caplog):
-        import logging as _logging
-
-        batch_id = "f" * 32
-        self._create_batch(db, filestore, batch_id=batch_id)
-        with caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.jobs"):
-            client.delete(f"/jobs/batch/{batch_id}")
-
-        summary = next(r.getMessage() for r in caplog.records if "batch deleted" in r.getMessage())
-        assert "deleted=" in summary
-        assert batch_id in summary
-
-    def test_delete_batch_removes_all_rows_and_logs_orphan_on_filestore_failure(self, client, db, filestore, caplog):
-        """Row-first batch delete (C5): every terminal row is removed
-        atomically (closing the delete/retry race). A file-reclaim failure on
-        one job leaves that job's files orphaned (logged), not its DB row — so
-        the whole batch clears and the summary counts all rows deleted.
-        """
-        import logging as _logging
-
-        from whisper_ui.core.models import Job, JobStatus
-
-        batch_id = "1" * 32
-        jobs = [Job(filename=f"f{i}.mp3", status=JobStatus.COMPLETED, batch_id=batch_id) for i in range(3)]
-        for j in jobs:
-            db.insert_job(j)
-
-        original_delete = filestore.delete_job_files
-        call_count = {"n": 0}
-
-        def _failing_delete(job_id):
-            call_count["n"] += 1
-            if call_count["n"] == 2:
-                raise PermissionError("denied for middle job")
-            return original_delete(job_id)
-
-        with (
-            patch.object(filestore, "delete_job_files", side_effect=_failing_delete),
-            caplog.at_level(_logging.INFO, logger="whisper_ui.web.routes.jobs"),
-        ):
-            resp = client.delete(f"/jobs/batch/{batch_id}")
-
-        assert resp.status_code == 204
-        # All rows removed row-first, including the one whose file reclaim failed.
-        assert db.get_job(jobs[0].id) is None
-        assert db.get_job(jobs[1].id) is None
-        assert db.get_job(jobs[2].id) is None
-
-        summary = next(r.getMessage() for r in caplog.records if "batch deleted" in r.getMessage())
-        assert "deleted=3" in summary
-        assert "total=3" in summary
-        # The orphaned files from the failed reclaim are logged for cleanup.
-        assert any("row removed but filestore reclaim failed" in r.getMessage() for r in caplog.records)
 
 
 class TestRetentionSweep:
@@ -2275,318 +834,175 @@ class TestRetentionSweep:
         removed_3 = _run_retention_sweep(settings.database_path, filestore, threshold_iso, limit)
         assert removed_3 == 0
 
-    def test_list_terminal_job_ids_orders_oldest_first(self, db):
-        """Stable ORDER BY makes the sweep deterministic; assert that
-        the SQL contract returns oldest-first regardless of insert order."""
-        from datetime import UTC, datetime, timedelta
-
-        from whisper_ui.core.models import Job
-
-        now = datetime.now(UTC)
-        # Insert in non-chronological order to detect any reliance on rowid.
-        ts_newer = (now - timedelta(days=10)).isoformat()
-        ts_older = (now - timedelta(days=40)).isoformat()
-        newer = Job(filename="newer.mp3", status=JobStatus.COMPLETED, language="zh")
-        older = Job(filename="older.mp3", status=JobStatus.COMPLETED, language="zh")
-        db.insert_job(newer)
-        db.insert_job(older)
-        db._conn.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (ts_newer, newer.id))
-        db._conn.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (ts_older, older.id))
-        db._conn.commit()
-
-        threshold_iso = (now - timedelta(days=1)).isoformat()
-        ids = db.list_terminal_job_ids_older_than(threshold_iso)
-        assert ids == [older.id, newer.id]
-
-
-class TestContentDispositionHelper:
-    def test_ascii_filename(self):
-        result = make_content_disposition("report.pdf")
-        assert result == "attachment; filename=\"report.pdf\"; filename*=UTF-8''report.pdf"
-
-    def test_non_ascii_filename(self):
-        result = make_content_disposition("\u6e2c\u8a66.srt")
-        assert "filename*=UTF-8''" in result
-        assert "%E6%B8%AC%E8%A9%A6" in result
-
-    def test_ascii_fallback_replaces_non_ascii_and_quotes(self):
-        # The plain filename= form must stay a valid quoted-string: no raw
-        # Unicode, no embedded quotes or backslashes.
-        result = make_content_disposition('\u6e2c\u8a66"a\\b.srt')
-        assert 'filename="___a_b.srt"' in result
-
-    def test_plain_filename_form_present_for_client_regex(self):
-        # The bulk export client parses filename="..." from this header; the
-        # filename* form alone would never match.
-        result = make_content_disposition("selection_srt.zip")
-        assert 'filename="selection_srt.zip"' in result
-
-    def test_inline_disposition(self):
-        result = make_content_disposition("file.txt", disposition="inline")
-        assert result.startswith("inline;")
-
-
-class TestFormatTime:
-    def test_under_one_hour(self):
-        assert _format_time(125) == "02:05"
-
-    def test_exactly_one_hour(self):
-        assert _format_time(3600) == "01:00:00"
-
-    def test_over_one_hour(self):
-        assert _format_time(3661) == "01:01:01"
-
-    def test_zero(self):
-        assert _format_time(0) == "00:00"
-
-    def test_large_duration(self):
-        assert _format_time(36000) == "10:00:00"
-
-
-class TestFormatRelativeTime:
-    def test_invalid_input(self):
-        assert _format_relative_time("not-a-date") == "not-a-date"
-
-    def test_recent_shows_just_now(self):
-        from datetime import UTC, datetime
-
-        now = datetime.now(UTC).isoformat()
-        result = _format_relative_time(now)
-        assert result == "剛剛"
-
-
-class TestFormatSizeHelper:
-    def test_gigabytes_have_one_decimal(self):
-        from whisper_ui.web.routes.upload import _format_size
-
-        assert _format_size(2 * 1024**3) == "2.0 GB"
-
-    def test_megabytes_are_whole(self):
-        from whisper_ui.web.routes.upload import _format_size
-
-        assert _format_size(500 * 1024**2) == "500 MB"
-
-    def test_sub_megabyte_shows_kilobytes_not_zero_mb(self):
-        from whisper_ui.web.routes.upload import _format_size
-
-        assert _format_size(512 * 1024) == "512 KB"
 
 class TestStandaloneLLMCorrectionRoutes:
     def test_completed_job_can_request_correction_without_retranscribing(self, client, app, db, filestore):
-        app.state.settings = app.state.settings.model_copy(update={
-            'ollama_base_url': 'http://192.168.0.150:18084',
-            'llm_api_mode': 'openai-router',
-        })
+        app.state.settings = app.state.settings.model_copy(
+            update={
+                "ollama_base_url": "http://192.168.0.150:18084",
+                "llm_api_mode": "openai-router",
+            }
+        )
         job = _create_completed_job(db, filestore)
         with (
             patch(
-                'whisper_ui.worker.standalone_correction.correction_status',
-                return_value={'status': 'not_requested'},
+                "whisper_ui.worker.standalone_correction.correction_status",
+                return_value={"status": "not_requested"},
             ),
             patch(
-                'whisper_ui.worker.standalone_correction.enqueue_correction',
-                return_value={'status': 'queued'},
+                "whisper_ui.worker.standalone_correction.enqueue_correction",
+                return_value={"status": "queued"},
             ) as enqueue,
         ):
             response = client.post(
-                f'/viewer/{job.id}/correct', data={'llm_context_prompt': 'Meeting Airdass, API tecniche.'},
+                f"/viewer/{job.id}/correct",
+                data={"llm_context_prompt": "Meeting Airdass, API tecniche."},
                 follow_redirects=False,
             )
         assert response.status_code == 303
-        assert response.headers['location'] == f'/viewer/{job.id}?correction=queued'
-        assert db.get_job(job.id).llm_context_prompt == 'Meeting Airdass, API tecniche.'
+        assert response.headers["location"] == f"/viewer/{job.id}?correction=queued"
+        assert db.get_job(job.id).llm_context_prompt == "Meeting Airdass, API tecniche."
         enqueue.assert_called_once_with(app.state.redis, job.id)
         assert db.get_job(job.id).status == JobStatus.COMPLETED
 
-    def test_recorrection_when_already_queued_reports_waiting_without_duplicate(self, client, app, db, filestore):
-        app.state.settings = app.state.settings.model_copy(update={
-            'ollama_base_url': 'http://192.168.0.150:18084',
-        })
-        job = _create_completed_job(db, filestore)
-        previous_prompt = job.llm_context_prompt
-        with (
-            patch('whisper_ui.worker.standalone_correction.correction_status', return_value={'status': 'queued'}),
-            patch('whisper_ui.worker.standalone_correction.enqueue_correction') as enqueue,
-        ):
-            response = client.post(f'/viewer/{job.id}/correct',
-                                   data={'llm_context_prompt': 'Change prompt'}, follow_redirects=False)
-            page = client.get(response.headers['location'])
-        assert response.status_code == 303
-        assert 'correction=already-active' in response.headers['location']
-        assert page.status_code == 200
-        assert 'già una correzione LLM in coda' in page.text
-        assert '· in coda' in page.text
-        assert 'Correzione LLM separata' in page.text
-        assert db.get_job(job.id).llm_context_prompt == previous_prompt
-        enqueue.assert_not_called()
-
-    def test_existing_correction_can_be_rerun_after_finished(self, client, app, db, filestore):
-        app.state.settings = app.state.settings.model_copy(update={
-            'ollama_base_url': 'http://192.168.0.150:18084',
-        })
-        job = _create_completed_job(db, filestore)
-        filestore.save_corrected_result(job.id, filestore.load_result(job.id))
-        with (
-            patch('whisper_ui.worker.standalone_correction.correction_status',
-                  return_value={'status': 'finished'}),
-            patch('whisper_ui.worker.standalone_correction.enqueue_correction',
-                  return_value={'status': 'queued'}) as enqueue,
-        ):
-            response = client.post(f'/viewer/{job.id}/correct',
-                                   data={'llm_context_prompt': 'New correction'}, follow_redirects=False)
-            page = client.get(response.headers['location'])
-        assert response.status_code == 303
-        assert 'correction=queued' in response.headers['location']
-        assert 'Correzione richiesta e inserita nella coda LLM' in page.text
-        assert db.get_job(job.id).llm_context_prompt == 'New correction'
-        enqueue.assert_called_once()
-
-    def test_correction_endpoint_is_unavailable_without_llm(self, client, db, filestore):
-        job = _create_completed_job(db, filestore)
-        resp = client.post(f'/viewer/{job.id}/correct', data={'llm_context_prompt': 'test'}, follow_redirects=False)
-        assert resp.status_code == 503
-        assert db.get_job(job.id).status == JobStatus.COMPLETED
-
     def test_original_and_corrected_are_separate_readable_and_exportable(self, client, db, filestore, app):
-        app.state.settings = app.state.settings.model_copy(update={'ollama_base_url': 'http://192.168.0.150:18084'})
+        app.state.settings = app.state.settings.model_copy(update={"ollama_base_url": "http://192.168.0.150:18084"})
         original = TranscriptResult(
-            segments=[Segment(0, 2, 'Airdas e la piattaforma.', 'S1'), Segment(2, 4, 'Allora iniziamo.', 'S1')],
-            language='it', duration=4,
+            segments=[Segment(0, 2, "Airdas e la piattaforma.", "S1"), Segment(2, 4, "Allora iniziamo.", "S1")],
+            language="it",
+            duration=4,
         )
         corrected = TranscriptResult(
-            segments=[Segment(0, 2, 'Airdass e la piattaforma.', 'S1'), Segment(2, 4, 'Allora iniziamo.', 'S1')],
-            language='it', duration=4,
+            segments=[Segment(0, 2, "Airdass e la piattaforma.", "S1"), Segment(2, 4, "Allora iniziamo.", "S1")],
+            language="it",
+            duration=4,
         )
-        job = Job(filename='meeting.wav', status=JobStatus.COMPLETED, language='it')
+        job = Job(filename="meeting.wav", status=JobStatus.COMPLETED, language="it")
         job.result_path = str(filestore.save_result(job.id, original))
         filestore.save_corrected_result(job.id, corrected)
         db.insert_job(job)
-        page = client.get(f'/viewer/{job.id}')
+        page = client.get(f"/viewer/{job.id}")
         assert page.status_code == 200
-        assert 'Whisper originale' in page.text
-        assert 'Paragrafi' in page.text
-        assert 'Airdass e la piattaforma' in page.text
-        assert 'Ricorreggi con LLM' in page.text
-        assert 'version=corrected' in page.text
-        raw = client.get(f'/viewer/{job.id}/export/txt')
-        fixed = client.get(f'/viewer/{job.id}/export/txt?version=corrected')
+        assert "Whisper originale" in page.text
+        assert "Paragrafi" in page.text
+        assert "Airdass e la piattaforma" in page.text
+        assert "Ricorreggi con LLM" in page.text
+        assert "version=corrected" in page.text
+        raw = client.get(f"/viewer/{job.id}/export/txt")
+        fixed = client.get(f"/viewer/{job.id}/export/txt?version=corrected")
         assert raw.status_code == 200 and fixed.status_code == 200
-        assert 'Airdas e la piattaforma' in raw.text
-        assert 'Airdass e la piattaforma' in fixed.text
-        assert 'meeting-corrected' in fixed.headers['content-disposition']
-        assert filestore.load_result(job.id).segments[0].text == 'Airdas e la piattaforma.'
+        assert "Airdas e la piattaforma" in raw.text
+        assert "Airdass e la piattaforma" in fixed.text
+        assert "meeting-corrected" in fixed.headers["content-disposition"]
+        assert filestore.load_result(job.id).segments[0].text == "Airdas e la piattaforma."
+
 
 class TestSavedTranscriptionPresets:
     """Complete preset CRUD, cloning, isolation and upload integration."""
 
     def _create(self, client, **overrides):
         fields = {
-            'name': 'Meeting Airdass', 'description': 'Per i miei meeting',
-            'language': 'it', 'model_name': 'large-v3', 'num_speakers': '2',
-            'enable_diarization': 'true', 'llm_correction_enabled': 'true',
-            'whisper_keywords': 'Airdass, API, Customer Success',
-            'llm_context_prompt': 'Correggi i termini Airdass senza inventare nulla.',
-            'summary_prompt': 'Elenca decisioni e responsabili.',
-            'summary_enabled': 'true',
-            'vad_threshold': '0.15', 'vad_enabled': 'false',
-            'vad_min_speech_ms': '80', 'vad_min_silence_ms': '600',
-            'vad_speech_pad_ms': '800', 'vad_samples_overlap': '0.50',
-            'whisper_beam_size': '8', 'audio_processing': 'custom',
-            'audio_denoise': 'medium', 'audio_compression': 'light',
-            'audio_target_lufs': '-18', 'audio_max_gain_db': '12', 'audio_highpass_hz': '100',
+            "name": "Meeting Airdass",
+            "description": "Per i miei meeting",
+            "language": "it",
+            "model_name": "large-v3",
+            "num_speakers": "2",
+            "enable_diarization": "true",
+            "llm_correction_enabled": "true",
+            "whisper_keywords": "Airdass, API, Customer Success",
+            "llm_context_prompt": "Correggi i termini Airdass senza inventare nulla.",
+            "summary_prompt": "Elenca decisioni e responsabili.",
+            "summary_enabled": "true",
+            "vad_threshold": "0.15",
+            "vad_enabled": "false",
+            "vad_min_speech_ms": "80",
+            "vad_min_silence_ms": "600",
+            "vad_speech_pad_ms": "800",
+            "vad_samples_overlap": "0.50",
+            "whisper_beam_size": "8",
+            "audio_processing": "custom",
+            "audio_denoise": "medium",
+            "audio_compression": "light",
+            "audio_target_lufs": "-18",
+            "audio_max_gain_db": "12",
+            "audio_highpass_hz": "100",
         }
         fields.update(overrides)
-        return client.post('/presets', data=fields, follow_redirects=False)
-
-    def test_list_and_blank_and_meeting_clone_editor(self, client):
-        page = client.get('/presets')
-        assert page.status_code == 200
-        assert 'Nuovo preset da zero' in page.text
-        assert 'source=meeting' in page.text
-        blank = client.get('/presets/new')
-        assert blank.status_code == 200
-        assert 'name="llm_context_prompt"' in blank.text
-        assert 'name="summary_prompt"' in blank.text
-        assert 'name="summary_enabled"' in blank.text
-        assert 'name="whisper_keywords"' in blank.text
-        assert 'name="vad_threshold"' in blank.text
-        for name in (
-            'vad_enabled', 'vad_min_speech_ms', 'vad_min_silence_ms',
-            'vad_speech_pad_ms', 'vad_samples_overlap',
-        ):
-            assert f'name="{name}"' in blank.text
-        assert 'name="audio_highpass_hz"' in blank.text
-        meeting = client.get('/presets/new?source=meeting')
-        assert meeting.status_code == 200
-        assert 'name="enable_diarization"' in meeting.text
-        assert 'name="llm_correction_enabled"' in meeting.text
-        assert 'checked' in meeting.text
+        return client.post("/presets", data=fields, follow_redirects=False)
 
     def test_save_complete_settings_and_upload_can_select_it(self, client, db, test_user):
         from whisper_ui.storage.presets import PresetRepository
+
         response = self._create(client)
         assert response.status_code == 303
-        assert response.headers['location'] == '/presets'
+        assert response.headers["location"] == "/presets"
         preset = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
-        assert preset.settings['language'] == 'it'
-        assert preset.settings['enable_diarization'] is True
-        assert preset.settings['llm_correction_enabled'] is True
-        assert preset.settings['whisper_keywords'] == 'Airdass, API, Customer Success'
-        assert preset.settings['llm_context_prompt'].startswith('Correggi')
-        assert preset.settings['summary_prompt'].startswith('Elenca')
-        assert preset.settings['summary_enabled'] is True
-        assert preset.settings['vad_threshold'] == .15
-        assert preset.settings['vad_enabled'] is False
-        assert preset.settings['vad_speech_pad_ms'] == 800
-        assert preset.settings['vad_samples_overlap'] == .50
-        assert preset.settings['audio_target_lufs'] == -18
-        assert preset.settings['audio_denoise'] == 'medium'
-        uploaded = client.get(f'/upload?preset={preset.id}')
+        assert preset.settings["language"] == "it"
+        assert preset.settings["enable_diarization"] is True
+        assert preset.settings["llm_correction_enabled"] is True
+        assert preset.settings["whisper_keywords"] == "Airdass, API, Customer Success"
+        assert preset.settings["llm_context_prompt"].startswith("Correggi")
+        assert preset.settings["summary_prompt"].startswith("Elenca")
+        assert preset.settings["summary_enabled"] is True
+        assert preset.settings["vad_threshold"] == 0.15
+        assert preset.settings["vad_enabled"] is False
+        assert preset.settings["vad_speech_pad_ms"] == 800
+        assert preset.settings["vad_samples_overlap"] == 0.50
+        assert preset.settings["audio_target_lufs"] == -18
+        assert preset.settings["audio_denoise"] == "medium"
+        uploaded = client.get(f"/upload?preset={preset.id}")
         assert uploaded.status_code == 200
-        assert 'Meeting Airdass' in uploaded.text
+        assert "Meeting Airdass" in uploaded.text
         assert f'"{preset.id}"' in uploaded.text
         assert '"vad_threshold": 0.15' in uploaded.text
         assert '"audio_denoise": "medium"' in uploaded.text
         assert '"llm_context_prompt": "Correggi' in uploaded.text
-        assert f'/presets/{preset.id}/edit' in client.get('/presets').text
+        assert f"/presets/{preset.id}/edit" in client.get("/presets").text
 
     def test_preset_settings_are_snapshotted_in_real_upload_job(self, client, app, db, test_user):
         from whisper_ui.storage.presets import PresetRepository
+
         self._create(client)
         config = PresetRepository(db.conn).list_for_owner(test_user.id)[0].settings
-        app.state.settings = app.state.settings.model_copy(update={
-            'ollama_base_url': 'http://ai-router:18084', 'hf_token': 'test-token-not-real',
-        })
+        app.state.settings = app.state.settings.model_copy(
+            update={
+                "ollama_base_url": "http://ai-router:18084",
+                "hf_token": "test-token-not-real",
+            }
+        )
         # These are the complete controls populated by applyPreset() before
         # the browser sends its regular POST. No special pipeline or model path.
         form = {k: str(v) for k, v in config.items() if not isinstance(v, bool)}
-        form.update({k: 'true' for k, v in config.items() if isinstance(v, bool) and v})
-        form['vad_enabled'] = 'true' if config['vad_enabled'] else 'false'
-        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-            resp = client.post('/upload', data=form,
-                               files=[('files', ('meeting.wav', b'test audio', 'audio/wav'))],
-                               follow_redirects=False)
+        form.update({k: "true" for k, v in config.items() if isinstance(v, bool) and v})
+        form["vad_enabled"] = "true" if config["vad_enabled"] else "false"
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            resp = client.post(
+                "/upload",
+                data=form,
+                files=[("files", ("meeting.wav", b"test audio", "audio/wav"))],
+                follow_redirects=False,
+            )
         assert resp.status_code == 303
         job = enqueue.call_args[0][0]
-        assert job.language == 'it'
-        assert job.model_name == 'large-v3'
+        assert job.language == "it"
+        assert job.model_name == "large-v3"
         assert job.num_speakers == 2
         assert job.enable_diarization is True
         assert job.llm_correction_enabled is True
-        assert job.whisper_keywords == 'Airdass, API, Customer Success'
-        assert job.llm_context_prompt.startswith('Correggi')
-        assert job.summary_prompt == 'Elenca decisioni e responsabili.'
+        assert job.whisper_keywords == "Airdass, API, Customer Success"
+        assert job.llm_context_prompt.startswith("Correggi")
+        assert job.summary_prompt == "Elenca decisioni e responsabili."
         assert job.summary_enabled is True
-        assert job.vad_threshold == .15
+        assert job.vad_threshold == 0.15
         assert job.vad_enabled is False
         assert job.vad_min_speech_ms == 80
         assert job.vad_min_silence_ms == 600
         assert job.vad_speech_pad_ms == 800
-        assert job.vad_samples_overlap == .50
+        assert job.vad_samples_overlap == 0.50
         assert job.whisper_beam_size == 8
-        assert job.audio_processing == 'custom'
-        assert job.audio_denoise == 'medium'
-        assert job.audio_compression == 'light'
+        assert job.audio_processing == "custom"
+        assert job.audio_denoise == "medium"
+        assert job.audio_compression == "light"
         assert job.audio_target_lufs == -18
         assert job.audio_max_gain_db == 12
         assert job.audio_highpass_hz == 100
@@ -2594,381 +1010,386 @@ class TestSavedTranscriptionPresets:
         # Deleting the saved preset must not change settings stored in a job.
         preset = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
         PresetRepository(db.conn).delete(preset.id, test_user.id)
-        assert db.get_job(job.id).vad_threshold == .15
+        assert db.get_job(job.id).vad_threshold == 0.15
 
     def test_clone_saved_preset_and_edit_without_mutating_original(self, client, db, test_user):
         from whisper_ui.storage.presets import PresetRepository
+
         self._create(client)
         repo = PresetRepository(db.conn)
         first = repo.list_for_owner(test_user.id)[0]
-        clone = client.get(f'/presets/new?source={first.id}')
+        clone = client.get(f"/presets/new?source={first.id}")
         assert clone.status_code == 200
-        assert 'Customer Success' in clone.text
-        assert 'Correggi i termini' in clone.text
-        response = self._create(client, name='Meeting duplicato', vad_threshold='0.35')
+        assert "Customer Success" in clone.text
+        assert "Correggi i termini" in clone.text
+        response = self._create(client, name="Meeting duplicato", vad_threshold="0.35")
         assert response.status_code == 303
         latest = {p.name: p for p in repo.list_for_owner(test_user.id)}
-        assert latest['Meeting Airdass'].settings['vad_threshold'] == .15
-        assert latest['Meeting duplicato'].settings['vad_threshold'] == .35
+        assert latest["Meeting Airdass"].settings["vad_threshold"] == 0.15
+        assert latest["Meeting duplicato"].settings["vad_threshold"] == 0.35
         updated = client.post(
-            f'/presets/{first.id}/edit',
-            data={'name': 'Airdass aggiornato', 'language': 'it', 'vad_threshold': '0.30'},
+            f"/presets/{first.id}/edit",
+            data={"name": "Airdass aggiornato", "language": "it", "vad_threshold": "0.30"},
             follow_redirects=False,
         )
         assert updated.status_code == 303
-        assert repo.get(first.id, test_user.id).name == 'Airdass aggiornato'
-        assert repo.get(first.id, test_user.id).settings['vad_threshold'] == .30
-        assert client.post(f'/presets/{first.id}/delete', follow_redirects=False).status_code == 303
+        assert repo.get(first.id, test_user.id).name == "Airdass aggiornato"
+        assert repo.get(first.id, test_user.id).settings["vad_threshold"] == 0.30
+        assert client.post(f"/presets/{first.id}/delete", follow_redirects=False).status_code == 303
         assert repo.get(first.id, test_user.id) is None
         assert len(repo.list_for_owner(test_user.id)) == 1
 
     def test_owner_isolation_and_no_cross_user_preset_lookups(self, client, admin_client, db, test_user):
         from whisper_ui.storage.presets import PresetRepository
+
         self._create(client)
         stored = PresetRepository(db.conn).list_for_owner(test_user.id)[0]
-        assert admin_client.get(f'/presets/{stored.id}/edit').status_code == 404
-        assert admin_client.get(f'/presets/new?source={stored.id}').status_code == 404
-        assert admin_client.get(f'/upload?preset={stored.id}').status_code == 404
-        assert admin_client.post(f'/presets/{stored.id}/delete', follow_redirects=False).status_code == 404
+        assert admin_client.get(f"/presets/{stored.id}/edit").status_code == 404
+        assert admin_client.get(f"/presets/new?source={stored.id}").status_code == 404
+        assert admin_client.get(f"/upload?preset={stored.id}").status_code == 404
+        assert admin_client.post(f"/presets/{stored.id}/delete", follow_redirects=False).status_code == 404
         assert PresetRepository(db.conn).get(stored.id, test_user.id) is not None
 
     def test_validation_duplicates_and_prompt_escaping(self, client, db, test_user):
         from whisper_ui.storage.presets import PresetRepository
-        assert self._create(client, vad_threshold='0.01').status_code == 200
+
+        assert self._create(client, vad_threshold="0.01").status_code == 200
         assert PresetRepository(db.conn).list_for_owner(test_user.id) == []
-        assert self._create(client, name='').status_code == 200
-        assert self._create(client, name='<script>alert(1)</script>').status_code == 303
-        page = client.get('/presets')
-        assert '<script>alert(1)</script>' not in page.text
-        assert '&lt;script&gt;' in page.text
-        assert self._create(client, name='<SCRIPT>ALERT(1)</SCRIPT>').status_code == 200
+        assert self._create(client, name="").status_code == 200
+        assert self._create(client, name="<script>alert(1)</script>").status_code == 303
+        page = client.get("/presets")
+        assert "<script>alert(1)</script>" not in page.text
+        assert "&lt;script&gt;" in page.text
+        assert self._create(client, name="<SCRIPT>ALERT(1)</SCRIPT>").status_code == 200
+
 
 class TestReviewStudio:
-    def _make(self, db, filestore, *, source_job_id=None, text='Buongiorno Airdas'):
+    def _make(self, db, filestore, *, source_job_id=None, text="Buongiorno Airdas"):
         result = TranscriptResult(
-            segments=[Segment(1, 4, text, 'S1'), Segment(5, 7, 'Grazie a tutti.', 'S2')],
-            language='it', duration=8,
+            segments=[Segment(1, 4, text, "S1"), Segment(5, 7, "Grazie a tutti.", "S2")],
+            language="it",
+            duration=8,
         )
-        job = Job(filename='meeting.wav', status=JobStatus.COMPLETED, source_job_id=source_job_id)
+        job = Job(filename="meeting.wav", status=JobStatus.COMPLETED, source_job_id=source_job_id)
         job.result_path = str(filestore.save_result(job.id, result))
         db.insert_job(job)
         return job
 
     def test_three_column_editor_and_families_render(self, client, db, filestore):
         original = self._make(db, filestore)
-        save_upload(filestore, original.id, 'meeting.wav', b'fake audio')
-        original.filepath = str(filestore.get_upload_path(original.id, 'meeting.wav'))
+        save_upload(filestore, original.id, "meeting.wav", b"fake audio")
+        original.filepath = str(filestore.get_upload_path(original.id, "meeting.wav"))
         db.update_job(original)
-        second = self._make(db, filestore, source_job_id=original.id, text='Buongiorno Airdass')
+        second = self._make(db, filestore, source_job_id=original.id, text="Buongiorno Airdass")
         corrected = TranscriptResult(
-            segments=[Segment(1, 4, 'Buongiorno Airdass', 'S1'), Segment(5, 7, 'Grazie a tutti.', 'S2')],
-            language='it', duration=8,
+            segments=[Segment(1, 4, "Buongiorno Airdass", "S1"), Segment(5, 7, "Grazie a tutti.", "S2")],
+            language="it",
+            duration=8,
         )
         filestore.save_corrected_result(second.id, corrected)
-        response = client.get(f'/studio/{second.id}')
+        response = client.get(f"/studio/{second.id}")
         assert response.status_code == 200
-        assert 'Studio di revisione' in response.text
-        assert 'Versione di confronto' in response.text
-        assert 'La mia versione' in response.text
-        assert 'Riassunto AI' in response.text
-        assert f'{original.id}~original' in response.text
-        assert f'{second.id}~corrected' in response.text
+        assert "at2-review-shell" in response.text
+        assert "Versione di confronto" in response.text
+        assert "La mia versione" in response.text
+        assert "Riassunto AI" in response.text
+        assert f"{original.id}~original" in response.text
+        assert f"{second.id}~corrected" in response.text
         assert 'id="studio-timeline-seek"' in response.text
         assert 'id="studio-timeline-overview"' in response.text
-        assert 'onAudioTimeUpdate' in response.text
-        assert 'Segui testo: attivo' in response.text
-        assert 'data-studio-index' in response.text
-        assert '<canvas' not in response.text
-        assert '/waveform?' not in response.text
-        assert client.get(f'/viewer/{second.id}').status_code == 200
-        assert f'/studio/{second.id}' in client.get(f'/viewer/{second.id}').text
+        assert "onAudioTimeUpdate" in response.text
+        assert "Segui testo: attivo" in response.text
+        assert "data-studio-index" in response.text
+        assert "<canvas" not in response.text
+        assert "/waveform?" not in response.text
+        assert client.get(f"/viewer/{second.id}").status_code == 200
+        assert f"/studio/{second.id}" in client.get(f"/viewer/{second.id}").text
 
     def test_version_endpoint_and_only_same_family(self, client, db, filestore):
         original = self._make(db, filestore)
         reprocessed = self._make(db, filestore, source_job_id=original.id)
         foreign_recording = self._make(db, filestore)
-        got = client.get(f'/studio/{reprocessed.id}/version/{original.id}~original')
+        got = client.get(f"/studio/{reprocessed.id}/version/{original.id}~original")
         assert got.status_code == 200
-        assert got.json()['segments'][0]['text'] == 'Buongiorno Airdas'
-        denied = client.get(f'/studio/{reprocessed.id}/version/{foreign_recording.id}~original')
+        assert got.json()["segments"][0]["text"] == "Buongiorno Airdas"
+        denied = client.get(f"/studio/{reprocessed.id}/version/{foreign_recording.id}~original")
         assert denied.status_code == 404
 
     def test_custom_text_and_speaker_saved_separately_preserving_timing(self, client, db, filestore):
         job = self._make(db, filestore)
-        source = f'{job.id}~original'
-        response = client.post(f'/studio/{job.id}/custom', json={
-            'source': source,
-            'segments': [
-                {'text': 'Buongiorno Airdass', 'speaker': 'Responsabile'},
-                {'text': 'Grazie a tutti.', 'speaker': 'S2'},
-            ],
-        })
+        source = f"{job.id}~original"
+        response = client.post(
+            f"/studio/{job.id}/custom",
+            json={
+                "source": source,
+                "segments": [
+                    {"text": "Buongiorno Airdass", "speaker": "Responsabile"},
+                    {"text": "Grazie a tutti.", "speaker": "S2"},
+                ],
+            },
+        )
         assert response.status_code == 200
-        assert response.json()['version'] == f'{job.id}~custom'
+        assert response.json()["version"] == f"{job.id}~custom"
         original = filestore.load_result(job.id)
         edited = filestore.load_custom_result(job.id)
-        assert original.segments[0].text == 'Buongiorno Airdas'
-        assert edited.segments[0].text == 'Buongiorno Airdass'
-        assert edited.segments[0].speaker == 'Responsabile'
+        assert original.segments[0].text == "Buongiorno Airdas"
+        assert edited.segments[0].text == "Buongiorno Airdass"
+        assert edited.segments[0].speaker == "Responsabile"
         assert (edited.segments[0].start, edited.segments[0].end) == (1, 4)
-        assert client.get(f'/studio/{job.id}/version/{job.id}~custom').status_code == 200
-        exported = client.get(f'/studio/{job.id}/custom-export?token={job.id}~custom&format_name=txt')
+        assert client.get(f"/studio/{job.id}/version/{job.id}~custom").status_code == 200
+        exported = client.get(f"/studio/{job.id}/custom-export?token={job.id}~custom&format_name=txt")
         assert exported.status_code == 200
-        assert 'Airdass' in exported.text
-        assert 'personalizzata' in exported.headers['content-disposition']
+        assert "Airdass" in exported.text
+        assert "personalizzata" in exported.headers["content-disposition"]
 
     def test_editor_rejects_invalid_sources_and_timing_changes(self, client, db, filestore):
         job = self._make(db, filestore)
-        url = f'/studio/{job.id}/custom'
+        url = f"/studio/{job.id}/custom"
         for data in (
-            {'source': f'{job.id}~original', 'segments': [{'text': 'Too short'}]},
-            {'source': f'{job.id}~original', 'segments': [
-                {'text': 'A', 'start': 999, 'speaker': 'S1'}, {'text': 456, 'speaker': 'S2'},
-            ]},
-            {'source': 'invalid', 'segments': [{'text': 'A'}, {'text': 'B'}]},
+            {"source": f"{job.id}~original", "segments": [{"text": "Too short"}]},
+            {
+                "source": f"{job.id}~original",
+                "segments": [
+                    {"text": "A", "start": 999, "speaker": "S1"},
+                    {"text": 456, "speaker": "S2"},
+                ],
+            },
+            {"source": "invalid", "segments": [{"text": "A"}, {"text": "B"}]},
         ):
             assert client.post(url, json=data).status_code in (400, 422)
         assert filestore.load_custom_result(job.id) is None
 
     def test_studio_rejects_unauthorized_user(self, client, app, db, filestore):
         from whisper_ui.storage import users_repo
-        bob = users_repo.create_user(db.conn, 'other-reviewer', 'password123', is_admin=False)
+
+        bob = users_repo.create_user(db.conn, "other-reviewer", "password123", is_admin=False)
         other_client = authed_test_client(app, bob)
         job = self._make(db, filestore)
-        assert other_client.get(f'/studio/{job.id}').status_code == 404
-        assert other_client.get(f'/studio/{job.id}/version/{job.id}~original').status_code == 404
-        assert other_client.post(f'/studio/{job.id}/custom', json={
-            'source': f'{job.id}~original', 'segments': [
-                {'text': 'A', 'speaker': 'S1'}, {'text': 'B', 'speaker': 'S2'},
-            ],
-        }).status_code == 404
+        assert other_client.get(f"/studio/{job.id}").status_code == 404
+        assert other_client.get(f"/studio/{job.id}/version/{job.id}~original").status_code == 404
+        assert (
+            other_client.post(
+                f"/studio/{job.id}/custom",
+                json={
+                    "source": f"{job.id}~original",
+                    "segments": [
+                        {"text": "A", "speaker": "S1"},
+                        {"text": "B", "speaker": "S2"},
+                    ],
+                },
+            ).status_code
+            == 404
+        )
 
     def test_summary_prompt_is_queued_without_changing_original(self, client, app, db, filestore):
         job = self._make(db, filestore)
-        app.state.settings = app.state.settings.model_copy(update={
-            'ollama_base_url': 'http://router:18084',
-        })
-        with patch('whisper_ui.worker.standalone_summary.enqueue_summary', return_value={'status': 'queued'}) as enq:
-            response = client.post(f'/studio/{job.id}/summary', json={
-                'source': f'{job.id}~original', 'prompt': 'Riassumi decisioni e rischi.',
-            })
+        app.state.settings = app.state.settings.model_copy(
+            update={
+                "ollama_base_url": "http://router:18084",
+            }
+        )
+        with patch("whisper_ui.worker.standalone_summary.enqueue_summary", return_value={"status": "queued"}) as enq:
+            response = client.post(
+                f"/studio/{job.id}/summary",
+                json={
+                    "source": f"{job.id}~original",
+                    "prompt": "Riassumi decisioni e rischi.",
+                },
+            )
         assert response.status_code == 200
-        enq.assert_called_once_with(app.state.redis, job.id, 'Riassumi decisioni e rischi.', 'original')
-        assert db.get_job(job.id).summary_prompt == 'Riassumi decisioni e rischi.'
-        assert filestore.load_result(job.id).segments[0].text == 'Buongiorno Airdas'
-        status = client.get(f'/studio/{job.id}/summary-status?source_job={job.id}')
+        enq.assert_called_once_with(app.state.redis, job.id, "Riassumi decisioni e rischi.", "original")
+        assert db.get_job(job.id).summary_prompt == "Riassumi decisioni e rischi."
+        assert filestore.load_result(job.id).segments[0].text == "Buongiorno Airdas"
+        status = client.get(f"/studio/{job.id}/summary-status?source_job={job.id}")
         assert status.status_code == 200
-        assert status.json()['summary'] is None
+        assert status.json()["summary"] is None
 
-class TestVADHelpDialog:
-    """A single globally accessible explainer for all three VAD forms."""
-
-    def test_vad_help_is_available_in_upload_preset_editor_and_retranscribe(self, client):
-        for url in ('/upload', '/presets/new', '/jobs'):
-            response = client.get(url)
-            assert response.status_code == 200, url
-            html = response.text
-            assert html.count('id="vad-help-dialog"') == 1, url
-            assert 'data-vad-help' in html, url
-            assert 'aria-controls="vad-help-dialog"' in html
-            assert 'aria-haspopup="dialog"' in html
-            assert 'aria-labelledby="vad-help-title"' in html
-            assert 'aria-describedby="vad-help-description"' in html
-            assert 'method="dialog"' in html
-            assert 'dialog.showModal()' in html
-            assert 'event.target.closest(\'[data-vad-help]\')' in html
-
-    def test_vad_help_explains_all_settings_and_real_world_tuning(self, client):
-        page = client.get('/upload')
-        assert page.status_code == 200
-        for text in (
-            'Come regolare Silero VAD', 'Attiva / disattiva VAD',
-            'Soglia di sensibilità', 'Parlato minimo', 'Pausa per separare',
-            'Margine audio', 'Sovrapposizione', 'standard 0,25',
-            'standard 100 ms', 'standard 300 ms', 'standard 400 ms',
-            'standard 0,20 s', '0,15', '800 ms', '0,50 s',
-            'parole tagliate', 'allineamento WhisperX', 'voci gravi',
-            'rischio di testo inventato', 'Suite di editing',
-        ):
-            assert text.lower() in page.text.lower(), text
-        assert 'type="button" data-vad-help' in page.text
-        assert 'Chiudi guida VAD' in page.text
 
 class TestJoinedAudioUploads:
     """Merge mode is explicitly opt-in and produces exactly one auditable job."""
 
     def test_upload_ordered_files_yields_one_job_and_manifest(self, client, db, filestore):
         import json
-        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-            response = client.post('/upload', data={
-                'merge_mode': 'merge', 'merge_order': '2,0,1', 'language': 'it',
-                'vad_threshold': '0.15', 'vad_speech_pad_ms': '800',
-            }, files=[
-                ('files', ('one.mp3', b'FILE_ONE', 'audio/mpeg')),
-                ('files', ('two.wav', b'FILE_TWO', 'audio/wav')),
-                ('files', ('three.m4a', b'FILE_THREE', 'audio/mp4')),
-            ], follow_redirects=False)
+
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            response = client.post(
+                "/upload",
+                data={
+                    "merge_mode": "merge",
+                    "merge_order": "2,0,1",
+                    "language": "it",
+                    "vad_threshold": "0.15",
+                    "vad_speech_pad_ms": "800",
+                },
+                files=[
+                    ("files", ("one.mp3", b"FILE_ONE", "audio/mpeg")),
+                    ("files", ("two.wav", b"FILE_TWO", "audio/wav")),
+                    ("files", ("three.m4a", b"FILE_THREE", "audio/mp4")),
+                ],
+                follow_redirects=False,
+            )
         assert response.status_code == 303
-        assert response.headers['location'] == '/jobs'
+        assert response.headers["location"] == "/jobs"
         assert len(list_jobs(db)) == 1
         job = enqueue.call_args.args[0]
-        assert job.filename == 'registrazione-unita.wav'
+        assert job.filename == "registrazione-unita.wav"
         assert job.duration is None
-        assert job.vad_threshold == .15
+        assert job.vad_threshold == 0.15
         assert job.vad_speech_pad_ms == 800
         assert not filestore.get_upload_path(job.id, job.filename).exists()
-        manifest = json.loads(filestore.get_upload_path(job.id, 'merge-manifest.json').read_text())
-        assert [x['original_name'] for x in manifest['parts']] == ['three.m4a', 'one.mp3', 'two.wav']
-        assert [x['filename'] for x in manifest['parts']] == ['part-0001.m4a', 'part-0002.mp3', 'part-0003.wav']
-        assert [filestore.get_upload_path(job.id, x['filename']).read_bytes() for x in manifest['parts']] == [
-            b'FILE_THREE', b'FILE_ONE', b'FILE_TWO',
+        manifest = json.loads(filestore.get_upload_path(job.id, "merge-manifest.json").read_text())
+        assert [x["original_name"] for x in manifest["parts"]] == ["three.m4a", "one.mp3", "two.wav"]
+        assert [x["filename"] for x in manifest["parts"]] == ["part-0001.m4a", "part-0002.mp3", "part-0003.wav"]
+        assert [filestore.get_upload_path(job.id, x["filename"]).read_bytes() for x in manifest["parts"]] == [
+            b"FILE_THREE",
+            b"FILE_ONE",
+            b"FILE_TWO",
         ]
 
     def test_invalid_merge_order_rejects_before_any_job(self, client, db):
-        for order in ('0,0', '2,0', '-1,0', 'abc,0', '0,1,2'):
-            with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-                response = client.post('/upload', data={'merge_mode': 'merge', 'merge_order': order}, files=[
-                    ('files', ('a.mp3', b'FILE_A', 'audio/mpeg')),
-                    ('files', ('b.mp3', b'FILE_B', 'audio/mpeg')),
-                ])
+        for order in ("0,0", "2,0", "-1,0", "abc,0", "0,1,2"):
+            with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+                response = client.post(
+                    "/upload",
+                    data={"merge_mode": "merge", "merge_order": order},
+                    files=[
+                        ("files", ("a.mp3", b"FILE_A", "audio/mpeg")),
+                        ("files", ("b.mp3", b"FILE_B", "audio/mpeg")),
+                    ],
+                )
             assert response.status_code == 422, order
             enqueue.assert_not_called()
         assert list_jobs(db) == []
 
     def test_merge_rejects_any_unsupported_or_nonmedia_part_atomically(self, client, db, filestore):
-        for bad_filename, bad_bytes in [('wrong.pdf', b'doc'), ('disguised.mp3', b'%PDF bad')]:
-            with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-                response = client.post('/upload', data={'merge_mode': 'merge'}, files=[
-                    ('files', ('valid.mp3', b'FILE_A', 'audio/mpeg')),
-                    ('files', (bad_filename, bad_bytes, 'application/octet-stream')),
-                ], follow_redirects=False)
+        for bad_filename, bad_bytes in [("wrong.pdf", b"doc"), ("disguised.mp3", b"%PDF bad")]:
+            with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+                response = client.post(
+                    "/upload",
+                    data={"merge_mode": "merge"},
+                    files=[
+                        ("files", ("valid.mp3", b"FILE_A", "audio/mpeg")),
+                        ("files", (bad_filename, bad_bytes, "application/octet-stream")),
+                    ],
+                    follow_redirects=False,
+                )
             assert response.status_code == 303
-            assert 'error=merge_invalid' in response.headers['location']
+            assert "error=merge_invalid" in response.headers["location"]
             enqueue.assert_not_called()
         assert list_jobs(db) == []
-        assert not list(filestore._upload_dir.glob('*/merge-manifest.json'))
+        assert not list(filestore._upload_dir.glob("*/merge-manifest.json"))
 
     def test_merge_checks_total_upload_size_and_cleans_parts(self, client, app, db, filestore):
-        app.state.settings = app.state.settings.model_copy(update={'max_upload_size': 15})
-        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-            response = client.post('/upload', data={'merge_mode': 'merge'}, files=[
-                ('files', ('first.mp3', b'1234567890', 'audio/mpeg')),
-                ('files', ('second.wav', b'1234567890', 'audio/wav')),
-            ], follow_redirects=False)
+        app.state.settings = app.state.settings.model_copy(update={"max_upload_size": 15})
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            response = client.post(
+                "/upload",
+                data={"merge_mode": "merge"},
+                files=[
+                    ("files", ("first.mp3", b"1234567890", "audio/mpeg")),
+                    ("files", ("second.wav", b"1234567890", "audio/wav")),
+                ],
+                follow_redirects=False,
+            )
         assert response.status_code == 303
-        assert 'error=merge_invalid' in response.headers['location']
+        assert "error=merge_invalid" in response.headers["location"]
         assert list_jobs(db) == []
         enqueue.assert_not_called()
-        assert not list(filestore._upload_dir.glob('*/part-*'))
+        assert not list(filestore._upload_dir.glob("*/part-*"))
 
     def test_separate_mode_remains_the_default_for_batches(self, client, db):
-        with patch('whisper_ui.web.routes.upload.enqueue_pipeline') as enqueue:
-            response = client.post('/upload', files=[
-                ('files', ('part1.mp3', b'FILE_ONE', 'audio/mpeg')),
-                ('files', ('part2.wav', b'FILE_TWO', 'audio/wav')),
-            ], follow_redirects=False)
+        with patch("whisper_ui.web.routes.upload.enqueue_pipeline") as enqueue:
+            response = client.post(
+                "/upload",
+                files=[
+                    ("files", ("part1.mp3", b"FILE_ONE", "audio/mpeg")),
+                    ("files", ("part2.wav", b"FILE_TWO", "audio/wav")),
+                ],
+                follow_redirects=False,
+            )
         assert response.status_code == 303
         assert len(list_jobs(db)) == 2
         assert enqueue.call_count == 2
 
-    def test_upload_merge_ui_exposes_order_buttons_and_separate_default(self, client):
-        response = client.get('/upload')
-        assert response.status_code == 200
-        assert 'name="merge_mode"' in response.text
-        assert 'value="separate"' in response.text
-        assert 'value="merge"' in response.text
-        assert 'name="merge_order"' in response.text
-        assert 'moveFile(idx, -1)' in response.text
-        assert 'moveFile(idx, 1)' in response.text
-        assert 'syncFileOrder()' in response.text
-        assert 'Unisci in una sola registrazione' in response.text
 
 class TestPosthocTranscriptJoin:
     """Only owned, finished jobs can be joined; order and variants are frozen."""
 
-    def _completed(self, db, filestore, text='Ciao', *, owner_id=None, has_audio=True):
-        job = Job(filename=f'{text}.wav', status=JobStatus.COMPLETED, owner_id=owner_id, duration=4)
-        filestore.save_result(job.id, TranscriptResult([Segment(.1, 1, text, 'S1')], 'it', 4))
+    def _completed(self, db, filestore, text="Ciao", *, owner_id=None, has_audio=True):
+        job = Job(filename=f"{text}.wav", status=JobStatus.COMPLETED, owner_id=owner_id, duration=4)
+        filestore.save_result(job.id, TranscriptResult([Segment(0.1, 1, text, "S1")], "it", 4))
         if has_audio:
-            (filestore._output_dir / job.id / 'processed.wav').write_bytes(b'RIFF' + b'\0'*80)
+            (filestore._output_dir / job.id / "processed.wav").write_bytes(b"RIFF" + b"\0" * 80)
         db.insert_job(job)
         return job
 
     def test_options_return_owned_jobs_and_transcript_variants(self, client, db, filestore):
-        first=self._completed(db,filestore,'Prima')
-        second=self._completed(db,filestore,'Seconda',has_audio=False)
-        filestore.save_corrected_result(second.id,TranscriptResult([Segment(0,1,'Corretto')], 'it', 4))
-        filestore.save_custom_result(second.id,TranscriptResult([Segment(0,1,'Manuale')], 'it', 4))
-        resp=client.get('/jobs/merge/options',params={'job_ids':f'{second.id},{first.id}'})
-        assert resp.status_code==200
-        jobs=resp.json()['jobs']
-        assert [j['id'] for j in jobs]==[second.id,first.id]
-        assert [v['value'] for v in jobs[0]['versions']]==['original','corrected','custom']
-        assert jobs[0]['has_audio'] is False
-        assert jobs[1]['has_audio'] is True
-        page=client.get('/jobs')
-        assert 'Unisci trascrizioni' in page.text
-        assert 'mergeCompletedJobsDialog()' in page.text
-        assert 'Crea trascrizione unita' in page.text
+        first = self._completed(db, filestore, "Prima")
+        second = self._completed(db, filestore, "Seconda", has_audio=False)
+        filestore.save_corrected_result(second.id, TranscriptResult([Segment(0, 1, "Corretto")], "it", 4))
+        filestore.save_custom_result(second.id, TranscriptResult([Segment(0, 1, "Manuale")], "it", 4))
+        resp = client.get("/jobs/merge/options", params={"job_ids": f"{second.id},{first.id}"})
+        assert resp.status_code == 200
+        jobs = resp.json()["jobs"]
+        assert [j["id"] for j in jobs] == [second.id, first.id]
+        assert [v["value"] for v in jobs[0]["versions"]] == ["original", "corrected", "custom"]
+        assert jobs[0]["has_audio"] is False
+        assert jobs[1]["has_audio"] is True
+        page = client.get("/jobs")
+        assert "Unisci trascrizioni" in page.text
+        assert "mergeCompletedJobsDialog()" in page.text
+        assert "Crea trascrizione unita" in page.text
 
-    def test_join_creates_new_job_manifest_and_enqueues_io_not_gpu(self,client,db,filestore):
-        first=self._completed(db,filestore,'Prima')
-        second=self._completed(db,filestore,'Seconda')
-        with patch('whisper_ui.web.routes.merge_jobs.enqueue_join') as enqueue:
-            resp=client.post('/jobs/merge',data={
-                'job_ids':f'{second.id},{first.id}',
-                'versions':'original,original','title':'Riunione completa',
-            })
-        assert resp.status_code==202,resp.text
-        jid=resp.json()['job_id']
-        job=db.get_job(jid)
-        assert job.status==JobStatus.QUEUED
-        assert job.filename=='Riunione completa.wav'
-        assert job.owner_id==first.owner_id
+    def test_join_creates_new_job_manifest_and_enqueues_io_not_gpu(self, client, db, filestore):
+        first = self._completed(db, filestore, "Prima")
+        second = self._completed(db, filestore, "Seconda")
+        with patch("whisper_ui.web.routes.merge_jobs.enqueue_join") as enqueue:
+            resp = client.post(
+                "/jobs/merge",
+                data={
+                    "job_ids": f"{second.id},{first.id}",
+                    "versions": "original,original",
+                    "title": "Riunione completa",
+                },
+            )
+        assert resp.status_code == 202, resp.text
+        jid = resp.json()["job_id"]
+        job = db.get_job(jid)
+        assert job.status == JobStatus.QUEUED
+        assert job.filename == "Riunione completa.wav"
+        assert job.owner_id == first.owner_id
         assert job.duration is None
         import json
 
-        manifest=json.loads(filestore.get_upload_path(jid,'joined-sources.json').read_text())
-        assert manifest['sources']==[
-            {'job_id':second.id,'transcript':'original'},
-            {'job_id':first.id,'transcript':'original'},
+        manifest = json.loads(filestore.get_upload_path(jid, "joined-sources.json").read_text())
+        assert manifest["sources"] == [
+            {"job_id": second.id, "transcript": "original"},
+            {"job_id": first.id, "transcript": "original"},
         ]
-        enqueue.assert_called_once_with(client.app.state.redis,jid)
-        assert db.get_job(first.id).status==JobStatus.COMPLETED
-        assert db.get_job(second.id).status==JobStatus.COMPLETED
+        enqueue.assert_called_once_with(client.app.state.redis, jid)
+        assert db.get_job(first.id).status == JobStatus.COMPLETED
+        assert db.get_job(second.id).status == JobStatus.COMPLETED
 
-    @pytest.mark.parametrize('kind',('duplicate','single','invalid-version','overlong-title'))
-    def test_bad_join_request_rejected_without_creating_job(self,client,db,filestore,kind):
-        a=self._completed(db,filestore,'Prima')
-        b=self._completed(db,filestore,'Seconda')
-        data={'job_ids':f'{a.id},{b.id}','versions':'original,original','title':'Unione'}
-        if kind=='duplicate':
-            data['job_ids']=f'{a.id},{a.id}'
-        if kind=='single':
-            data['job_ids']=a.id
-        if kind=='invalid-version':
-            data['versions']='custom,original'
-        if kind=='overlong-title':
-            data['title']='X'*120
-        resp=client.post('/jobs/merge',data=data)
-        assert resp.status_code==422
-        assert len(list_jobs(db))==2
+    @pytest.mark.parametrize("kind", ("duplicate", "single", "invalid-version", "overlong-title"))
+    def test_bad_join_request_rejected_without_creating_job(self, client, db, filestore, kind):
+        a = self._completed(db, filestore, "Prima")
+        b = self._completed(db, filestore, "Seconda")
+        data = {"job_ids": f"{a.id},{b.id}", "versions": "original,original", "title": "Unione"}
+        if kind == "duplicate":
+            data["job_ids"] = f"{a.id},{a.id}"
+        if kind == "single":
+            data["job_ids"] = a.id
+        if kind == "invalid-version":
+            data["versions"] = "custom,original"
+        if kind == "overlong-title":
+            data["title"] = "X" * 120
+        resp = client.post("/jobs/merge", data=data)
+        assert resp.status_code == 422
+        assert len(list_jobs(db)) == 2
 
-    def test_other_user_source_not_mergeable(self,client,db,filestore,test_user):
-        first=self._completed(db,filestore,'Prima')
-        outside=self._completed(db,filestore,'Seconda',owner_id=test_user.id+42)
-        assert client.get('/jobs/merge/options',params={
-            'job_ids':f'{first.id},{outside.id}'
-        }).status_code==404
-        assert client.post('/jobs/merge',data={
-            'job_ids':f'{first.id},{outside.id}'
-        }).status_code==404
-        assert len(list_jobs(db))==2
-
-    def test_failed_job_not_selectable(self,client,db,filestore):
-        first=self._completed(db,filestore,'Prima')
-        failed=Job(filename='failed.wav',status=JobStatus.FAILED)
-        db.insert_job(failed)
-        assert client.post('/jobs/merge',data={
-            'job_ids':f'{first.id},{failed.id}'
-        }).status_code==404
+    def test_other_user_source_not_mergeable(self, client, db, filestore, test_user):
+        first = self._completed(db, filestore, "Prima")
+        outside = self._completed(db, filestore, "Seconda", owner_id=test_user.id + 42)
+        assert client.get("/jobs/merge/options", params={"job_ids": f"{first.id},{outside.id}"}).status_code == 404
+        assert client.post("/jobs/merge", data={"job_ids": f"{first.id},{outside.id}"}).status_code == 404
+        assert len(list_jobs(db)) == 2

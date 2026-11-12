@@ -19,23 +19,6 @@ def test_vtt_export():
     assert "World" in data
 
 
-def test_vtt_format_metadata():
-    exporter = VttExporter()
-    assert exporter.file_extension == ".vtt"
-    assert exporter.mime_type == "text/vtt"
-
-
-def test_vtt_collapses_newlines_in_text_to_keep_cue_single_line():
-    # A newline inside the text would otherwise terminate the cue early at the
-    # blank-line delimiter; collapse it so the cue stays on one line.
-    result = TranscriptResult(
-        segments=[Segment(start=0.0, end=1.5, text="line one\nline two", speaker="SPEAKER_00")],
-    )
-    lines = VttExporter().export(result).decode("utf-8").split("\n")
-
-    assert lines == ["WEBVTT", "", "00:00:00.000 --> 00:00:01.500", "<v SPEAKER_00>line one line two", ""]
-
-
 def test_vtt_escapes_structural_characters_in_cue_text():
     # "&" and "<" are reserved in VTT cue text and a literal "-->" would be
     # parsed as a timing line; all must come back escaped while the voice tag

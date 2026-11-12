@@ -3,6 +3,7 @@
 No Whisper model runs here. result.json remains immutable; correction is saved
 atomically as result.corrected.json so Studio can switch versions instantly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,14 +48,19 @@ def enqueue_correction(redis, job_id: str) -> dict[str, str]:
     if previous is not None:
         redis.eval(
             "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0",
-            1, key, previous,
+            1,
+            key,
+            previous,
         )
     if not redis.set(key, "pending", nx=True, ex=14400):
         return correction_status(redis, job_id)
     try:
         task = Queue(WORKER_QUEUE_LLM, connection=redis).enqueue(
-            run_standalone_correction, job_id, job_timeout=7200,
-            result_ttl=86400, failure_ttl=86400,
+            run_standalone_correction,
+            job_id,
+            job_timeout=7200,
+            result_ttl=86400,
+            failure_ttl=86400,
         )
         redis.set(key, task.id, ex=86400)
         return {"status": "queued", "task_id": task.id}
@@ -76,6 +82,7 @@ def run_standalone_correction(job_id: str) -> dict[str, Any]:
         if not settings.llm_correction_available:
             raise RuntimeError("LLM correction is not configured")
         from whisper_ui.pipeline.llm_correction import LLMCorrectionStage
+
         stage = LLMCorrectionStage(
             base_url=settings.ollama_base_url,
             model=settings.ollama_model,

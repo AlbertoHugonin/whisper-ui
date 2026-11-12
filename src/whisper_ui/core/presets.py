@@ -3,6 +3,7 @@
 The form fields mirror the upload and re-transcribe job fields. Selecting a
 preset never changes an existing job; an upload persists its own settings.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -59,19 +60,23 @@ class PresetSettings(BaseModel):
 
 BUILTIN_PRESETS = {
     "meeting": {
-        "name": "Meeting", "description": "Riunioni, più interlocutori e correzione LLM",
+        "name": "Meeting",
+        "description": "Riunioni, più interlocutori e correzione LLM",
         "settings": PresetSettings(enable_diarization=True, llm_correction_enabled=True).model_dump(),
     },
     "podcast": {
-        "name": "Podcast", "description": "Due interlocutori e correzione LLM",
+        "name": "Podcast",
+        "description": "Due interlocutori e correzione LLM",
         "settings": PresetSettings(enable_diarization=True, num_speakers=2, llm_correction_enabled=True).model_dump(),
     },
     "interview": {
-        "name": "Intervista", "description": "Interviste a due, diarizzazione e correzione",
+        "name": "Intervista",
+        "description": "Interviste a due, diarizzazione e correzione",
         "settings": PresetSettings(enable_diarization=True, num_speakers=2, llm_correction_enabled=True).model_dump(),
     },
     "lecture": {
-        "name": "Lezione", "description": "Voce singola e correzione LLM",
+        "name": "Lezione",
+        "description": "Voce singola e correzione LLM",
         "settings": PresetSettings(llm_correction_enabled=True).model_dump(),
     },
 }
