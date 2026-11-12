@@ -20,26 +20,15 @@
   <div class="wv-workspace {{ 'wv-with-audio' if media_available else '' }}">
     {% if media_available %}
     <aside class="wv-player" :class="{'is-expanded': audioExpanded}" aria-label="Ascolto della registrazione">
-      <div class="wv-player-heading">
       <div class="wv-panel-heading"><div><span class="at2-kicker">ASCOLTA E RITROVA</span><h2>La registrazione</h2></div><button type="button" class="wv-expand" @click="audioExpanded=!audioExpanded; $nextTick(() => _timeline?.refresh())" :aria-expanded="audioExpanded" x-text="audioExpanded ? 'Meno dettagli -' : 'Dettagli audio +'">Dettagli audio +</button><span class="wv-audio-dot" :class="{'is-playing': playing}" aria-hidden="true">♪</span></div>
       <div class="wv-switch" role="group" aria-label="Versione audio">
         {% if original_available %}<button type="button" :aria-pressed="audioSource==='original'" @click="switchAudio('original')">Originale</button>{% endif %}
         {% if processed_available %}<button type="button" :aria-pressed="audioSource==='processed'" @click="switchAudio('processed')">Audio elaborato</button>{% endif %}
       </div>
       <div class="wv-clock"><strong x-text="clock">00:00</strong><span>/ <span x-text="clockTotal">{{ result.duration|format_time }}</span></span></div>
-      </div>
-      <div class="wv-waveform">
-        <canvas id="viewer-waveform" height="144" aria-hidden="true"></canvas>
+      <div class="viewer-waveform-wrap wv-waveform">
+        <canvas id="viewer-waveform" height="106" aria-hidden="true"></canvas>
         <input id="viewer-seek" type="range" min="0" max="{{ result.duration or 1 }}" value="0" step=".01" aria-label="Posizione nella registrazione">
-      </div>
-      <div class="wv-player-controls">
-      <div class="wv-transport">
-        <button type="button" @click="seekDelta(-5)" aria-label="Indietro di 5 secondi">↶ 5</button>
-        <button type="button" class="wv-play" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'"><span x-text="playing ? 'Ⅱ' : '▶'" aria-hidden="true">▶</span><span x-text="playing ? 'Pausa' : 'Ascolta'">Ascolta</span></button>
-        <button type="button" @click="seekDelta(5)" aria-label="Avanti di 5 secondi">5 ↷</button>
-      </div>
-      <div class="wv-play-options"><button type="button" class="wv-follow" :aria-pressed="followPlayback" @click="toggleFollow()">↳ Segui testo</button>
-        <label>Velocità <select aria-label="Velocità di riproduzione" x-model="speed" @change="setSpeed()">{% for speed in ['0.75','1','1.25','1.5','2'] %}<option value="{{ speed }}">{{ speed }}×</option>{% endfor %}</select></label>
       </div>
       <div class="wv-zoom"><span x-text="viewWindow">Registrazione completa</span><div>
         <button type="button" @click="timelineZoom(1/1.7)" aria-label="Riduci zoom">−</button>
@@ -48,9 +37,16 @@
         <button type="button" @click="_timeline?.pan(.5)" aria-label="Sposta vista avanti">›</button>
         <button type="button" @click="_timeline?.fit()">Tutto</button>
       </div></div>
-      </div>
       <canvas id="viewer-overview" height="32" aria-label="Panoramica della registrazione"></canvas>
       <p id="viewer-waveform-status" class="wv-hint" role="status">Caricamento forma d’onda…</p>
+      <div class="wv-transport">
+        <button type="button" @click="seekDelta(-5)" aria-label="Indietro di 5 secondi">↶ 5</button>
+        <button type="button" class="wv-play" @click="togglePlayPause()" :aria-label="playing ? 'Pausa' : 'Riproduci'"><span x-text="playing ? 'Ⅱ' : '▶'" aria-hidden="true">▶</span><span x-text="playing ? 'Pausa' : 'Ascolta'">Ascolta</span></button>
+        <button type="button" @click="seekDelta(5)" aria-label="Avanti di 5 secondi">5 ↷</button>
+      </div>
+      <div class="wv-play-options"><button type="button" class="wv-follow" :aria-pressed="followPlayback" @click="toggleFollow()">↳ Segui testo</button>
+        <label>Velocità <select aria-label="Velocità di riproduzione" x-model="speed" @change="setSpeed()">{% for speed in ['0.75','1','1.25','1.5','2'] %}<option value="{{ speed }}">{{ speed }}×</option>{% endfor %}</select></label>
+      </div>
       <p class="wv-error" x-text="mediaError" x-show="mediaError" role="alert" x-cloak></p>
       <details class="wv-spectrum-details" @toggle="toggleSpectrum($event.target.open)">
         <summary>Spettro delle frequenze <span>dal vivo</span></summary>
