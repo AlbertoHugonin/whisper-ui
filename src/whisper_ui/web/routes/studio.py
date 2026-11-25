@@ -77,9 +77,7 @@ async def studio_page(
     request: Request,
     db: DbDep,
     filestore: FileStoreDep,
-    settings: SettingsDep,
     user: CurrentUserDep,
-    redis: RedisDep,
 ):
     root, jobs = _family(job_id, db, user)
     versions = []
@@ -109,25 +107,6 @@ async def studio_page(
     audio_job = next((j for j in jobs if j.id == root), jobs[0])
     has_processed = filestore.get_output_artifact(audio_job.id, "processed.wav") is not None
     has_original = filestore.get_any_media_path(audio_job.id, audio_job.filepath) is not None
-    # Pick the saved summary's real source on reopening, even if the right pane differs.
-    ordered_jobs = sorted(jobs, key=lambda j: j.id != job_id)
-    saved = next(((j.id, item) for j in ordered_jobs if (item := filestore.load_summary(j.id))), None)
-    summary_initial = None
-    if saved:
-        token = f"{saved[0]}~{saved[1].get('source', '')}"
-        if token in {v["id"] for v in versions}:
-            summary_initial = token
-    # Reopening an in-flight summary resumes its status polling.
-    from whisper_ui.worker.standalone_summary import summary_status
-    for j in ordered_jobs:
-        state = summary_status(redis, j.id)
-        if state["status"] in {"queued", "started", "deferred", "scheduled"}:
-            token = f"{j.id}~{state.get('source', '')}"
-            candidate = next((v["id"] for v in versions if v["id"] == token),
-                             next((v["id"] for v in versions if v["id"].startswith(j.id + "~")), None))
-            if candidate:
-                summary_initial = candidate
-                break
     return templates.TemplateResponse(
         request=request,
         name="studio.html",
@@ -141,14 +120,9 @@ async def studio_page(
                 versions[min(1, len(versions) - 1)]["id"],
             ),
             "audio_job_id": audio_job.id,
+            "summary_job_id": job_id,
             "has_processed": has_processed,
             "has_original": has_original,
-            "summary_prompt": next((j.summary_prompt for j in jobs if j.id == job_id), ""),
-            "llm_available": settings.llm_correction_available,
-            "summary_initial": summary_initial,
-            "summary_saved": saved[1] if saved else None,
-            "summary_saved_job": saved[0] if saved else None,
-            "summary_default_model": settings.ollama_model,
         },
     )
 
@@ -313,7 +287,8 @@ async def studio_summary_download(job_id: str, db: DbDep, filestore: FileStoreDe
     source = next((j for j in jobs if j.id == (source_job or job_id)), None)
     if source is None:
         raise HTTPException(status_code=404)
-    summary = filestore.load_summary(source.id)
+    from whisper_ui.storage import summary_library
+    summary = summary_library.read(filestore, source.id, "legacy")
     if not summary or not summary.get("text"):
         raise HTTPException(status_code=404, detail="Riassunto non disponibile")
     filename = f"{Path(source.filename).stem}-riassunto.txt"

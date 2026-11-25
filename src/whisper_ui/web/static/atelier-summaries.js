@@ -1,0 +1,38 @@
+(function(){
+'use strict';
+const base='/summaries/api/';
+const key=(j,s)=>encodeURIComponent(j)+'/'+encodeURIComponent(s);
+const active=new Set(['queued','started','deferred','scheduled']);
+const md=window.markdownit({html:false,linkify:false,typographer:false});
+// Never fetch externally referenced images from private meeting notes.
+md.renderer.rules.image=(tokens,i)=>md.utils.escapeHtml(tokens[i].content||'[Immagine]');
+md.renderer.rules.link_open=(tokens,i,opts,env,renderer)=>{tokens[i].attrSet('rel','noopener noreferrer');tokens[i].attrSet('target','_blank');return renderer.renderToken(tokens,i,opts);};
+async function request(path,options={}){const r=await fetch(base+path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(typeof d.detail==='string'?d.detail:'Richiesta non riuscita ('+r.status+')');}return r.json();}
+window.summaryWorkspace=function(config){let seq=0,sourceSeq=0,timer=null,libraryTimer=null,gone=false,unload;return {
+ rows:[],jobs:[],query:'',selected:null,title:'',text:'',savedText:'',savedTitle:'',error:'',notice:'',loading:true,creating:false,saving:false,generating:false,mode:matchMedia('(max-width:700px)').matches?'edit':'split',models:[config.defaultModel],modelNotice:'',sources:[],llmAvailable:config.llmAvailable,form:{job_id:'',source:'',title:'',model:config.defaultModel,prompt:''},
+ get dirty(){return !!this.selected&&this.selected.status==='finished'&&(this.text!==this.savedText||this.title!==this.savedTitle)},
+ get filtered(){const q=this.query.trim().toLocaleLowerCase();return this.rows.filter(x=>!q||[x.title,x.filename,x.model].some(y=>String(y||'').toLocaleLowerCase().includes(q)))},
+ get rendered(){return this.mode==='edit'?'':md.render(this.text||'')},
+ get wordCount(){return this.text.trim()?this.text.trim().split(/\s+/u).length:0},
+ isActive(s){return active.has(s)},
+ statusLabel(s){return ({finished:'Pronto',queued:'In coda AI',started:'Elaborazione AI',scheduled:'Programmato',deferred:'In attesa',failed:'Errore di generazione',unknown:'Stato non disponibile',canceled:'Annullato',stopped:'Interrotto'})[s]||'Documento'},
+ sourceLabel(s){return ({original:'Whisper originale',corrected:'Correzione LLM',custom:'Personalizzata'})[s]||'Trascrizione'},
+ dateLabel(s){if(!s)return '';const date=new Date(s);return Number.isNaN(+date)?'':date.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})},
+ async init(){this.$root.dataset.summaryLocation=location.pathname+location.search+location.hash;unload=e=>{if(this.dirty){e.preventDefault();e.returnValue=''}};window.addEventListener('beforeunload',unload);await this.refreshLibrary();if(gone)return;const target=config.summary?this.rows.find(r=>r.job_id===config.job&&r.id===config.summary):config.job?this.rows.find(r=>r.job_id===config.job):this.rows[0];if(target)await this.open(target.job_id,target.id,false);else if(config.job)await this.newSummary(config.job);libraryTimer=setInterval(()=>{if(!gone&&this.rows.some(r=>active.has(r.status)))void this.refreshLibrary()},10000)},
+ destroy(){gone=true;seq++;sourceSeq++;clearTimeout(timer);clearInterval(libraryTimer);window.removeEventListener('beforeunload',unload)},
+ async refreshLibrary(){try{const d=await request('library');if(gone)return;this.rows=d.summaries;this.jobs=d.jobs;}catch(e){if(!gone)this.error=e.message}finally{this.loading=false}},
+ canLeave(){return !this.saving&&(!this.dirty||confirm('Hai modifiche non salvate. Vuoi abbandonarle?'))},
+ async open(job,sid,updateUrl=true){if(!this.canLeave())return;this.creating=false;this.error='';clearTimeout(timer);const t=++seq;try{const d=await request(key(job,sid));if(gone||t!==seq)return;this.assign(d);if(updateUrl){const url='/summaries?job='+encodeURIComponent(job)+'&summary='+encodeURIComponent(sid);history.replaceState(history.state,'',url);this.$root.dataset.summaryLocation=url;}this.poll();if(matchMedia('(max-width:700px)').matches&&updateUrl)this.$nextTick(()=>document.querySelector('.summary-document')?.scrollIntoView({block:'start'}));}catch(e){if(!gone&&t===seq)this.error=e.message}},
+ assign(d){this.selected=d;this.title=this.savedTitle=d.title||'';this.text=this.savedText=d.text||'';this.notice='';},
+ poll(){clearTimeout(timer);if(!gone&&active.has(this.selected?.status))timer=setTimeout(()=>this.refreshSelected(),4500)},
+ async refreshSelected(){const old=this.selected;if(!old||this.dirty||this.saving)return;const t=seq;try{const d=await request(key(old.job_id,old.id));if(gone||t!==seq)return;this.assign(d);if(!active.has(d.status))void this.refreshLibrary();}catch(e){if(!gone&&t===seq)this.error=e.message}finally{if(!gone&&t===seq)this.poll()}},
+ async newSummary(job=''){if(!this.canLeave())return;this.error='';this.creating=true;clearTimeout(timer);seq++;this.selected=null;this.title=this.savedTitle='';this.text=this.savedText='';this.form={job_id:job||config.job||'',source:'',title:'',model:config.defaultModel,prompt:''};this.sources=[];this.modelNotice='Caricamento modelli…';void this.loadModels();await this.loadSources(true);if(matchMedia('(max-width:700px)').matches)this.$nextTick(()=>document.querySelector('.summary-document')?.scrollIntoView({block:'start'}))},
+ async loadModels(){try{const d=await request('models');if(gone)return;this.models=d.models;if(!this.models.includes(this.form.model))this.form.model=d.default;this.modelNotice='Catalogo Model Router · '+this.models.length+' opzioni';}catch(_){this.modelNotice='Catalogo non raggiungibile. Puoi usare il modello predefinito.'}},
+ async loadSources(reset){const job=this.form.job_id,t=++sourceSeq;this.sources=[];this.form.source='';if(!job)return;try{const d=await request(encodeURIComponent(job)+'/sources');if(gone||t!==sourceSeq)return;this.sources=d.sources;this.form.source=d.sources.find(x=>x.id==='corrected')?.id||d.sources[0]?.id||'';if(reset){const name=this.jobs.find(j=>j.id===job)?.filename||'Trascrizione';this.form.title=('Riassunto · '+name).slice(0,200);this.form.prompt=d.prompt||'';}}catch(e){if(!gone&&t===sourceSeq)this.error=e.message}},
+ async generate(){if(this.generating)return;this.generating=true;this.error='';try{const d=await request('generate',{method:'POST',body:JSON.stringify(this.form)});if(gone)return;await this.refreshLibrary();await this.open(d.job_id,d.id);}catch(e){if(!gone)this.error=e.message}finally{this.generating=false}},
+ async save(){if(!this.dirty||this.saving||!this.selected)return;const old=this.selected,t=seq;const title=this.title,text=this.text;this.saving=true;this.error='';try{const d=await request(key(old.job_id,old.id),{method:'PUT',body:JSON.stringify({title,text,revision:old.revision})});if(gone||t!==seq)return;this.selected={...old,...d};this.savedTitle=d.title;this.savedText=d.text;if(this.title===title)this.title=d.title;this.notice='Modifiche salvate';void this.refreshLibrary()}catch(e){if(!gone)this.error=e.message}finally{this.saving=false}},
+ insert(prefix,suffix){const el=this.$refs.editor;if(!el)return;const a=el.selectionStart,b=el.selectionEnd;this.text=this.text.slice(0,a)+prefix+this.text.slice(a,b)+suffix+this.text.slice(b);this.$nextTick(()=>{el.focus();el.setSelectionRange(a+prefix.length,b+prefix.length)})},
+ async copyText(){try{await window.whisperCopy(this.text);this.notice='Copiato negli appunti'}catch(_){this.error='Copia non disponibile'}},
+ downloadUrl(format){return this.selected?base+key(this.selected.job_id,this.selected.id)+'/download?format='+format:'#'}
+};};
+})();

@@ -24,7 +24,10 @@
   {# htmx fragment scripts come from a different HTTP response; keep the CSP
      nonce of the initial document so Alpine screen controllers may execute. #}
   <script nonce="{{ csp_nonce }}">if (window.htmx) htmx.config.inlineScriptNonce = {{ csp_nonce|tojson }};</script>
-  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r4"></script>
+  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r5"></script>
+  <script defer src="{{ url_for('static', path='vendor/markdown-it.min.js') }}"></script>
+  <script defer src="{{ url_for('static', path='atelier-summaries.js') }}?v=1"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-summaries.css') }}?v=1">
   <script defer src="{{ url_for('static', path='atelier-local-media.js') }}?v=mp4-r1"></script>
   {# Vendored, not CDN: when the morph extension is missing htmx silently
      falls back to defaultSwapStyle=innerHTML, which would nest /jobs/list
@@ -110,6 +113,7 @@
         <a href="/" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='dashboard'}"><span class="atelier-nav-symbol" aria-hidden="true">◫</span><span>Panoramica</span></a>
         <a href="/upload" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='upload'}"><span class="atelier-nav-symbol" aria-hidden="true">↥</span><span>Nuova trascrizione</span></a>
         <a href="/jobs" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='jobs'}"><span class="atelier-nav-symbol" aria-hidden="true">▤</span><span>Le mie trascrizioni</span></a>
+        <a href="/summaries" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='summaries'}"><span class="atelier-nav-symbol" aria-hidden="true">≡</span><span>Riassunti</span></a>
         <a href="/presets" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='presets'}"><span class="atelier-nav-symbol" aria-hidden="true">⚙</span><span>Preset e impostazioni</span></a>
       </nav>
       {% if request.state and request.state.user and request.state.user.is_admin %}
@@ -131,7 +135,7 @@
     <div class="atelier-main-column">
       <header class="atelier-topbar">
         <div class="atelier-mobile-logo"><span class="atelier-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span> atelier<span class="atelier-brand-dot">.</span></div>
-        <div class="atelier-topbar-context"><span class="atelier-topbar-kicker">IL TUO WORKSPACE</span><strong x-text="({dashboard:'Panoramica',upload:'Nuova trascrizione',jobs:'Le mie trascrizioni',presets:'Preset',admin_users:'Utenti',admin_jobs:'Gestione lavori'})[$store.nav.activePage] || 'Whisper Studio'">Whisper Studio</strong></div>
+        <div class="atelier-topbar-context"><span class="atelier-topbar-kicker">IL TUO WORKSPACE</span><strong x-text="({dashboard:'Panoramica',upload:'Nuova trascrizione',jobs:'Le mie trascrizioni',summaries:'Riassunti',presets:'Preset',admin_users:'Utenti',admin_jobs:'Gestione lavori'})[$store.nav.activePage] || 'Whisper Studio'">Whisper Studio</strong></div>
         <div class="atelier-topbar-actions">
           <span class="atelier-topbar-state"><span class="atelier-online-indicator"></span> Workspace attivo</span>
           <button class="atelier-icon-button" type="button" :aria-label="theme === 'whisper-light' ? 'Attiva tema scuro' : 'Attiva tema chiaro'" :title="theme === 'whisper-light' ? 'Tema scuro' : 'Tema chiaro'" @click="theme = theme === 'whisper-light' ? 'whisper-dark' : 'whisper-light'" x-text="theme === 'whisper-light' ? '☾' : '☼'">☼</button>
@@ -165,6 +169,7 @@
     <a href="/" :class="{'is-active':$store.nav.activePage==='dashboard'}"><span aria-hidden="true">◫</span><small>Home</small></a>
     <a href="/jobs" :class="{'is-active':$store.nav.activePage==='jobs'}"><span aria-hidden="true">▤</span><small>Lavori</small></a>
     <a href="/upload" class="atelier-mobile-create" :class="{'is-active':$store.nav.activePage==='upload'}"><span aria-hidden="true">＋</span><small>Crea</small></a>
+    <a href="/summaries" :class="{'is-active':$store.nav.activePage==='summaries'}"><span aria-hidden="true">≡</span><small>Riassunti</small></a>
     <a href="/presets" :class="{'is-active':$store.nav.activePage==='presets'}"><span aria-hidden="true">⚙</span><small>Preset</small></a>
   </nav>
 
@@ -223,6 +228,7 @@
       if (nav) {
         if (path === '/') nav.activePage = 'dashboard';
         else if (path.startsWith('/upload')) nav.activePage = 'upload';
+        else if (path.startsWith('/summaries')) nav.activePage = 'summaries';
         else if (path.startsWith('/presets')) nav.activePage = 'presets';
         else if (path.startsWith('/admin/users')) nav.activePage = 'admin_users';
         else if (path.startsWith('/admin/jobs')) nav.activePage = 'admin_jobs';

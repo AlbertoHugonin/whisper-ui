@@ -5,7 +5,7 @@
   'use strict';
   const ROOT = '#page-content';
   const pageRoute = (path) => (
-    path === '/' || path === '/upload' || path === '/jobs' ||
+    path === '/' || path === '/upload' || path === '/jobs' || path === '/summaries' ||
     path === '/presets' || path === '/presets/new' ||
     path === '/admin/users' || path === '/admin/jobs' ||
     /^\/presets\/[^/]+\/edit$/.test(path) ||
@@ -14,6 +14,7 @@
   const navName = (path) => {
     if (path === '/') return 'dashboard';
     if (path.startsWith('/upload')) return 'upload';
+    if (path === '/summaries') return 'summaries';
     if (path.startsWith('/presets')) return 'presets';
     if (path.startsWith('/admin/users')) return 'admin_users';
     if (path.startsWith('/admin/jobs')) return 'admin_jobs';
@@ -61,6 +62,7 @@
     page?.removeAttribute('aria-busy');
   }
   function navigate(url, historyMode = 'push') {
+    if (historyMode==='push' && document.querySelector('[data-summary-dirty=true]') && !window.confirm('Hai modifiche al riassunto non salvate. Vuoi uscire senza salvarle?')) return true;
     if (document.querySelector('[data-atelier-preparing]')) return true; // Keep local extraction alive.
     if (!window.htmx || pending || !document.querySelector(ROOT)) return false;
     const currentGeneration = ++generation;
@@ -169,6 +171,8 @@
   // fragment but does not automatically push a URL without an hx-push-url
   // attribute on the triggering element.
   window.addEventListener('popstate', () => {
+    const dirty = document.querySelector('[data-summary-dirty=true]');
+    if (dirty && !window.confirm('Hai modifiche al riassunto non salvate. Vuoi uscire senza salvarle?')) { history.pushState({atelier:true}, '', dirty.dataset.summaryLocation || '/summaries'); return; }
     const preparing = document.querySelector('[data-atelier-preparing]');
     if (preparing) { history.pushState({atelier:true}, '', preparing.dataset.atelierPreparing); return; }
     const superseded = pendingRequest;

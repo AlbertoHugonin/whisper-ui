@@ -42,7 +42,7 @@
     {% if job.status.value == 'completed' %}
     <a href="/viewer/{{ job.id }}" class="btn btn-primary btn-xs">{{ labels.JOBS_VIEW }}</a>
     <a href="/studio/{{ job.id }}" class="btn btn-outline btn-xs">Modifica in Studio</a>
-    <a href="/studio/{{ job.id }}#studio-summary" class="btn btn-ghost btn-xs">Riassunto AI</a>
+    <a href="/summaries?job={{ job.id }}" class="btn btn-ghost btn-xs">Riassunto AI</a>
     {# Inline export dropdown. Visibility is driven by DaisyUI's
        :focus-within CSS alone — an Alpine x-show here would be a second
        source of truth that desyncs whenever a swap or focus loss closes

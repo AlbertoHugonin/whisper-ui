@@ -33,12 +33,12 @@ def summary_status(redis, job_id: str) -> dict:
         task = RQJob.fetch(task_id, connection=redis)
         state = task.get_status(refresh=True)
         return {"status": getattr(state, "value", str(state)), "task_id": task_id,
-                **{key: task.meta[key] for key in ("model", "source", "done", "total", "phase") if key in task.meta}}
+                **{key: task.meta[key] for key in ("model", "source", "done", "total", "phase", "summary_id") if key in task.meta}}
     except Exception:
         return {"status": "unknown"}
 
 
-def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "original", model: str = "") -> dict:
+def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "original", model: str = "", summary_id: str = "") -> dict:
     if version not in ("original", "corrected", "custom"):
         raise ValueError("Invalid source version")
     key = _PREFIX + job_id
@@ -62,13 +62,14 @@ def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "origin
             prompt[:4000],
             version,
             model,
-            meta={"source": version, "model": model, "done": 0, "phase": "queued"},
+            *([summary_id] if summary_id else []),
+            meta={"summary_id": summary_id, "source": version, "model": model, "done": 0, "phase": "queued"},
             job_timeout=18000,
             result_ttl=86400,
             failure_ttl=86400,
         )
         redis.set(key, task.id, ex=172800)
-        return {"status": "queued", "task_id": task.id, "source": version, "model": model}
+        return {"status": "queued", "task_id": task.id, "source": version, "model": model, "summary_id": summary_id}
     except Exception:
         redis.delete(key)
         raise
@@ -94,7 +95,21 @@ def _split_transcript(text: str, max_chars: int = 5600) -> list[str]:
     return parts
 
 
-def run_standalone_summary(job_id: str, prompt: str, version: str, model: str = "") -> dict[str, str | int]:
+def run_standalone_summary(job_id: str, prompt: str, version: str, model: str = "", summary_id: str = "") -> dict[str, str | int]:
+    try:
+        return _generate_summary(job_id, prompt, version, model, summary_id)
+    except Exception:
+        if summary_id:
+            try:
+                from whisper_ui.storage import summary_library
+                with build_worker_runtime(job_id) as runtime:
+                    summary_library.update(runtime.filestore, job_id, summary_id, {"status": "failed"})
+            except Exception:
+                pass  # Preserve the original error; RQ still records failure.
+        raise
+
+
+def _generate_summary(job_id: str, prompt: str, version: str, model: str, summary_id: str) -> dict[str, str | int]:
     with build_worker_runtime(job_id) as runtime:
         job = runtime.db.get_job(job_id)
         if job is None or job.status != JobStatus.COMPLETED:
@@ -185,15 +200,13 @@ def run_standalone_summary(job_id: str, prompt: str, version: str, model: str = 
                 partials = merged
         finally:
             client.close()
-        dest = runtime.filestore.save_summary(
-            job_id,
-            {
-                "text": partials[0],
-                "source": version,
-                "prompt": instruction,
-                "chunks": len(chunks),
-                "model": model,
-            },
-        )
+        payload = {"text": partials[0], "source": version, "prompt": instruction,
+                   "chunks": len(chunks), "model": model}
+        if summary_id:
+            from whisper_ui.storage import summary_library
+            summary_library.update(runtime.filestore, job_id, summary_id, {**payload, "status": "finished"})
+            dest = summary_library._path(runtime.filestore, job_id, summary_id)
+        else:
+            dest = runtime.filestore.save_summary(job_id, payload)
         progress(done, total, "finished")
         return {"summary_path": str(dest), "chunks": len(chunks), "model": model}
