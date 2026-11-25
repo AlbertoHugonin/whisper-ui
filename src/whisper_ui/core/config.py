@@ -224,6 +224,7 @@ class Settings(BaseSettings):
     # or any external Ollama server.
     ollama_base_url: str = ""
     llm_api_mode: str = "ollama"  # "openai-router" for the AI model router
+    llm_catalog_base_url: str = ""  # optional always-on catalog, when compute host sleeps
     ollama_model: str = "gemma4:e4b"
     # keep_alive format follows Ollama's duration string (e.g. "30m", "1h",
     # "-1" = forever). Longer values amortize model load cost across chunks.

@@ -102,3 +102,18 @@ def test_remote_worker_adapter_roundtrip(monkeypatch):
     assert calls[-1][2] == {"progress": 45, "message": "done"}
     with pytest.raises(ValueError):
         RemoteJobDatabase("http://arbitrary-host:8000", TOKEN)
+
+
+def test_standalone_llm_counts_keep_ai_host_awake(monkeypatch):
+    from unittest.mock import patch
+    monkeypatch.setenv("WHISPER_WORKER_TOKEN", TOKEN)
+    app = FastAPI()
+    app.state.db = Database()
+    app.state.db.job.status = JobStatus.COMPLETED
+    app.state.redis = object()
+    app.include_router(router)
+    with patch("rq.Queue") as queue, patch("rq.registry.StartedJobRegistry") as started:
+        queue.return_value.count = 1
+        started.return_value.count = 2
+        response = TestClient(app).get("/internal/worker/pending", headers={"X-Worker-Token": TOKEN})
+        assert response.json() == {"pending": 0, "queued": 1, "processing": 2}

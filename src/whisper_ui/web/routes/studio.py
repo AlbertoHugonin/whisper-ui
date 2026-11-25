@@ -227,15 +227,18 @@ async def _summary_models(settings):
     default = settings.ollama_model
     if settings.llm_api_mode != "openai-router":
         return [default]
-    try:
-        async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=6.0) as client:
-            response = await client.get("/v1/models")
-            response.raise_for_status()
-            rows = response.json()["data"]
-        models = [row["id"] for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)]
-        return list(dict.fromkeys([default, *models]))
-    except (httpx.HTTPError, ValueError, KeyError, TypeError):
-        raise HTTPException(status_code=503, detail="Catalogo del router AI non disponibile") from None
+    urls = list(dict.fromkeys(filter(None, [settings.ollama_base_url, settings.llm_catalog_base_url])))
+    for url in urls:
+        try:
+            async with httpx.AsyncClient(base_url=url, timeout=3.0, trust_env=False) as client:
+                response = await client.get("/v1/models")
+                response.raise_for_status()
+                rows = response.json()["data"]
+            models = [row["id"] for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)]
+            return list(dict.fromkeys([default, *models]))
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            continue
+    raise HTTPException(status_code=503, detail="Catalogo del router AI non disponibile")
 
 
 @router.get("/studio/{job_id}/summary-models")

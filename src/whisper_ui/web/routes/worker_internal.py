@@ -90,8 +90,17 @@ async def write_progress(request: Request, job_id: str):
 async def pending_jobs(request: Request):
     _authorize(request)
     db = request.app.state.db
+    # A standalone AI summary/correction belongs to a completed DB job, so
+    # SQLite counts alone miss it. Include the LLM queue and active registry
+    # in the power supervisor's counts to wake/keep the inference host alive.
+    from rq import Queue
+    from rq.registry import StartedJobRegistry
+    from whisper_ui.core.constants import WORKER_QUEUE_LLM
+    redis = getattr(request.app.state, "redis", None)
+    llm_queued = Queue(WORKER_QUEUE_LLM, connection=redis).count if redis is not None else 0
+    llm_started = StartedJobRegistry(WORKER_QUEUE_LLM, connection=redis).count if redis is not None else 0
     return {
         "pending": db.count_jobs(status=JobStatus.PENDING.value),
-        "queued": db.count_jobs(status=JobStatus.QUEUED.value),
-        "processing": db.count_jobs(status=JobStatus.PROCESSING.value),
+        "queued": db.count_jobs(status=JobStatus.QUEUED.value) + llm_queued,
+        "processing": db.count_jobs(status=JobStatus.PROCESSING.value) + llm_started,
     }
