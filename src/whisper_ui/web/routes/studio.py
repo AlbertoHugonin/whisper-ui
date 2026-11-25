@@ -123,9 +123,11 @@ async def studio_page(
         state = summary_status(redis, j.id)
         if state["status"] in {"queued", "started", "deferred", "scheduled"}:
             token = f"{j.id}~{state.get('source', '')}"
-            summary_initial = next((v["id"] for v in versions if v["id"] == token),
-                                   next(v["id"] for v in versions if v["id"].startswith(j.id + "~")))
-            break
+            candidate = next((v["id"] for v in versions if v["id"] == token),
+                             next((v["id"] for v in versions if v["id"].startswith(j.id + "~")), None))
+            if candidate:
+                summary_initial = candidate
+                break
     return templates.TemplateResponse(
         request=request,
         name="studio.html",

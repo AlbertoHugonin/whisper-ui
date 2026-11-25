@@ -24,7 +24,7 @@
   {# htmx fragment scripts come from a different HTTP response; keep the CSP
      nonce of the initial document so Alpine screen controllers may execute. #}
   <script nonce="{{ csp_nonce }}">if (window.htmx) htmx.config.inlineScriptNonce = {{ csp_nonce|tojson }};</script>
-  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r3"></script>
+  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r4"></script>
   <script defer src="{{ url_for('static', path='atelier-local-media.js') }}?v=mp4-r1"></script>
   {# Vendored, not CDN: when the morph extension is missing htmx silently
      falls back to defaultSwapStyle=innerHTML, which would nest /jobs/list

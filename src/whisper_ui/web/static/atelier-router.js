@@ -146,7 +146,9 @@
     // Focus the new screen without scrolling a second time for keyboard users.
     node.setAttribute('tabindex','-1');
     node.focus({preventScroll:true});
-    window.scrollTo({top:0,behavior:'instant'});
+    const anchor = location.hash && document.getElementById(location.hash.slice(1));
+    if (anchor) anchor.scrollIntoView({block:'start',behavior:'instant'});
+    else window.scrollTo({top:0,behavior:'instant'});
     document.dispatchEvent(new CustomEvent('atelier:navigated', {detail:{path:location.pathname}}));
   });
   document.addEventListener('htmx:responseError', (event) => {
