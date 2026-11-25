@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import httpx
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -78,6 +79,7 @@ async def studio_page(
     filestore: FileStoreDep,
     settings: SettingsDep,
     user: CurrentUserDep,
+    redis: RedisDep,
 ):
     root, jobs = _family(job_id, db, user)
     versions = []
@@ -107,6 +109,23 @@ async def studio_page(
     audio_job = next((j for j in jobs if j.id == root), jobs[0])
     has_processed = filestore.get_output_artifact(audio_job.id, "processed.wav") is not None
     has_original = filestore.get_any_media_path(audio_job.id, audio_job.filepath) is not None
+    # Pick the saved summary's real source on reopening, even if the right pane differs.
+    ordered_jobs = sorted(jobs, key=lambda j: j.id != job_id)
+    saved = next(((j.id, item) for j in ordered_jobs if (item := filestore.load_summary(j.id))), None)
+    summary_initial = None
+    if saved:
+        token = f"{saved[0]}~{saved[1].get('source', '')}"
+        if token in {v["id"] for v in versions}:
+            summary_initial = token
+    # Reopening an in-flight summary resumes its status polling.
+    from whisper_ui.worker.standalone_summary import summary_status
+    for j in ordered_jobs:
+        state = summary_status(redis, j.id)
+        if state["status"] in {"queued", "started", "deferred", "scheduled"}:
+            token = f"{j.id}~{state.get('source', '')}"
+            summary_initial = next((v["id"] for v in versions if v["id"] == token),
+                                   next(v["id"] for v in versions if v["id"].startswith(j.id + "~")))
+            break
     return templates.TemplateResponse(
         request=request,
         name="studio.html",
@@ -124,6 +143,10 @@ async def studio_page(
             "has_original": has_original,
             "summary_prompt": next((j.summary_prompt for j in jobs if j.id == job_id), ""),
             "llm_available": settings.llm_correction_available,
+            "summary_initial": summary_initial,
+            "summary_saved": saved[1] if saved else None,
+            "summary_saved_job": saved[0] if saved else None,
+            "summary_default_model": settings.ollama_model,
         },
     )
 
@@ -198,6 +221,30 @@ async def studio_custom_export(
     )
 
 
+async def _summary_models(settings):
+    default = settings.ollama_model
+    if settings.llm_api_mode != "openai-router":
+        return [default]
+    try:
+        async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=6.0) as client:
+            response = await client.get("/v1/models")
+            response.raise_for_status()
+            rows = response.json()["data"]
+        models = [row["id"] for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)]
+        return list(dict.fromkeys([default, *models]))
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        raise HTTPException(status_code=503, detail="Catalogo del router AI non disponibile") from None
+
+
+@router.get("/studio/{job_id}/summary-models")
+async def studio_summary_models(job_id: str, db: DbDep, settings: SettingsDep, user: CurrentUserDep):
+    _family(job_id, db, user)
+    if not settings.llm_correction_available:
+        raise HTTPException(status_code=503)
+    return JSONResponse({"default": settings.ollama_model, "models": await _summary_models(settings)},
+                        headers={"Cache-Control": "private, no-store"})
+
+
 @router.post("/studio/{job_id}/summary")
 async def studio_summarize(
     job_id: str,
@@ -220,13 +267,18 @@ async def studio_summarize(
     prompt = data.get("prompt", "")
     if not isinstance(prompt, str) or len(prompt) > 4000:
         raise HTTPException(status_code=422, detail="Invalid summary prompt")
+    model = data.get("model", settings.ollama_model)
+    if not isinstance(model, str) or not model or len(model) > 256:
+        raise HTTPException(status_code=422, detail="Invalid AI model")
+    if model != settings.ollama_model and model not in await _summary_models(settings):
+        raise HTTPException(status_code=422, detail="Modello non presente nel router AI")
     from whisper_ui.worker.standalone_summary import enqueue_summary, summary_status
 
     if summary_status(redis, source_id)["status"] not in {"queued", "started", "deferred", "scheduled"}:
         source = db.get_job(source_id, owner_id=owner_filter(user))
         source.summary_prompt = prompt.strip()
         db.update_job(source)
-    return JSONResponse(enqueue_summary(redis, source_id, prompt.strip(), kind))
+    return JSONResponse(enqueue_summary(redis, source_id, prompt.strip(), kind, model))
 
 
 @router.get("/studio/{job_id}/summary-status")
@@ -245,4 +297,21 @@ async def studio_summary_status(
 
     response = summary_status(redis, source_job)
     response["summary"] = filestore.load_summary(source_job)
-    return JSONResponse(response, headers={"Cache-Control": "no-store"})
+    if response["summary"] and response["status"] in {"unknown", "not_requested"}:
+        response["status"] = "finished"
+    return JSONResponse(response, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/studio/{job_id}/summary-download")
+async def studio_summary_download(job_id: str, db: DbDep, filestore: FileStoreDep, user: CurrentUserDep, source_job: str = ""):
+    _, jobs = _family(job_id, db, user)
+    source = next((j for j in jobs if j.id == (source_job or job_id)), None)
+    if source is None:
+        raise HTTPException(status_code=404)
+    summary = filestore.load_summary(source.id)
+    if not summary or not summary.get("text"):
+        raise HTTPException(status_code=404, detail="Riassunto non disponibile")
+    filename = f"{Path(source.filename).stem}-riassunto.txt"
+    return Response(content=summary["text"], media_type="text/plain", headers={
+        "Content-Disposition": make_content_disposition(filename), "Cache-Control": "private, no-store",
+    })

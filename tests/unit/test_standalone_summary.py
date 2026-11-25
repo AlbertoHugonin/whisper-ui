@@ -1,6 +1,7 @@
 """The summary model runs separately, preserving the original transcript."""
 
 from contextlib import contextmanager
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +16,8 @@ def test_long_transcript_split_is_bounded():
     assert len(chunks) > 5
 
 
-def test_summary_is_saved_separately(tmp_path):
+@pytest.mark.parametrize("selected", ["", "qwen3.5-9b:latest"])
+def test_summary_is_saved_separately(tmp_path, selected):
     filestore = FileStore(tmp_path / "uploads", tmp_path / "outputs")
     job = Job(filename="meeting.wav", status=JobStatus.COMPLETED, summary_prompt="Decisioni Airdass")
     filestore.save_result(
@@ -48,7 +50,7 @@ def test_summary_is_saved_separately(tmp_path):
             assert url == "http://router:18084"
 
         def chat_json(self, **kwargs):
-            assert kwargs["model"] == "auto-resident"
+            assert kwargs["model"] == (selected or "auto-resident")
             assert "Decisioni Airdass" in kwargs["user"]
             return "Discussa la piattaforma Airdass."
 
@@ -62,9 +64,10 @@ def test_summary_is_saved_separately(tmp_path):
             FakeClient,
         ),
     ):
-        output = run_standalone_summary(job.id, "", "original")
+        output = run_standalone_summary(job.id, "", "original", selected)
     assert output["chunks"] == 1
     summary = filestore.load_summary(job.id)
     assert summary["source"] == "original"
+    assert summary["model"] == (selected or "auto-resident")
     assert summary["text"] == "Discussa la piattaforma Airdass."
     assert filestore.load_result(job.id).segments[0].text == "Buongiorno Airdas"

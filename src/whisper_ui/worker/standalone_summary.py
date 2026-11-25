@@ -6,7 +6,7 @@ atomically write summary.json. Transcribed speech is treated as untrusted data.
 
 from __future__ import annotations
 
-from rq import Queue
+from rq import Queue, get_current_job
 from rq.job import Job as RQJob
 
 from whisper_ui.core.constants import WORKER_QUEUE_LLM
@@ -22,7 +22,7 @@ _PREFIX = "whisper:summary:"
 _ACTIVE = {"queued", "started", "scheduled", "deferred"}
 
 
-def summary_status(redis, job_id: str) -> dict[str, str]:
+def summary_status(redis, job_id: str) -> dict:
     raw = redis.get(_PREFIX + job_id)
     if not raw:
         return {"status": "not_requested"}
@@ -32,12 +32,13 @@ def summary_status(redis, job_id: str) -> dict[str, str]:
     try:
         task = RQJob.fetch(task_id, connection=redis)
         state = task.get_status(refresh=True)
-        return {"status": getattr(state, "value", str(state)), "task_id": task_id}
+        return {"status": getattr(state, "value", str(state)), "task_id": task_id,
+                **{key: task.meta[key] for key in ("model", "source", "done", "total", "phase") if key in task.meta}}
     except Exception:
         return {"status": "unknown"}
 
 
-def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "original") -> dict[str, str]:
+def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "original", model: str = "") -> dict:
     if version not in ("original", "corrected", "custom"):
         raise ValueError("Invalid source version")
     key = _PREFIX + job_id
@@ -60,12 +61,14 @@ def enqueue_summary(redis, job_id: str, prompt: str = "", version: str = "origin
             job_id,
             prompt[:4000],
             version,
+            model,
+            meta={"source": version, "model": model, "done": 0, "phase": "queued"},
             job_timeout=18000,
             result_ttl=86400,
             failure_ttl=86400,
         )
         redis.set(key, task.id, ex=172800)
-        return {"status": "queued", "task_id": task.id}
+        return {"status": "queued", "task_id": task.id, "source": version, "model": model}
     except Exception:
         redis.delete(key)
         raise
@@ -91,7 +94,7 @@ def _split_transcript(text: str, max_chars: int = 5600) -> list[str]:
     return parts
 
 
-def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, str | int]:
+def run_standalone_summary(job_id: str, prompt: str, version: str, model: str = "") -> dict[str, str | int]:
     with build_worker_runtime(job_id) as runtime:
         job = runtime.db.get_job(job_id)
         if job is None or job.status != JobStatus.COMPLETED:
@@ -99,6 +102,12 @@ def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, 
         settings = runtime.settings
         if not settings.llm_correction_available:
             raise RuntimeError("Model Router is not configured")
+        model = model or settings.ollama_model
+        task = get_current_job()
+        def progress(done, total, phase):
+            if task is not None:
+                task.meta.update(model=model, source=version, done=done, total=total, phase=phase)
+                task.save_meta()
         loaders = {
             "original": runtime.filestore.load_result,
             "corrected": runtime.filestore.load_corrected_result,
@@ -126,13 +135,20 @@ def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, 
         try:
             chunks = _split_transcript(transcript_text)
             partials = []
+            total = len(chunks)
+            remaining = len(chunks)
+            while remaining > 1:
+                remaining = (remaining + 3) // 4
+                total += remaining
+            done = 0
+            progress(done, total, "summarizing")
             for index, chunk in enumerate(chunks):
                 user = (
                     f"Istruzioni dell'utente:\n{instruction}\n\n"
                     f"Parte {index + 1}/{len(chunks)} della trascrizione:\n<trascrizione>\n{chunk}\n</trascrizione>"
                 )
                 content = client.chat_json(
-                    model=settings.ollama_model,
+                    model=model,
                     system=system,
                     user=user,
                     temperature=0.1,
@@ -142,13 +158,16 @@ def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, 
                 if not content:
                     raise RuntimeError(f"Empty model response for part {index + 1}")
                 partials.append(content)
+                done += 1
+                progress(done, total, "summarizing")
             # Recursively merge summaries without overflowing context on long meetings.
             while len(partials) > 1:
+                progress(done, total, "merging")
                 merged = []
                 for begin in range(0, len(partials), 4):
                     batch = "\n\n".join(partials[begin : begin + 4])
                     content = client.chat_json(
-                        model=settings.ollama_model,
+                        model=model,
                         system=system,
                         user=(
                             f"Unisci queste note in un unico riassunto senza ripetizioni.\n{instruction}\n"
@@ -161,6 +180,8 @@ def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, 
                     if not content:
                         raise RuntimeError("Model returned empty combined summary")
                     merged.append(content)
+                    done += 1
+                    progress(done, total, "merging")
                 partials = merged
         finally:
             client.close()
@@ -171,6 +192,8 @@ def run_standalone_summary(job_id: str, prompt: str, version: str) -> dict[str, 
                 "source": version,
                 "prompt": instruction,
                 "chunks": len(chunks),
+                "model": model,
             },
         )
-        return {"summary_path": str(dest), "chunks": len(chunks)}
+        progress(done, total, "finished")
+        return {"summary_path": str(dest), "chunks": len(chunks), "model": model}

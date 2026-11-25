@@ -18,8 +18,9 @@ let script = template.split('<script nonce="{{ csp_nonce }}">')[1].split('</scri
 script = script.replace(/{{[^}]+}}/g, (match) => {
   if (match.includes('versions|tojson')) return '[]';
   if (match.includes('left_initial|tojson')) return '"job~original"';
-  if (match.includes('right_initial|tojson')) return '"job~corrected"';
-  if (match.includes('summary_prompt|tojson')) return '""';
+  if (match.includes('right_initial') && match.includes('tojson')) return '"job~corrected"';
+  if (match.includes('summary_prompt|tojson') || match.includes('summary_saved') && match.includes('tojson')) return '""';
+  if (match.includes('summary_default_model')) return '"auto-resident"';
   return 'job';
 });
 const doc = {activeElement: null};
