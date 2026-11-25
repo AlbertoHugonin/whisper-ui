@@ -1,0 +1,7 @@
+# Local MP4 audio extraction
+
+Atelier reads MP4 files locally using Mediabunny and WebCodecs inside a dedicated Worker. The primary audio track is converted to 16 kHz, one-channel signed 16-bit PCM WAV. Video tracks are discarded. The output is stored temporarily in origin-private browser storage when available; otherwise a 256 MiB bounded memory target is used. The original MP4 is not submitted by the interactive upload form. Unsupported codecs, invalid inputs, storage errors and cancellation stop the request. Other audio files and ordered multi-file batches retain their existing upload path. Multiple audio tracks are not mixed together; the primary track is used.
+
+Build the checked-in static worker from this directory with `npm ci` then `npm run build`. The pinned Mediabunny dependency is MPL-2.0; its complete corresponding source is available at https://github.com/Vanilagy/mediabunny/tree/v1.66.4 and in https://registry.npmjs.org/mediabunny/-/mediabunny-1.66.4.tgz. The package license and generated bundled license notices are served alongside the worker.
+
+Manual browser smoke test: generate an 8-second H.264/AAC stereo MP4 with FFmpeg, submit from Upload on desktop 1366x768 and 1600x1000 and phone 430x932. Intercept the multipart request and check the only file is a .wav; ffprobe must report pcm_s16le, 16000 Hz, one channel and 8 seconds. Repeat with an invalid MP4 and cancel during extraction: both must generate zero POSTs. Check existing WAV upload and mixed-file order. Real Safari and large multi-hour recordings need additional device testing.

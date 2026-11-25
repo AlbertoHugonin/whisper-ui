@@ -66,23 +66,29 @@
       {% endif %}
       hx-encoding="multipart/form-data"
       hx-target="#upload-feedback" hx-swap="innerHTML"
-      {% if not rt %}@htmx:config-request="if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
+      {% if not rt %}@htmx:config-request="guardVideoRequest($event); if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
       @htmx:xhr:progress.window="onProgress($event)"
       @htmx:before-request="uploading = true"
       @htmx:after-request="uploading = false; progress = 0"
       @input="markCustomised($event)"
       @change="markCustomised($event)">
 
+  <p x-cloak x-show="mediaError" role="alert" class="alert alert-error at2-upload-feedback" x-text="mediaError"></p>
   <div id="upload-feedback" class="at2-upload-feedback" role="status" aria-live="polite"></div>
 
   {# Upload progress overlay #}
-  <template x-if="uploading">
-    <div class="fixed inset-0 bg-base-100/80 z-50 flex items-center justify-center">
+  <template x-teleport="body">
+    <div x-cloak x-show="preparing || uploading" class="fixed inset-0 bg-base-100/90 flex items-center justify-center p-4" style="z-index: 10000" role="dialog" aria-modal="true" aria-label="Preparazione e invio della registrazione">
       <div class="card bg-base-100 border border-line shadow-lg w-80">
         <div class="card-body items-center text-center p-6">
           <span class="loading loading-spinner loading-lg text-primary mb-2"></span>
-          <progress class="progress progress-primary w-full" :value="progress" max="100"></progress>
-          <p class="text-sm mt-2" x-text="Math.round(progress) + '% — {{ labels.UPLOAD_UPLOADING }}'"></p>
+          <strong class="text-base" x-text="preparing ? 'Estrazione audio locale' : 'Invio della registrazione'"></strong>
+          <p x-show="preparing" class="text-xs opacity-75 break-all" x-text="mediaName"></p>
+          <progress class="progress progress-primary w-full" :value="progress" max="100" :aria-label="preparing ? 'Avanzamento estrazione' : 'Avanzamento caricamento'"></progress>
+          <p class="text-sm mt-2" aria-live="polite" x-text="preparing ? Math.round(progress) + '% — file ' + mediaIndex + ' di ' + mediaTotal : Math.round(progress) + '% — {{ labels.UPLOAD_UPLOADING }}'"></p>
+          <p x-show="preparing" class="text-xs opacity-75">Conversione in WAV mono a 16 kHz. Il video resta sul dispositivo. Non chiudere questa pagina.</p>
+          <p x-show="preparing && mediaTracks > 1" class="text-xs opacity-75" x-text="mediaTracks + ' tracce rilevate: verrà usata quella audio principale.'"></p>
+          <button x-show="preparing" type="button" class="btn btn-outline btn-sm" @click="cancelMedia()">Annulla estrazione</button>
         </div>
       </div>
     </div>
@@ -127,9 +133,10 @@
          @dragleave.prevent="dragging = false"
          @drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; updateFileList()">
       {{ icon_upload("w-10 h-10 mx-auto mb-3 opacity-30") }}
+      <p class="text-xs opacity-70 mb-2">MP4: viene estratto e inviato soltanto l’audio mono.</p>
       <p class="text-sm opacity-60 mb-4">{{ labels.UPLOAD_DRAG_DROP }}</p>
       <label for="upload-files" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.fileInput.click()" @keydown.space.prevent="$refs.fileInput.click()">{{ labels.UPLOAD_CHOOSE_FILE }}</label>
-      <input type="file" id="upload-files" name="files" multiple
+      <input type="file" id="upload-files" name="files" multiple disabled
              accept="{{ supported_extensions|join(',') }}"
              :disabled="tab !== 'files'"
              x-ref="fileInput"
@@ -142,7 +149,7 @@
   <div x-show="tab === 'folder'" x-transition.opacity>
     <p class="text-sm opacity-60 mb-3">{{ labels.UPLOAD_FOLDER_DESCRIPTION }}</p>
     <label for="upload-folder" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.folderInput.click()" @keydown.space.prevent="$refs.folderInput.click()">{{ labels.UPLOAD_CHOOSE_FOLDER }}</label>
-    <input type="file" id="upload-folder" name="files" webkitdirectory
+    <input type="file" id="upload-folder" name="files" webkitdirectory disabled
            :disabled="tab !== 'folder'"
            x-ref="folderInput"
            @change="updateFileList($event)"
@@ -488,7 +495,7 @@
   <div class="at2-upload-submit">
     <div class="flex items-center gap-3">
       <span class="text-sm opacity-70 flex-1 min-w-0 truncate" x-text="statusLine"></span>
-      <button type="submit" class="btn btn-primary btn-lg gap-2" :disabled="uploading">
+      <button type="submit" class="btn btn-primary btn-lg gap-2" disabled :disabled="uploading || preparing">
         {{ icon_upload("w-5 h-5") }}
         {% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_SUBMIT }}{% else %}{{ labels.UPLOAD_START }}{% endif %}
       </button>
@@ -509,11 +516,18 @@
 var UPLOAD_PRESETS = {{ preset_configs | tojson }};
 
 function uploadForm() {
+  let localMedia, submitListener, unloadListener, conversionGeneration = 0;
   return {
     tab: '{{ initial_tab|default("files") }}',
     initialPreset: {{ initial_preset | tojson }},
     retranscribing: {{ 'true' if rt else 'false' }},
     uploading: false,
+    preparing: false,
+    mediaError: '',
+    mediaName: '',
+    mediaIndex: 0,
+    mediaTotal: 0,
+    mediaTracks: 0,
     progress: 0,
     selectedFiles: [],
     mergeMode: 'separate',
@@ -554,8 +568,76 @@ function uploadForm() {
       // Switching source tab clears any pending selection so the sticky
       // footer count and the disabled-but-still-populated input can't go
       // stale between tabs.
+      const form = this.$root;
+      localMedia = window.AtelierLocalMedia?.create();
+      submitListener = event => {
+        if (this.preparing || this.uploading) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+        if (this.retranscribing || this.tab === 'url') return;
+        const input = this.tab === 'folder' ? this.$root.querySelector('#upload-folder') : this.$root.querySelector('#upload-files');
+        const files = Array.from(input?.files || []);
+        if (!files.some(file => /\.mp4$/i.test(file.name) || file.type === 'video/mp4')) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        this.prepareMedia(form, input, files);
+      };
+      form.addEventListener('submit', submitListener, true);
+      unloadListener = event => { if (this.preparing) { event.preventDefault(); event.returnValue = ''; } };
+      window.addEventListener('beforeunload', unloadListener);
       this.$watch('tab', () => this.resetSelection());
       if (this.initialPreset) this.$nextTick(() => this.applyPreset(this.initialPreset));
+    },
+    destroy() {
+      conversionGeneration++;
+      this.$root.removeEventListener('submit', submitListener, true);
+      window.removeEventListener('beforeunload', unloadListener);
+      localMedia?.cleanup();
+    },
+    guardVideoRequest(event) {
+      if (this.retranscribing || this.tab === 'url') return;
+      const input = this.tab === 'folder' ? this.$root.querySelector('#upload-folder') : this.$root.querySelector('#upload-files');
+      if (this.preparing || Array.from(input?.files || []).some(file => /\.mp4$/i.test(file.name) || file.type === 'video/mp4')) {
+        event.preventDefault();
+        if (!this.preparing) this.mediaError = 'Il video non è stato preparato. Riprova a inviare il file.';
+      }
+    },
+    async prepareMedia(form, input, files) {
+      this.mediaError = '';
+      if (!localMedia) { this.mediaError = 'Estrazione locale non disponibile. Ricarica la pagina oppure usa un file audio.'; return; }
+      const token = ++conversionGeneration;
+      this.preparing = true; this.progress = 0;
+      form.dataset.atelierPreparing = location.pathname + location.search + location.hash;
+      try {
+        const prepared = await localMedia.prepare(files, update => {
+          if (token !== conversionGeneration) return;
+          this.mediaName = update.name; this.mediaIndex = update.index; this.mediaTotal = update.total;
+          if (update.progress !== undefined) this.progress = update.progress;
+          if (update.tracks !== undefined) this.mediaTracks = update.tracks;
+        });
+        if (token !== conversionGeneration || !form.isConnected) return;
+        // Replace the actual multipart input only after every video has succeeded.
+        const data = new DataTransfer();
+        prepared.forEach(file => data.items.add(file));
+        input.files = data.files;
+        if (Array.from(input.files).some(file => /\.mp4$/i.test(file.name) || file.type === 'video/mp4')) throw new Error('Sostituzione del file non riuscita.');
+        this.selectedFiles = Array.from(input.files);
+        this.preparing = false;
+        delete form.dataset.atelierPreparing;
+        this.progress = 0;
+        await this.$nextTick();
+        if (form.isConnected && token === conversionGeneration) form.requestSubmit();
+      } catch (error) {
+        if (token !== conversionGeneration) return;
+        localMedia.cleanup();
+        this.preparing = false; this.progress = 0;
+        delete form.dataset.atelierPreparing;
+        this.mediaError = (error?.message || 'Estrazione audio non riuscita.') + ' Il video non è stato inviato.';
+      }
+    },
+    cancelMedia() {
+      conversionGeneration++;
+      localMedia?.cleanup();
+      this.preparing = false; this.progress = 0;
+      delete this.$root.dataset.atelierPreparing;
+      this.mediaError = 'Estrazione annullata. Il video non è stato inviato.';
     },
     onProgress(event) {
       if (event.detail && event.detail.loaded !== undefined && event.detail.total) {
@@ -563,20 +645,23 @@ function uploadForm() {
       }
     },
     updateFileList(event) {
+      if (!this.preparing && !this.uploading) { localMedia?.cleanup(); this.mediaError = ''; }
       // Works for the files input, the folder input, and the drag-drop
       // handler (which calls without an event after writing $refs.fileInput).
-      const input = (event && event.target) ? event.target : this.$refs.fileInput;
+      const input = (event && event.target) ? event.target : this.$root.querySelector('#upload-files');
       if (input && input.files) {
         this.selectedFiles = Array.from(input.files);
       }
     },
     resetSelection() {
+      if (!this.preparing && !this.uploading) localMedia?.cleanup();
+      this.mediaError = '';
       this.selectedFiles = [];
-      if (this.$refs.fileInput) this.$refs.fileInput.value = '';
-      if (this.$refs.folderInput) this.$refs.folderInput.value = '';
+      if (this.$root.querySelector('#upload-files')) this.$root.querySelector('#upload-files').value = '';
+      if (this.$root.querySelector('#upload-folder')) this.$root.querySelector('#upload-folder').value = '';
     },
     syncFileOrder() {
-      const input = this.tab === 'folder' ? this.$refs.folderInput : this.$refs.fileInput;
+      const input = this.tab === 'folder' ? this.$root.querySelector('#upload-folder') : this.$root.querySelector('#upload-files');
       if (!input) return;
       const dt = new DataTransfer();
       this.selectedFiles.forEach(file => dt.items.add(file));

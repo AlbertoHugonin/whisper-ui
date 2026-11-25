@@ -15,7 +15,7 @@ const ctx = vm.createContext({DataTransfer});
 const controls = vm.runInContext('({' + methods + '})',ctx);
 const first={name:'First.mp3'},second={name:'Second.wav'},third={name:'Third.m4a'};
 const inputs={fileInput:{files:[first,second,third]},folderInput:{files:[]}};
-const state={...controls,tab:'files',selectedFiles:[first,second,third],$refs:inputs};
+const state={...controls,tab:'files',selectedFiles:[first,second,third],$root:{querySelector:s=>s==='#upload-folder'?inputs.folderInput:inputs.fileInput}};
 state.moveFile(2,-1);
 assert.deepEqual([...state.selectedFiles].map(f=>f.name),['First.mp3','Third.m4a','Second.wav']);
 assert.deepEqual([...inputs.fileInput.files].map(f=>f.name),['First.mp3','Third.m4a','Second.wav']);

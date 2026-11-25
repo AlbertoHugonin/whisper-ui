@@ -1,0 +1,5 @@
+'use strict';
+const fs=require('node:fs'); const path=require('node:path');const assert=require('node:assert/strict');
+const root=path.join(__dirname,'../..');const read=name=>fs.readFileSync(path.join(root,name),'utf8');
+const form=read('src/whisper_ui/web/templates/upload.html');const worker=read('tools/browser-media/extract-worker.js');const client=read('src/whisper_ui/web/static/atelier-local-media.js');
+assert.match(form,/form\.addEventListener\('submit', submitListener, true\)/);assert.match(form,/event\.preventDefault\(\); event\.stopImmediatePropagation\(\);/);assert.match(form,/guardVideoRequest\(\$event\)/);assert.match(form,/input\.files = data\.files/);assert.match(form,/form\.requestSubmit\(\)/);assert.match(form,/querySelector\('#upload-files'\)/);assert.match(worker,/video:\{discard:true\}/);assert.match(worker,/numberOfChannels:1,sampleRate:RATE,codec:'pcm-s16'/);assert.match(worker,/const RATE = 16000/);assert.match(client,/worker\.terminate\(\)/);console.log('Local MP4 audio: submit interception, fail-closed guard, WAV mono conversion, cancellation PASS');

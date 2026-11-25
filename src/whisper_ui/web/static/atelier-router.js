@@ -61,6 +61,7 @@
     page?.removeAttribute('aria-busy');
   }
   function navigate(url, historyMode = 'push') {
+    if (document.querySelector('[data-atelier-preparing]')) return true; // Keep local extraction alive.
     if (!window.htmx || pending || !document.querySelector(ROOT)) return false;
     const currentGeneration = ++generation;
     const source = document.querySelector(ROOT);
@@ -166,6 +167,8 @@
   // fragment but does not automatically push a URL without an hx-push-url
   // attribute on the triggering element.
   window.addEventListener('popstate', () => {
+    const preparing = document.querySelector('[data-atelier-preparing]');
+    if (preparing) { history.pushState({atelier:true}, '', preparing.dataset.atelierPreparing); return; }
     const superseded = pendingRequest;
     ++generation;
     stopLoading();

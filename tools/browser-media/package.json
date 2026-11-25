@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"build":"esbuild extract-worker.js --bundle --minify --legal-comments=linked --format=iife --target=es2022 --outfile=../../src/whisper_ui/web/static/vendor/atelier-extract-worker.js"},"dependencies":{"mediabunny":"1.66.4"},"devDependencies":{"esbuild":"0.25.12"}}
