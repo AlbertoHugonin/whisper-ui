@@ -3,13 +3,10 @@
 {% from "_alert.html" import alert %}
 
 {% from "_atelier_components.html" import heading %}
-{% block content %}
 {% set rt = retranscribe_source %}
+{% block content %}
 <div class="at2-screen at2-upload-screen">
   {{ heading('STUDIO / NUOVA TRASCRIZIONE', 'Nuova trascrizione.', 'Importa una registrazione, scegli le impostazioni e lascia lavorare Whisper.') if not rt else heading('STUDIO / NUOVA VERSIONE', 'Crea una nuova versione.', 'Crea una nuova versione senza modificare la trascrizione originale.') }}
-  {% if rt %}
-  <div class="at2-aside-card"><span class="at2-kicker">REGISTRAZIONE SORGENTE</span><h3>{{ rt.filename }}</h3>{% if rt.source_url %}<p>{{ rt.source_url }}</p>{% endif %}</div>
-  {% endif %}
 {% set error = request.query_params.get('error', '') %}
 {% if error %}
 {% set upload_error_msg %}
@@ -54,7 +51,7 @@
 {{ alert('error', upload_error_msg|trim, 'mb-4') }}
 {% endif %}
 
-<form method="post" class="at2-upload-form"
+<form method="post" class="at2-upload-form at-upload-wizard" novalidate
       x-data="uploadForm()"
       {% if rt %}
       action="/jobs/{{ rt.id }}/re-transcribe"
@@ -66,7 +63,7 @@
       {% endif %}
       hx-encoding="multipart/form-data"
       hx-target="#upload-feedback" hx-swap="innerHTML"
-      {% if not rt %}@htmx:config-request="guardVideoRequest($event); if (tab === 'url') { $event.detail.path = '/upload/url' }"{% endif %}
+      @htmx:config-request="if (step !== 5 || !sourceReady) { $event.preventDefault() } else { guardVideoRequest($event); {% if not rt %}if (tab === 'url') { $event.detail.path = '/upload/url' }{% endif %} }"
       @htmx:xhr:progress.window="onProgress($event)"
       @htmx:before-request="uploading = true"
       @htmx:after-request="uploading = false; progress = 0"
@@ -96,8 +93,18 @@
 
 
   <div class="at2-upload-main">
-  <div class="at-desktop-upload-fields">
-  <div class="at-desktop-upload-inputs">
+    <nav class="wizard-steps" aria-label="Passaggi della nuova trascrizione" x-cloak>
+      <template x-for="(label,index) in steps" :key="index">
+        <button type="button" class="wizard-step" :class="{'is-current':step===index+1,'is-done':step>index+1}" :aria-current="step===index+1?'step':null" :disabled="step<=index+1||uploading||preparing" @click="goTo(index+1)">
+          <span class="wizard-number" x-text="step>index+1?'✓':index+1"></span><span class="wizard-step-label" x-text="label"></span>
+        </button>
+      </template>
+    </nav>
+    <div class="wizard-mobile-status" aria-live="polite" x-text="'Passaggio '+step+' di 5 · '+steps[step-1]"></div>
+    <p x-show="wizardError" x-cloak role="alert" class="alert alert-error wizard-error" x-text="wizardError"></p>
+  <div class="at-desktop-upload-fields wizard-body" x-ref="wizardBody">
+  <div class="wizard-stage" data-wizard-step="1" x-show="step===1" x-cloak>
+  {% if rt %}<section class="at2-upload-pane"><div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Registrazione già disponibile</h2><p>Stai creando una nuova versione. Non occorre caricare di nuovo il file.</p></div></div><strong class="break-words">{{ rt.filename }}</strong></section>{% endif %}
 {% if not rt %}
 <section class="at2-upload-pane at2-upload-source" aria-label="Origine del contenuto">
 <div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Scegli la registrazione</h2><p>Carica file, scegli una cartella o importa un link.</p></div></div>
@@ -133,11 +140,11 @@
          x-data="{ dragging: false }"
          @dragover.prevent="dragging = true"
          @dragleave.prevent="dragging = false"
-         @drop.prevent="dragging = false; $refs.fileInput.files = $event.dataTransfer.files; updateFileList()">
+         @drop.prevent="dragging = false; document.getElementById('upload-files').files = $event.dataTransfer.files; updateFileList()">
       {{ icon_upload("w-10 h-10 mx-auto mb-3 opacity-30") }}
       <p class="text-xs opacity-70 mb-2">MP4: viene estratto e inviato soltanto l’audio mono.</p>
       <p class="text-sm opacity-60 mb-4">{{ labels.UPLOAD_DRAG_DROP }}</p>
-      <label for="upload-files" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.fileInput.click()" @keydown.space.prevent="$refs.fileInput.click()">{{ labels.UPLOAD_CHOOSE_FILE }}</label>
+      <label for="upload-files" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="document.getElementById('upload-files').click()" @keydown.space.prevent="document.getElementById('upload-files').click()">{{ labels.UPLOAD_CHOOSE_FILE }}</label>
       <input type="file" id="upload-files" name="files" multiple disabled
              accept="{{ supported_extensions|join(',') }}"
              :disabled="tab !== 'files'"
@@ -150,7 +157,7 @@
   {# Folder tab #}
   <div x-show="tab === 'folder'" x-transition.opacity>
     <p class="text-sm opacity-60 mb-3">{{ labels.UPLOAD_FOLDER_DESCRIPTION }}</p>
-    <label for="upload-folder" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="$refs.folderInput.click()" @keydown.space.prevent="$refs.folderInput.click()">{{ labels.UPLOAD_CHOOSE_FOLDER }}</label>
+    <label for="upload-folder" class="btn btn-outline btn-sm" role="button" tabindex="0" @keydown.enter.prevent="document.getElementById('upload-folder').click()" @keydown.space.prevent="document.getElementById('upload-folder').click()">{{ labels.UPLOAD_CHOOSE_FOLDER }}</label>
     <input type="file" id="upload-folder" name="files" webkitdirectory disabled
            :disabled="tab !== 'folder'"
            x-ref="folderInput"
@@ -166,7 +173,7 @@
               placeholder="{{ labels.UPLOAD_URL_PLACEHOLDER }}"
               :disabled="tab !== 'url'"
               class="textarea w-full"></textarea>
-    <p class="text-xs opacity-40 mt-2">{{ labels.UPLOAD_URL_DISCLAIMER }}</p>
+    <p class="text-xs opacity-60 mt-2">{{ labels.UPLOAD_URL_DISCLAIMER }}</p><p class="text-xs" role="status" x-show="urlText.trim()&&!sourceReady" x-cloak>Inserisci un indirizzo HTTP o HTTPS valido per ogni riga.</p>
   </div>
 
   {# Merge controls apply to both selected files and folders. User-defined order
@@ -214,9 +221,11 @@
 
 </section>
 {% endif %}
+  </div>
+  <div class="wizard-stage" data-wizard-step="2" x-show="step===2" x-cloak>
   {# Scene presets — one-tap configure of the basic + advanced controls. #}
   <section class="at2-upload-pane at2-upload-presets" aria-label="{{ labels.UPLOAD_PRESET_SECTION }}">
-    <div class="at2-panel-header"><div><span class="at2-kicker">02 / PROFILI</span><h2>Parti da un preset</h2><p>Un preset ti permette di partire con le impostazioni giuste.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">02 / PROFILI</span><h2>Parti da un preset</h2><p>Scegli un profilo oppure continua con le impostazioni attuali.</p></div></div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-sm font-medium opacity-80">{{ labels.UPLOAD_PRESET_SECTION }}</h2>
       <a href="/presets" class="btn btn-ghost btn-xs">Gestisci preset</a>
@@ -288,7 +297,7 @@
   {# Settings #}
   {# Basic settings — always visible, the two controls every user adjusts. #}
   </div>
-  <div class="at-desktop-upload-settings">
+  <div class="wizard-stage" data-wizard-step="3" x-show="step===3" x-cloak>
   <section class="at2-upload-pane at2-upload-basic">
     <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
 
@@ -331,6 +340,9 @@
     </div>
   </section>
 
+  </div>
+  <div class="wizard-stage" data-wizard-step="4" x-show="step===4" x-cloak>
+  <section class="at2-upload-pane wizard-intro"><div class="at2-panel-header"><div><span class="at2-kicker">04 / FACOLTATIVO</span><h2>Audio e opzioni AI</h2><p>Le impostazioni predefinite sono già pronte. Apri i pannelli solo se vuoi personalizzarle.</p></div></div></section>
   <details class="at2-upload-pane at2-upload-audio at2-settings-disclosure" @invalid.capture="$el.open=true">
     <summary><span><strong>Pulizia e qualità audio</strong><small>Volume, rumore e filtri · automatica per impostazione predefinita</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary>
 
@@ -349,7 +361,7 @@
      summary so users never have to expand the panel just to see whether
      diarization / Traditional Chinese / LLM are on. #}
   <section class="at2-upload-pane at2-upload-ai">
-    <div class="at2-panel-header"><div><span class="at2-kicker">05 / OPZIONI AVANZATE</span><h2>Personalizza la trascrizione</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">04 / OPZIONI AVANZATE</span><h2>Personalizza la trascrizione</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
     <button type="button"
             class="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none"
             :aria-expanded="advancedOpen.toString()"
@@ -470,7 +482,7 @@
         <label class="label justify-start gap-2 mt-2"><input type="checkbox" name="summary_enabled" value="true" class="toggle toggle-primary toggle-sm"
           x-model="summaryEnabled" {% if not llm_correction_available %}disabled{% endif %}>
           Genera automaticamente il riassunto dopo Whisper</label>
-        <p class="text-xs opacity-60">Puoi comunque generare o rigenerare il riassunto dall'Editor, senza ritrascrivere.</p>
+        <p class="text-xs opacity-60">Puoi anche generare altri riassunti dalla pagina Riassunti, senza ritrascrivere.</p>
       </div>
       <div class="fieldset">
         <label class="fieldset-label gap-3">
@@ -493,26 +505,27 @@
   </section>
 
 
-  {# Sticky submit footer — keeps the primary action close to the user's
-     cursor regardless of how far they've scrolled (Fitts's Law). The status
-     line previews how many files / URLs the current selection will submit. #}
+  </div>
+  <div class="wizard-stage" data-wizard-step="5" x-show="step===5" x-cloak>
+    <section class="at2-upload-pane wizard-review">
+      <div class="at2-panel-header"><div><span class="at2-kicker">05 / CONFERMA</span><h2>Pronto per trascrivere?</h2><p>Controlla le impostazioni. Puoi ancora tornare a qualsiasi passaggio.</p></div></div>
+      <div class="wizard-review-grid">
+        <template x-for="item in review" :key="item.title"><div class="wizard-review-item"><div><small x-text="item.title"></small><strong x-text="item.value"></strong></div><button type="button" class="btn btn-ghost btn-sm" @click="goTo(item.step)">Modifica</button></div></template>
+      </div>
+      <p class="wizard-privacy" x-show="hasVideo">Il video MP4 resterà sul dispositivo. Al momento dell'invio verrà estratto e caricato soltanto l'audio mono.</p>
+      <p class="wizard-privacy">Dopo l'invio potrai seguire lo stato nella libreria Trascrizioni.</p>
+    </section>
   </div>
   </div>
-  <div class="at2-upload-submit">
-    <div class="flex items-center gap-3">
-      <span class="text-sm opacity-70 flex-1 min-w-0 truncate" x-text="statusLine"></span>
-      <button type="submit" class="btn btn-primary btn-lg gap-2" disabled :disabled="uploading || preparing">
-        {{ icon_upload("w-5 h-5") }}
-        {% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_SUBMIT }}{% else %}{{ labels.UPLOAD_START }}{% endif %}
-      </button>
-    </div>
+  <div class="at2-upload-submit wizard-footer" x-cloak>
+    <button type="button" class="btn btn-ghost wizard-back" x-show="step>1" :disabled="uploading||preparing" @click="goTo(step-1)">← Indietro</button>
+    <div class="wizard-footer-copy"><strong x-text="steps[step-1]"></strong><span x-text="step===1 ? statusLine : 'Passaggio '+step+' di 5'"></span></div>
+    <button type="button" class="btn btn-primary wizard-next" x-show="step<5" :disabled="uploading||preparing||step===1&&!sourceReady" @click="nextStep()" x-text="step===2&&!activePreset?'Continua senza preset':step===4?'Vai alla conferma →':'Avanti →'"></button>
+    <button type="submit" class="btn btn-primary wizard-submit" x-show="step===5" disabled :disabled="step!==5||uploading||preparing||!sourceReady">
+        {{ icon_upload("w-5 h-5") }} {% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_SUBMIT }}{% else %}{{ labels.UPLOAD_START }}{% endif %}
+    </button>
   </div>
-
   </div>
-<aside class="at2-upload-side" aria-label="Guida alla trascrizione">
-  <div class="at2-aside-card"><span class="at2-kicker">PRONTO A PARTIRE</span><h3>La tua selezione</h3><p class="at2-selection-summary" x-text="statusLine"></p><ol><li>Scegli un file, una cartella o un indirizzo web.</li><li>Adatta lingua, modello e pulizia audio.</li><li>Avvia e segui i progressi nella libreria.</li></ol></div>
-  <div class="at2-aside-card"><span class="at2-kicker">DOPO L’INVIO</span><h3>Segui il lavoro in libreria.</h3><p>I lavori e le versioni precedenti restano consultabili nella libreria.</p><a href="/jobs">Vai ai tuoi lavori ↗</a></div>
-</aside>
 </form>
 </div>
 {% endblock %}
@@ -527,6 +540,10 @@ function uploadForm() {
     tab: '{{ initial_tab|default("files") }}',
     initialPreset: {{ initial_preset | tojson }},
     retranscribing: {{ 'true' if rt else 'false' }},
+    step: 1,
+    steps: ['Sorgente','Preset','Riconoscimento','Audio e AI','Conferma'],
+    review: [],
+    wizardError: '',
     uploading: false,
     preparing: false,
     mediaError: '',
@@ -557,18 +574,61 @@ function uploadForm() {
       return [this.diarization, this.convertTraditional, this.llmCorrection].filter(Boolean).length;
     },
     get statusLine() {
-      if (this.retranscribing) return 'New version of {{ rt.filename|e if rt else '' }}';
+      if (this.retranscribing) return {{ ('Nuova versione di '+rt.filename if rt else '')|tojson }};
       if (this.tab === 'url') {
         const lines = this.urlText.split('\n').map(s => s.trim()).filter(Boolean);
-        if (!lines.length) return '{{ labels.UPLOAD_SUBMIT_STATUS_EMPTY }}';
-        return '{{ labels.UPLOAD_SUBMIT_STATUS_URLS }}'.replace('{count}', lines.length);
+        if (!lines.length) return 'Nessuna sorgente selezionata';
+        return lines.length + ' link selezionati';
       }
       if (this.selectedFiles && this.selectedFiles.length) {
         if (this.mergeMode === 'merge' && this.selectedFiles.length >= 2)
           return this.selectedFiles.length + ' file → una sola registrazione';
-        return '{{ labels.UPLOAD_SUBMIT_STATUS_FILES }}'.replace('{count}', this.selectedFiles.length);
+        return this.selectedFiles.length + ' file selezionati';
       }
-      return '{{ labels.UPLOAD_SUBMIT_STATUS_EMPTY }}';
+      return 'Nessuna sorgente selezionata';
+    },
+    get sourceReady() {
+      if (this.retranscribing) return true;
+      if (this.tab === 'url') {
+        const lines = this.urlText.split('\n').map(s=>s.trim()).filter(Boolean);
+        return lines.length>0 && lines.every(s=>{try {return ['http:','https:'].includes(new URL(s).protocol)} catch(_){return false}});
+      }
+      return this.selectedFiles.length>0;
+    },
+    get hasVideo() {return this.selectedFiles.some(f=>/\.mp4$/i.test(f.name)||f.type==='video/mp4')},
+    goTo(target) {
+      if (this.uploading||this.preparing||target<1||target>=this.step) return;
+      this.wizardError='';this.step=target;this.focusStage();
+    },
+    focusStage() {
+      this.$nextTick(()=>{const body=this.$root.querySelector('.wizard-body');if(body)body.scrollTop=0;const heading=this.$root.querySelector(`[data-wizard-step="${this.step}"] h2`);if(heading){heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true})}if(matchMedia('(max-width:999px)').matches)this.$root.querySelector('.wizard-steps')?.scrollIntoView({block:'start',behavior:'instant'})});
+    },
+    invalidField(step=null) {
+      return Array.from(this.$root.elements).find(el=>el.willValidate&&!el.validity.valid&&(!step||Number(el.closest('[data-wizard-step]')?.dataset.wizardStep)===step));
+    },
+    revealInvalid(field) {
+      this.step=Number(field.closest('[data-wizard-step]')?.dataset.wizardStep)||4;
+      if(field.closest('.at2-upload-ai'))this.advancedOpen=true;
+      const details=field.closest('details');if(details)details.open=true;
+      this.wizardError='Controlla il valore indicato prima di continuare.';
+      this.$nextTick(()=>{field.scrollIntoView({block:'nearest'});field.reportValidity();});
+    },
+    nextStep() {
+      if(this.uploading||this.preparing||this.step>=5)return;
+      this.wizardError='';
+      if(this.step===1&&!this.sourceReady){this.wizardError='Seleziona una registrazione o inserisci un link HTTP/HTTPS valido.';return;}
+      const invalid=this.invalidField(this.step);if(invalid){this.revealInvalid(invalid);return;}
+      if(this.step===4){const other=this.invalidField();if(other){this.revealInvalid(other);return;}this.buildReview();}
+      this.step++;this.focusStage();
+    },
+    buildReview() {
+      const form=this.$root, data=new FormData(form);
+      const label=name=>{const select=form.querySelector(`select[name="${name}"]`);return select?.selectedOptions[0]?.textContent.trim()||String(data.get(name)||'—')};
+      const on=name=>data.has(name)?'Attivo':'Disattivato';
+      const source=this.retranscribing?this.statusLine:this.tab==='url'?this.urlText.split('\n').filter(v=>v.trim()).map(v=>v.trim()).join(' · '):this.selectedFiles.map(f=>f.name).join(' · ');
+      const preset=this.activePreset?form.querySelector('.at2-upload-presets button[aria-pressed="true"] .card-body')?.firstElementChild?.textContent.trim()||this.activePreset:(this.presetsTouched?'Personalizzato':'Impostazioni predefinite');
+      this.review=[{title:'Sorgente',value:source,step:1},{title:'Profilo',value:preset,step:2},{title:'Lingua e modello',value:label('language')+' · '+label('model_name'),step:3},{title:'Riconoscimento',value:data.get('vad_enabled')==='true'?'Standard · Silero VAD':'Diretta · senza Silero',step:3},{title:'Pulizia audio',value:label('audio_processing')+' · Rumore: '+label('audio_denoise'),step:4},{title:'Elaborazioni AI',value:'Parlanti: '+on('enable_diarization')+' · Correzione: '+on('llm_correction_enabled')+' · Riassunto: '+on('summary_enabled'),step:4}];
+      if(!this.retranscribing&&this.tab!=='url'&&this.selectedFiles.length>1)this.review.splice(1,0,{title:'Più registrazioni',value:this.mergeMode==='merge'?'Unisci in una registrazione':'Trascrizioni separate',step:1});
     },
     init() {
       // Switching source tab clears any pending selection so the sticky
@@ -578,6 +638,9 @@ function uploadForm() {
       localMedia = window.AtelierLocalMedia?.create();
       submitListener = event => {
         if (this.preparing || this.uploading) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+        if (this.step !== 5) { event.preventDefault(); event.stopImmediatePropagation(); this.nextStep(); return; }
+        if (!this.sourceReady) {event.preventDefault();event.stopImmediatePropagation();this.step=1;this.wizardError='Seleziona una sorgente valida.';this.focusStage();return;}
+        const invalid=this.invalidField();if(invalid){event.preventDefault();event.stopImmediatePropagation();this.revealInvalid(invalid);return;}
         if (this.retranscribing || this.tab === 'url') return;
         const input = this.tab === 'folder' ? this.$root.querySelector('#upload-folder') : this.$root.querySelector('#upload-files');
         const files = Array.from(input?.files || []);

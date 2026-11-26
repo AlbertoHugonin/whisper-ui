@@ -5,6 +5,7 @@ Redis servers, workers or external inference endpoints are used.
 """
 
 from __future__ import annotations
+from pathlib import Path
 
 import base64
 import json
@@ -188,9 +189,6 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             bounds = page.evaluate("({width:innerWidth, scroll:document.documentElement.scrollWidth})")
             assert bounds["scroll"] <= bounds["width"] + 2, (path, viewport, theme, bounds)
         if path == "/upload":
-            page.locator('input[name="vad_enabled"][value="false"]').check()
-            assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
-            page.locator('input[name="vad_enabled"][value="true"]').check()
             with page.expect_file_chooser() as chooser:
                 page.locator('label[for="upload-files"]').focus()
                 page.keyboard.press("Enter")
@@ -198,6 +196,12 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             chooser.value.set_files(media)
             page.get_by_text("File selezionati", exact=True).wait_for(state="visible")
             assert page.locator("#merge-mode").is_hidden()
+            page.locator('.wizard-next').click()
+            page.locator('.wizard-next').click()
+            page.locator('input[name="vad_enabled"][value="false"]').check()
+            assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
+            page.locator('input[name="vad_enabled"][value="true"]').check()
+            page.locator('.wizard-next').click()
             page.locator(".at2-upload-audio summary").click()
             page.locator('select[name="audio_denoise"]').select_option("medium")
             page.locator('input[name="audio_target_lufs"]').fill("-2")
@@ -209,6 +213,7 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             assert (
                 page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('audio_denoise')") == "medium"
             )
+            page.locator(".wizard-step").first.click()
             page.locator("button").evaluate_all(
                 "buttons => buttons.find(b => /tab.*folder/.test(b.getAttribute('@click') || '')).click()"
             )
@@ -607,14 +612,21 @@ def test_viewport_workspaces(atelier_page, atelier_app, viewport):
             assert metrics['panel'][1]<=viewport[1]+2 and metrics['panel'][3]>25,(path,metrics)
             assert metrics['top']==0,(path,metrics)
         if path=='/upload':
+            assert page.locator('.wizard-next').is_disabled()
+            with page.expect_file_chooser() as chooser:
+                page.locator('label[for="upload-files"]').click()
+            chooser.value.set_files(job.filepath)
+            page.locator('.wizard-next').click()
+            page.locator('.wizard-next').click()
             page.locator('input[name="vad_enabled"][value="false"]').check()
             assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
-            with page.expect_file_chooser():
-                page.locator('label[for="upload-files"]').click()
+            page.locator('.wizard-next').click()
             page.locator('.at2-upload-audio summary').click()
             page.locator('select[name="audio_denoise"]').select_option('medium')
+            page.locator('.wizard-next').click()
+            assert page.locator('.wizard-submit').is_visible()
             if desktop:
-                assert page.locator('.at2-upload-submit button').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
+                assert page.locator('.wizard-submit').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
         if path.startswith('/summaries'):
             if desktop:
                 assert page.locator('.summary-list').evaluate('el=>el.scrollHeight>el.clientHeight')
@@ -687,4 +699,102 @@ def test_horizontal_desktop_navigation(atelier_page, viewport):
     page.wait_for_function('location.pathname === "/admin/users" && !document.documentElement.classList.contains("atelier-navigating")')
     assert not page.locator('.atelier-account-menu').get_attribute('open')
     assert page.locator('.atelier-account-menu').evaluate("el=>el.classList.contains('atelier-account-active')")
+    assert not errors,errors
+
+
+@pytest.mark.parametrize('viewport',[(1366,650),(1600,1000),(428,926)])
+def test_upload_guided_workflow(atelier_page,atelier_app,viewport):
+    page,_,errors=atelier_page
+    page.set_viewport_size({'width':viewport[0],'height':viewport[1]})
+    page.goto(ORIGIN+'/upload')
+    next_button=page.locator('.wizard-next')
+    submit=page.locator('.wizard-submit')
+    assert next_button.is_disabled() and submit.is_hidden()
+    assert page.locator('.wizard-stage:visible').count()==1
+    media=atelier_app['db'].get_job(atelier_app['job']).filepath
+    page.locator('#upload-files').set_input_files(media)
+    page.locator('.wizard-next').click()
+    page.locator('.wizard-stage[data-wizard-step="2"]').wait_for()
+    page.locator('.at2-upload-presets button').first.click()
+    next_button.click()
+    page.locator('input[name="vad_enabled"][value="false"]').check()
+    page.locator('select[name="language"]').select_option('it')
+    next_button.click()
+    page.locator('.at2-upload-audio summary').click()
+    page.locator('input[name="audio_target_lufs"]').fill('-2')
+    next_button.click()
+    assert page.locator('.wizard-stage[data-wizard-step="4"]').is_visible()
+    assert page.locator('.wizard-error').is_visible()
+    page.locator('input[name="audio_target_lufs"]').fill('-16')
+    next_button.click()
+    assert submit.is_visible()
+    assert 'senza Silero' in page.locator('.wizard-review').inner_text()
+    assert page.locator('#upload-files').evaluate('el=>el.files.length')==1
+    assert Path(media).name in page.locator('.wizard-review').inner_text()
+    page.locator('.wizard-step').first.click()
+    assert page.locator('#upload-files').evaluate('el=>el.files.length')==1
+    for _ in range(4):next_button.click()
+    assert page.locator('input[name="vad_enabled"][value="false"]').is_checked()
+    assert submit.is_visible() and page.locator('.wizard-stage:visible').count()==1
+    requests=[]
+    def capture(route):
+        if route.request.method=='POST':
+            requests.append(route.request.post_data_buffer)
+            route.fulfill(status=200,content_type='text/html',body='<p>Invio QA completato</p>')
+        else: route.continue_()
+    page.route(ORIGIN+'/upload',capture)
+    submit.click()
+    page.get_by_text('Invio QA completato').wait_for()
+    assert len(requests)==1 and b'name="vad_enabled"\r\n\r\nfalse' in requests[0]
+    assert b'name="language"\r\n\r\nit' in requests[0] and b'filename=' in requests[0]
+    assert not errors,errors
+
+
+def test_upload_wizard_alternative_sources(atelier_page,atelier_app,tmp_path):
+    import shutil
+    import subprocess
+    from email.parser import BytesParser
+    from email.policy import default
+    import io
+    import wave
+    page,_,errors=atelier_page
+    page.set_viewport_size({'width':1366,'height':768})
+    sent=[]
+    def capture(route):
+        if route.request.method=='POST':
+            sent.append((urlsplit(route.request.url).path,route.request.headers,route.request.post_data_buffer))
+            route.fulfill(status=200,content_type='text/html',body='<p>QA ricevuto</p>')
+        else:route.continue_()
+    page.route(ORIGIN+'/upload*',capture)
+    page.route(ORIGIN+'/upload/url',capture)
+    page.route(ORIGIN+'/jobs/*/re-transcribe',capture)
+    def finish():
+        for _ in range(4):page.locator('.wizard-next').click()
+        page.locator('.wizard-submit').click()
+        page.get_by_text('QA ricevuto',exact=True).wait_for()
+    page.goto(ORIGIN+'/upload?mode=url')
+    page.locator('#upload-url').fill('not-a-url')
+    assert page.locator('.wizard-next').is_disabled()
+    page.locator('#upload-url').fill('https://www.youtube.com/watch?v=abc123xyz00')
+    finish()
+    assert sent[-1][0]=='/upload/url' and b'abc123xyz00' in sent[-1][2]
+    page.goto(ORIGIN+'/upload?source_job='+atelier_app['job'])
+    assert page.get_by_text('Registrazione già disponibile',exact=True).is_visible()
+    finish()
+    assert sent[-1][0]=='/jobs/'+atelier_app['job']+'/re-transcribe'
+    if not shutil.which('ffmpeg'):pytest.skip('ffmpeg unavailable for synthetic MP4')
+    video=tmp_path/'wizard-test.mp4'
+    subprocess.run(['ffmpeg','-loglevel','error','-f','lavfi','-i','color=c=black:s=160x120:r=10','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','2','-c:v','libx264','-c:a','aac','-ac','2',str(video)],check=True)
+    page.goto(ORIGIN+'/upload')
+    page.locator('#upload-files').set_input_files(str(video))
+    for _ in range(4):page.locator('.wizard-next').click()
+    assert page.get_by_text('Il video MP4 resterà sul dispositivo.',exact=False).is_visible()
+    page.locator('.wizard-submit').click()
+    page.get_by_text('QA ricevuto',exact=True).wait_for(timeout=25000)
+    path,headers,body=sent[-1]
+    assert path=='/upload' and b'filename="wizard-test.wav"' in body and b'filename="wizard-test.mp4"' not in body
+    msg=BytesParser(policy=default).parsebytes(('Content-Type: '+headers['content-type']+'\r\n\r\n').encode()+body)
+    audio=next(part.get_payload(decode=True) for part in msg.iter_parts() if part.get_filename()=='wizard-test.wav')
+    with wave.open(io.BytesIO(audio),'rb') as wav:
+        assert wav.getnchannels()==1 and wav.getframerate()==16000 and wav.getsampwidth()==2
     assert not errors,errors
