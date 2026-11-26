@@ -26,7 +26,7 @@
   <script nonce="{{ csp_nonce }}">if (window.htmx) htmx.config.inlineScriptNonce = {{ csp_nonce|tojson }};</script>
   <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r5"></script>
   <script defer src="{{ url_for('static', path='vendor/markdown-it.min.js') }}"></script>
-  <script defer src="{{ url_for('static', path='atelier-summaries.js') }}?v=2"></script>
+  <script defer src="{{ url_for('static', path='atelier-summaries.js') }}?v=3"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='atelier-summaries.css') }}?v=1">
   <script defer src="{{ url_for('static', path='atelier-local-media.js') }}?v=mp4-r1"></script>
   {# Vendored, not CDN: when the morph extension is missing htmx silently

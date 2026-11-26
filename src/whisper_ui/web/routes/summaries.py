@@ -15,12 +15,13 @@ from whisper_ui.worker.standalone_summary import enqueue_summary, summary_status
 router = APIRouter()
 ACTIVE = {'queued','started','deferred','scheduled'}
 PRIVATE = {'Cache-Control':'private, no-store'}
+DEFAULT_SUMMARY_PROMPT = 'Riassumi la trascrizione in maniera esaustiva e discorsiva in Italiano con un linguaggio semplice.'
 
 class Generate(BaseModel):
     job_id: str = Field(max_length=32)
     source: str = Field(max_length=20)
     title: str = Field(min_length=1,max_length=200)
-    prompt: str = Field(default='',max_length=4000)
+    prompt: str = Field(default=DEFAULT_SUMMARY_PROMPT,max_length=4000)
     model: str = Field(min_length=1,max_length=256)
     strategy: Literal["auto", "direct", "multistage"] = "auto"
 
@@ -81,7 +82,7 @@ async def summaries_page(request:Request,db:DbDep,filestore:FileStoreDep,redis:R
     if summary:
         if not job: raise HTTPException(400)
         _document(filestore,job,summary)
-    return templates.TemplateResponse(request=request,name='summaries.html',context={'active_page':'summaries','summary_config':{'job':job,'summary':summary,'defaultModel':settings.ollama_model,'llmAvailable':settings.llm_correction_available}},headers=PRIVATE)
+    return templates.TemplateResponse(request=request,name='summaries.html',context={'active_page':'summaries','summary_config':{'job':job,'summary':summary,'defaultModel':settings.ollama_model,'defaultPrompt':DEFAULT_SUMMARY_PROMPT,'llmAvailable':settings.llm_correction_available}},headers=PRIVATE)
 
 
 @router.get('/summaries/api/library')
