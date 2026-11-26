@@ -68,10 +68,10 @@ def _write(path, item):
             temp.unlink(missing_ok=True)
 
 
-def create(store, job_id, title, source, model, prompt):
+def create(store, job_id, title, source, model, prompt, strategy="multistage"):
     sid = uuid4().hex
     stamp = now()
-    item = dict(id=sid,job_id=job_id,title=title,source=source,model=model,prompt=prompt,text='',
+    item = dict(id=sid,job_id=job_id,title=title,source=source,model=model,prompt=prompt,strategy=strategy,text='',
                 status='queued',created_at=stamp,updated_at=stamp,revision=uuid4().hex)
     _write(_path(store,job_id,sid),item)
     return item

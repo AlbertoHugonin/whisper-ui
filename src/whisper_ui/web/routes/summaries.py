@@ -1,5 +1,6 @@
 """Authenticated summary library and revision workspace."""
 from pathlib import Path
+from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
@@ -21,6 +22,7 @@ class Generate(BaseModel):
     title: str = Field(min_length=1,max_length=200)
     prompt: str = Field(default='',max_length=4000)
     model: str = Field(min_length=1,max_length=256)
+    strategy: Literal["auto", "direct", "multistage"] = "auto"
 
 class Edit(BaseModel):
     title: str = Field(min_length=1,max_length=200)
@@ -109,8 +111,8 @@ async def generate(data:Generate,db:DbDep,filestore:FileStoreDep,redis:RedisDep,
     if not data.title.strip(): raise HTTPException(422,detail='Inserisci un titolo')
     if data.model != settings.ollama_model and data.model not in await _summary_models(settings): raise HTTPException(422,detail='Modello non presente nel router')
     if summary_status(redis,job.id)['status'] in ACTIVE: raise HTTPException(409,detail='Un riassunto di questa trascrizione è già in elaborazione')
-    item=library.create(filestore,job.id,data.title.strip(),data.source,data.model,data.prompt.strip())
-    try: task=enqueue_summary(redis,job.id,data.prompt.strip(),data.source,data.model,item['id'])
+    item=library.create(filestore,job.id,data.title.strip(),data.source,data.model,data.prompt.strip(),strategy=data.strategy)
+    try: task=enqueue_summary(redis,job.id,data.prompt.strip(),data.source,data.model,item['id'],strategy=data.strategy)
     except Exception:
         # Transport failure may be ambiguous; keep the document recoverable.
         raise

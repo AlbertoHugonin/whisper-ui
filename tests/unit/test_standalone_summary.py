@@ -103,3 +103,50 @@ def test_router_summary_client_reads_finish_reason():
     client._client=httpx.Client(base_url="http://router",transport=httpx.MockTransport(handler))
     try: assert client.complete(model="m",system="s",user="u",keep_alive="10m",max_tokens=8192)==("partial","length")
     finally: client.close()
+
+
+@pytest.mark.parametrize("model,size,expected", [
+    ("qwen3.8-flash-next-iq3_s", 46625, "direct"),
+    ("qwen3.8-flash-next-ud-iq4_xs-128k", 100000, "multistage"),
+    ("qwen3.8-flash-next-iq3_s", 200000, "multistage"),
+    ("auto-resident", 100, "multistage"),
+    ("unknown-model", 100, "multistage"),
+])
+def test_automatic_strategy_reserves_output_context(model, size, expected):
+    from whisper_ui.worker.standalone_summary import choose_strategy
+    assert choose_strategy("auto", model, "a" * size, "summary", "openai-router") == expected
+    assert choose_strategy("direct", model, "a" * size, "summary", "openai-router") == "direct"
+    assert choose_strategy("multistage", model, "a" * size, "summary", "openai-router") == "multistage"
+
+
+@pytest.mark.parametrize("requested,model,expected,passes", [
+    ("direct", "unknown-model", "direct", 1),
+    ("auto", "qwen3.8-flash-next-iq3_s", "direct", 1),
+    ("multistage", "qwen3.8-flash-next-iq3_s", "multistage", 4),
+])
+def test_generation_strategy_preserves_input_and_records_actual_mode(tmp_path, requested, model, expected, passes):
+    from whisper_ui.storage import summary_library as lib
+    from whisper_ui.worker.standalone_summary import choose_strategy
+    store = FileStore(tmp_path / "uploads", tmp_path / "outputs")
+    job = Job(filename="test.wav", status=JobStatus.COMPLETED)
+    lines = ["first " + "a"*4000, "middle " + "b"*4000, "last " + "c"*4000]
+    store.save_result(job.id, TranscriptResult(segments=[Segment(i,i+1,line,"S1") for i,line in enumerate(lines)],language="it",duration=3))
+    doc = lib.create(store,job.id,"Test","original",model,"Prompt",strategy=requested)
+    db = MagicMock();db.get_job.return_value=job
+    settings=SimpleNamespace(llm_correction_available=True,llm_api_mode="openai-router",ollama_base_url="http://router",ollama_request_timeout=60,ollama_model=model,ollama_keep_alive="10m")
+    @contextmanager
+    def runtime(_):
+        yield SimpleNamespace(db=db,filestore=store,settings=settings)
+    calls=[]
+    client=MagicMock();client.complete.side_effect=lambda **kw: (calls.append(kw) or "Complete summary.", "stop")
+    with patch("whisper_ui.worker.standalone_summary.build_worker_runtime",side_effect=runtime),patch("whisper_ui.worker.standalone_summary.SummaryClient",return_value=client):
+        result=run_standalone_summary(job.id,"Prompt","original",model,doc["id"],requested)
+    assert len(calls)==passes
+    assert result["passes"]==passes
+    if expected=="direct":
+        assert "\n".join(lines) in calls[0]["user"]
+        assert calls[0]["max_tokens"]==32768
+    else:
+        assert all(line in calls[i]["user"] for i,line in enumerate(lines))
+    saved=lib.read(store,job.id,doc["id"])
+    assert saved["strategy"]==requested and saved["strategy_used"]==expected and saved["passes"]==passes and saved["status"]=="finished"
