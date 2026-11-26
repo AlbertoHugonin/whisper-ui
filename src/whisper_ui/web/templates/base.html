@@ -34,7 +34,7 @@
      responses inside the existing #job-list-wrapper and break polling. #}
   <script src="{{ url_for('static', path='vendor/idiomorph-ext.min.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='viewer.css') }}?v=reader-r1">
-  <link rel="stylesheet" href="{{ url_for('static', path='atelier-desktop.css') }}?v=desktop-r1">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-desktop.css') }}?v=desktop-r2">
   <script defer src="{{ url_for('static', path='viewer-timeline.js') }}?v=reader-r1"></script>
   <script defer src="{{ url_for('static', path='viewer.js') }}?v=reader-r1"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.14.8/dist/cdn.min.js"
@@ -135,13 +135,24 @@
     </aside>
     <div class="atelier-main-column">
       <header class="atelier-topbar">
+        <a class="atelier-desktop-brand atelier-brand" href="/" aria-label="Atelier, pagina iniziale">
+          <span class="atelier-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="atelier-brand-name">atelier<span class="atelier-brand-dot">.</span></span>
+        </a>
+        <nav class="atelier-desktop-nav atelier-navigation" aria-label="Navigazione desktop">
+          <a href="/" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='dashboard'}"><span class="atelier-nav-symbol" aria-hidden="true">◫</span><span>Panoramica</span></a>
+          <a href="/upload" class="atelier-nav-item atelier-desktop-create" :class="{'is-active':$store.nav.activePage==='upload'}"><span class="atelier-nav-symbol" aria-hidden="true">＋</span><span>Nuova trascrizione</span></a>
+          <a href="/jobs" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='jobs'}"><span class="atelier-nav-symbol" aria-hidden="true">▤</span><span>Trascrizioni</span></a>
+          <a href="/summaries" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='summaries'}"><span class="atelier-nav-symbol" aria-hidden="true">≡</span><span>Riassunti</span></a>
+          <a href="/presets" class="atelier-nav-item" :class="{'is-active':$store.nav.activePage==='presets'}"><span class="atelier-nav-symbol" aria-hidden="true">⚙</span><span>Preset</span></a>
+        </nav>
         <div class="atelier-mobile-logo"><span class="atelier-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span> atelier<span class="atelier-brand-dot">.</span></div>
         <div class="atelier-topbar-context"><span class="atelier-topbar-kicker">IL TUO WORKSPACE</span><strong x-text="({dashboard:'Panoramica',upload:'Nuova trascrizione',jobs:'Le mie trascrizioni',summaries:'Riassunti',presets:'Preset',admin_users:'Utenti',admin_jobs:'Gestione lavori'})[$store.nav.activePage] || 'Whisper Studio'">Whisper Studio</strong></div>
         <div class="atelier-topbar-actions">
           <span class="atelier-topbar-state"><span class="atelier-online-indicator"></span> Workspace attivo</span>
           <button class="atelier-icon-button" type="button" :aria-label="theme === 'whisper-light' ? 'Attiva tema scuro' : 'Attiva tema chiaro'" :title="theme === 'whisper-light' ? 'Tema scuro' : 'Tema chiaro'" @click="theme = theme === 'whisper-light' ? 'whisper-dark' : 'whisper-light'" x-text="theme === 'whisper-light' ? '☾' : '☼'">☼</button>
           {% if request.state and request.state.user %}
-          <details class="atelier-account-menu">
+          <details @click.outside="$el.open=false" @keydown.escape="$el.open=false" class="atelier-account-menu" :class="{'atelier-account-active':$store.nav.activePage==='admin_users'||$store.nav.activePage==='admin_jobs'}">
             <summary class="atelier-icon-button" aria-label="Menu account" title="Menu account">♙</summary>
             <div class="atelier-account-panel">
               <strong>{{ request.state.user.username }}</strong>

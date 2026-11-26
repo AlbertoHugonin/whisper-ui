@@ -135,3 +135,31 @@
   .at2-share-body .at2-shared-reader{display:flex;flex-direction:column;flex:1;min-height:0;padding:10px 12px}.at2-share-body .player-wrapper{flex:none;margin:0 0 8px}.at2-share-body .player-wrapper video{max-height:22dvh}.at2-shared-reader>div[x-data]{display:flex;flex-direction:column;flex:1;min-height:0}.at2-share-body .at2-shared-search{flex:none;margin-bottom:6px;padding:0 0 6px}.at2-share-body .at2-shared-search input{height:34px;min-height:34px;font-size:13px}
   .at2-share-body .at2-shared-reader .shared-transcript-list{flex:1;min-height:0;height:auto;max-height:none!important;overflow:auto;overscroll-behavior:contain}.at2-share-root>footer{flex:none;margin:0;padding-top:5px}
 }
+
+/* Desktop navigation: one top strip, no lateral shell. Other viewports keep
+   the existing sidebar/mobile bottom navigation. */
+.atelier-desktop-brand.atelier-brand,.atelier-desktop-nav.atelier-navigation{display:none}
+@media(min-width:1000px) and (min-height:500px){
+  .atelier-app>.atelier-sidebar{display:none!important}
+  .atelier-app>.atelier-main-column{width:100%;max-width:none;flex:1 1 100%}
+  .atelier-topbar{display:flex;align-items:center;justify-content:flex-start;gap:16px;isolation:isolate;background:var(--atelier-side);color:#ecf2f4;border-bottom:1px solid #ffffff1b;z-index:30;overflow:visible;padding-inline:16px}
+  .atelier-desktop-brand.atelier-brand{display:flex;flex:none;min-height:0;margin:0;padding:0 10px 0 1px;gap:9px}
+  .atelier-desktop-brand .atelier-brand-mark{width:30px;height:30px;border-radius:10px;gap:2px}.atelier-desktop-brand .atelier-brand-mark i{width:2px}.atelier-desktop-brand .atelier-brand-mark i:nth-child(2),.atelier-desktop-brand .atelier-brand-mark i:nth-child(4){height:15px}.atelier-desktop-brand .atelier-brand-mark i:nth-child(3){height:20px}
+  .atelier-desktop-brand .atelier-brand-name{font-size:23px;letter-spacing:-1.2px}
+  .atelier-desktop-nav.atelier-navigation{display:flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0;white-space:nowrap}
+  .atelier-desktop-nav .atelier-nav-item{padding:6px 11px;min-height:32px;border-radius:8px;gap:7px;font-size:12px;line-height:1.2;white-space:nowrap}
+  .atelier-desktop-nav .atelier-nav-item .atelier-nav-symbol{width:auto;min-width:14px;font-size:16px;line-height:1;color:inherit}
+  .atelier-desktop-nav .atelier-nav-item.is-active{box-shadow:none}
+  .atelier-desktop-nav .atelier-desktop-create:not(.is-active){border-color:#d7ff7040;color:#d7ff70!important}
+  .atelier-topbar-context,.atelier-topbar-state,.atelier-topbar-create,.atelier-mobile-logo{display:none!important}
+  .atelier-topbar-actions{margin-left:auto;flex:none;gap:8px}
+  .atelier-topbar .atelier-icon-button{color:#e7eff1;background:#ffffff08;border-color:#ffffff24;border-radius:8px}
+  .atelier-topbar .atelier-icon-button:hover,.atelier-topbar .atelier-icon-button:focus-visible{background:#ffffff19}
+  .atelier-topbar .atelier-account-active>summary{border-color:#d7ff70;color:#d7ff70}
+  .atelier-topbar .atelier-account-panel{color:var(--color-base-content);background:var(--color-base-100);z-index:40}
+  .atelier-topbar .atelier-account-panel a,.atelier-topbar .atelier-account-panel button{color:inherit}
+  .atelier-topbar a:focus-visible,.atelier-topbar button:focus-visible,.atelier-topbar summary:focus-visible{outline:2px solid #d7ff70;outline-offset:2px}
+}
+@media(min-width:1000px) and (max-width:1199px) and (min-height:500px){
+  .atelier-topbar{gap:9px;padding-inline:12px}.atelier-desktop-brand.atelier-brand{padding-right:5px;gap:7px}.atelier-desktop-nav.atelier-navigation{gap:2px}.atelier-desktop-nav .atelier-nav-item{padding-inline:8px;gap:5px}
+}

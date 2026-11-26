@@ -646,3 +646,45 @@ def test_viewport_workspaces(atelier_page, atelier_app, viewport):
             if desktop:
                 assert page.locator('.shared-transcript-list').evaluate('el=>el.scrollHeight>el.clientHeight')
     assert not errors,errors
+
+
+@pytest.mark.parametrize('viewport', [(1000, 600), (1366, 768), (1600, 1000), (1920, 1080), (428, 926)])
+def test_horizontal_desktop_navigation(atelier_page, viewport):
+    page, _, errors = atelier_page
+    width, height = viewport
+    page.set_viewport_size({'width':width,'height':height})
+    page.goto(ORIGIN + '/')
+    page.wait_for_function('!!window.Alpine && !!window.AtelierNavigation')
+    desktop = width >= 1000
+    nav = page.locator('.atelier-desktop-nav' if desktop else '.atelier-mobile-nav')
+    assert nav.is_visible()
+    assert not page.locator('.atelier-sidebar').is_visible()
+    assert page.locator('.atelier-desktop-brand').is_visible() == desktop
+    if desktop:
+        assert not page.locator('.atelier-mobile-nav').is_visible()
+        bounds = page.locator('#page-content').bounding_box()
+        assert bounds['x'] <= 2 and bounds['width'] >= width-2, bounds
+        top = page.locator('.atelier-topbar').bounding_box()
+        assert top['y'] == 0 and top['height'] <= 52, top
+        links = nav.locator('a').all()
+        assert len(links) == 5
+        action = page.locator('.atelier-topbar-actions').bounding_box()
+        for link in links:
+            r = link.bounding_box()
+            assert r['x'] >= 0 and r['x']+r['width'] <= action['x']+1, (viewport, r, action)
+    else:
+        assert not page.locator('.atelier-desktop-nav').is_visible()
+    page.evaluate("window.__navbar = document.querySelector('.atelier-topbar')")
+    for path in ['/upload','/jobs','/summaries','/presets','/']:
+        nav.locator(f'a[href="{path}"]').click()
+        page.wait_for_function('path => location.pathname === path && !document.documentElement.classList.contains("atelier-navigating")', arg=path)
+        assert nav.locator(f'a[href="{path}"]').get_attribute('aria-current') == 'page'
+        assert page.evaluate("window.__navbar === document.querySelector('.atelier-topbar')")
+        assert page.evaluate('document.scrollingElement.scrollWidth <= innerWidth + 2')
+    page.locator('.atelier-topbar button.atelier-icon-button').click()
+    page.locator('.atelier-account-menu summary').click()
+    page.locator('.atelier-account-panel a[href="/admin/users"]').click()
+    page.wait_for_function('location.pathname === "/admin/users" && !document.documentElement.classList.contains("atelier-navigating")')
+    assert not page.locator('.atelier-account-menu').get_attribute('open')
+    assert page.locator('.atelier-account-menu').evaluate("el=>el.classList.contains('atelier-account-active')")
+    assert not errors,errors
