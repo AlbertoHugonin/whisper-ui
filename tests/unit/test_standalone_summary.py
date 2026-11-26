@@ -79,7 +79,7 @@ def test_summary_retries_truncated_output_and_never_returns_partial():
     client.complete.side_effect=[("truncated", "length"), ("complete.", "stop")]
     args=dict(model="model",system="system",user="full input",keep_alive="10m",merging=True)
     assert _complete_summary(client,**args)=="complete."
-    assert [call.kwargs["max_tokens"] for call in client.complete.call_args_list]==[8192,16384]
+    assert [call.kwargs["max_tokens"] for call in client.complete.call_args_list]==[32768,65536]
     assert all(call.kwargs["user"]=="full input" for call in client.complete.call_args_list)
     client.reset_mock();client.complete.side_effect=[("partial", "length")]*2
     with pytest.raises(RuntimeError,match="no truncated result saved"):

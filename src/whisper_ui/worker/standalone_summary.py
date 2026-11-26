@@ -109,7 +109,8 @@ class SummaryClient:
 def _complete_summary(client, *, model, system, user, keep_alive, merging=False, on_retry=None):
     # Never save length-limited output as a successful summary. Retry the same
     # full input with a larger budget, not a continuation of broken text.
-    budgets = (8192, 16384) if merging else (4096, 8192, 16384)
+    # Allow detailed documents to finish naturally; these are ceilings, not targets.
+    budgets = (32768, 65536) if merging else (16384, 32768, 65536)
     for limit in budgets:
         text, reason = client.complete(model=model, system=system, user=user,
                                      keep_alive=keep_alive, max_tokens=limit)
@@ -122,7 +123,7 @@ def _complete_summary(client, *, model, system, user, keep_alive, merging=False,
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError("Empty model response")
         return text.strip()
-    raise RuntimeError("Summary exceeded the maximum output budget (16384 tokens); no truncated result saved")
+    raise RuntimeError("Summary exceeded the maximum output budget (65536 tokens); no truncated result saved")
 
 
 def _split_transcript(text: str, max_chars: int = 5600) -> list[str]:
