@@ -568,3 +568,81 @@ def test_batch_upload_collection_and_polling(atelier_page, atelier_app, browser_
             page.evaluate("scrollTo(0,0);document.querySelector('.jobs-scroll-panel').scrollTop=0")
             page.screenshot(path=f".qa-batches/{browser_name}-{width}-{theme}.png", animations="disabled")
     assert not errors, errors
+
+
+@pytest.mark.parametrize('viewport', [(1366, 650), (1600, 1000), (1920, 1080), (428, 926)])
+def test_viewport_workspaces(atelier_page, atelier_app, viewport):
+    """Real routes with long documents: desktop uses panel scroll, phone stays touch-friendly."""
+    page, _, errors = atelier_page
+    page.set_viewport_size({'width': viewport[0], 'height': viewport[1]})
+    job_id = atelier_app['job']
+    app = atelier_app['client'].app
+    store = app.state.filestore
+    job = atelier_app['db'].get_job(job_id)
+    text = '# Riassunto di prova\n\n' + ('Testo sufficientemente lungo per verificare lo scorrimento.\n\n' * 250)
+    store.save_summary(job_id, {'text': text, 'source':'corrected','model':'auto-resident'})
+    for i in range(22):
+        clone = Job(filename=f'Registrazione QA {i}.wav', owner_id=job.owner_id, status=JobStatus.COMPLETED)
+        atelier_app['db'].insert_job(clone)
+        store.save_summary(clone.id, {'text': text, 'source':'original','model':'auto-resident'})
+    long_result = TranscriptResult(segments=[Segment(i*2,i*2+2,f'Battuta di prova numero {i}. '+('Testo di verifica. '*8),'S1') for i in range(75)],language='it',duration=150)
+    store.save_result(job_id,long_result)
+    store.save_corrected_result(job_id,long_result)
+    desktop=viewport[0]>=1000
+    paths=[('/', '.at2-home-content'),('/upload','.at-desktop-upload-fields' if desktop else '.at2-upload-main'),('/jobs','.at2-workspace-results'),(f'/viewer/{job_id}','.wv-transcript-scroll'),(f'/studio/{job_id}','.at2-review-columns'),('/presets','.at2-library-panel'),('/presets/new','.at2-editor-stack'),(f'/presets/{atelier_app["preset"]}/edit','.at2-editor-stack'),('/admin/users','.admin-table-scroll'),('/admin/jobs','.at2-workspace-results'),(f'/summaries?job={job_id}&summary=legacy','.summary-panes')]
+    for path,panel in paths:
+        response=page.goto(ORIGIN+path)
+        assert response.status==200,path
+        page.wait_for_function('!!window.Alpine')
+        page.locator(panel).first.wait_for(state='visible')
+        if path.startswith('/summaries'):
+            page.locator('#summary-text').wait_for(state='visible')
+        metrics=page.evaluate('''selector=>{const s=document.scrollingElement,p=document.querySelector('#page-content'),t=document.querySelector('.atelier-topbar'),r=document.querySelector(selector).getBoundingClientRect();return {window:[innerWidth,innerHeight],body:[s.scrollWidth,s.scrollHeight],shell:[p.clientHeight,p.scrollHeight,p.clientWidth,p.scrollWidth],top:t.getBoundingClientRect().top,panel:[r.top,r.bottom,r.width,r.height]}}''',panel)
+        print(viewport,path,metrics)
+        assert metrics['body'][0]<=viewport[0]+2,(path,metrics)
+        if desktop:
+            assert metrics['body'][1]<=viewport[1]+2,(path,metrics)
+            assert metrics['shell'][1]<=metrics['shell'][0]+2,(path,metrics)
+            assert metrics['shell'][3]<=metrics['shell'][2]+2,(path,metrics)
+            assert metrics['panel'][1]<=viewport[1]+2 and metrics['panel'][3]>25,(path,metrics)
+            assert metrics['top']==0,(path,metrics)
+        if path=='/upload':
+            page.locator('input[name="vad_enabled"][value="false"]').check()
+            assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
+            with page.expect_file_chooser():
+                page.locator('label[for="upload-files"]').click()
+            page.locator('.at2-upload-audio summary').click()
+            page.locator('select[name="audio_denoise"]').select_option('medium')
+            if desktop:
+                assert page.locator('.at2-upload-submit button').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
+        if path.startswith('/summaries'):
+            if desktop:
+                assert page.locator('.summary-list').evaluate('el=>el.scrollHeight>el.clientHeight')
+                assert page.locator('#summary-text').evaluate('el=>el.scrollHeight>el.clientHeight')
+                assert page.locator('.summary-markdown').evaluate('el=>el.scrollHeight>el.clientHeight')
+                page.locator('.summary-markdown').evaluate('el=>el.scrollTop=500')
+                assert page.locator('.summary-markdown').evaluate('el=>el.scrollTop')>0
+                assert page.locator('#summary-text').evaluate('el=>el.scrollTop')==0
+            page.locator('#summary-text').fill('# Documento aggiornato\n\n'+text)
+            page.get_by_role('button',name='Salva',exact=True).click()
+            page.get_by_text('Modifiche salvate',exact=True).wait_for()
+            assert page.locator('.summary-dochead a').get_attribute('href')==f'/studio/{job_id}'
+            page.get_by_role('button',name='Markdown',exact=True).click()
+            page.locator('.summary-markdown h1').first.wait_for()
+            assert page.locator('.summary-markdown h1').first.inner_text()=='Documento aggiornato'
+    for path in ['/login', '/register', '/shared/atelier-preview-share']:
+        page.context.clear_cookies()
+        response = page.goto(ORIGIN + path)
+        assert response.status == 200, path
+        page.wait_for_function('!!window.Alpine')
+        if desktop:
+            metrics = page.evaluate("() => { const e=document.scrollingElement; const panel=document.querySelector('.at2-auth-layout,.at2-share-root'); return [e.scrollWidth,e.scrollHeight,panel.clientHeight,panel.scrollHeight] }")
+            assert metrics[0] <= viewport[0]+2 and metrics[1] <= viewport[1]+2, (path, metrics)
+            assert metrics[3] <= metrics[2]+2, (path, metrics)
+        if path == '/login':
+            assert page.locator('input[name="password"]').is_visible()
+        if path.startswith('/shared'):
+            assert page.locator('.shared-transcript-list').is_visible()
+            if desktop:
+                assert page.locator('.shared-transcript-list').evaluate('el=>el.scrollHeight>el.clientHeight')
+    assert not errors,errors

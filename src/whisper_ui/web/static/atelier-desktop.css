@@ -1,0 +1,137 @@
+/* Viewport-sized PC workspace. Phone/tablet keep their existing document flow.
+   Use CSS viewport dimensions, never physical diagonal or UA detection. */
+.at-desktop-upload-fields,.at-desktop-upload-inputs,.at-desktop-upload-settings{display:contents}
+@media (min-width:1000px) and (min-height:500px){
+  html:has(body.atelier-body),body.atelier-body{height:100%;min-height:0;overflow:hidden}
+  body.atelier-body{font-size:13px}
+  .atelier-app{height:100dvh;min-height:0;overflow:hidden}
+  .atelier-sidebar{height:100%;min-height:0;width:210px;padding:18px 12px 12px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;position:relative;align-self:stretch}
+  .atelier-sidebar .atelier-brand{margin-bottom:24px}
+  .atelier-sidebar .atelier-nav-item{min-height:38px;padding-block:8px}
+  .atelier-sidebar .atelier-caption-spaced{margin-top:20px}
+  .atelier-main-column{display:flex;flex-direction:column;height:100%;min-height:0;min-width:0;flex:1}
+  .atelier-topbar{height:50px;min-height:50px;flex:none;padding:0 18px;gap:12px}
+  .atelier-topbar-actions{gap:9px}.atelier-topbar-kicker{display:none}.atelier-topbar-context strong{font-size:14px}
+  .atelier-topbar .atelier-icon-button{width:32px;height:32px;font-size:17px}.atelier-topbar-create{min-height:32px;padding:0 12px}
+  .main-content.atelier-main{display:flex;flex-direction:column;flex:1;min-height:0!important;height:auto!important;overflow:hidden}
+  /* Last-resort internal scroll for unusually large alerts, zoom or content.
+     Normal workspaces fill the shell and scroll only their own panels. */
+  #page-content.app-page-shell.atelier-page{width:100%;max-width:none!important;min-height:0!important;height:100%!important;max-height:none!important;margin:0;padding:12px 16px!important;display:flex;flex-direction:column;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+  #page-content>.at2-screen,#page-content>.summary-workspace{flex:1;min-height:0;min-width:0;gap:10px}
+  .atelier-page :is(.at2-page-heading,.summary-heading,.at2-review-hero,.wv-heading){flex:none;gap:10px;margin:0;align-items:center}
+  .atelier-page :is(.at2-page-heading h1,.summary-heading h1,.at2-review-hero h1,.wv-heading h1){font-size:clamp(22px,1.7vw,29px);line-height:1.15;margin:2px 0 4px;letter-spacing:-.6px;overflow-wrap:anywhere}
+  .atelier-page :is(.at2-page-heading .at2-description,.summary-heading p,.at2-review-hero p){font-size:11px;line-height:1.4;margin:0}
+  .atelier-page :is(.at2-page-heading,.summary-heading,.at2-review-hero,.wv-heading) .at2-kicker{font-size:9px;letter-spacing:.8px}
+  .atelier-page .btn,.atelier-page .at2-button{min-height:32px;height:auto;padding-block:6px;font-size:12px;border-radius:8px}
+  .atelier-page :is(.btn-xs,.btn-sm){min-height:28px;padding-block:4px;font-size:11px}
+  .atelier-page :is(.input,.select){min-height:32px;height:32px;border-radius:8px;font-size:12px}
+  .atelier-page .textarea{min-height:64px;font-size:12px}.atelier-page .tab{min-height:32px}
+  .atelier-page .fieldset{gap:4px;padding-block:4px}.atelier-page .fieldset-legend{padding-bottom:3px;font-size:11px}
+  .atelier-page .table :where(th,td){padding:8px 10px}
+  .atelier-page :is(.at2-panel,.at2-workspace,.at2-upload-pane,.summary-library,.summary-document){border-radius:12px}
+  .atelier-page :is(.at2-panel-header,.at2-workspace-head) h2{font-size:17px;margin:2px 0}
+  .atelier-page :is(.at2-panel-header,.at2-workspace-head) p{font-size:11px;line-height:1.4}
+  .atelier-page .at2-panel-header{margin-bottom:10px}
+  .atelier-page :is(.at2-workspace-head,.at2-workspace-filters){padding:9px 12px;gap:7px;flex:none}
+  .atelier-page .at2-workspace-filters .btn-sm{min-height:29px}.atelier-page .at2-workspace-filters input{min-height:32px}
+  .atelier-page .at2-workspace-results{padding:8px 10px;min-height:0;max-height:none!important;flex:1;overflow:auto;overscroll-behavior:contain}
+  .atelier-page .at2-workspace{display:flex;flex-direction:column;min-height:0;flex:1}
+  .at2-jobs-screen,.at2-admin-jobs-screen,.at2-admin-users-screen{min-height:0}
+  .at2-jobs-screen .at2-workspace-head>div>.at2-kicker,.at2-admin-jobs-screen .at2-workspace-head>div>.at2-kicker{display:none}
+  .atelier-page .at2-workspace-results .at2-job-row .card-body{padding:10px 12px}
+  .at2-admin-users-screen .at2-workspace>[x-data]{display:flex;flex-direction:column;flex:1;min-height:0}
+  .at2-admin-users-screen .admin-table-scroll{flex:1;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}
+  .at2-admin-users-screen .admin-table-scroll thead{position:sticky;top:0;background:var(--atelier-surface);z-index:2}
+  .at2-admin-users-screen .at2-workspace-filters>div{margin-bottom:0}
+  .at2-admin-create{flex:none;padding:11px 14px;max-height:32%;overflow:auto}.at2-admin-create h2{font-size:17px;margin-bottom:2px}.at2-admin-create p{margin-bottom:7px}
+  /* Dashboard: two independently scrolling collections below the shortcuts. */
+  #page-content>.at2-home-screen{display:flex;flex-direction:column;flex:1;min-height:0;gap:10px}
+  .at2-home-screen .atelier-dashboard-heading{flex:none}.at2-home-screen .atelier-dashboard-heading h1{font-size:27px;margin:2px 0}.at2-home-screen .atelier-dashboard-heading p{font-size:11px}
+  .at2-home-start{flex:none;padding:12px 16px;gap:14px}.at2-home-start h2{font-size:22px;margin:3px 0}.at2-home-start p{font-size:11px;line-height:1.4}
+  .at2-home-sources a{min-height:64px;gap:3px;padding:8px 10px}.at2-home-sources a>span{font-size:18px;margin-bottom:0}.at2-home-sources small{font-size:10px}
+  .at2-home-screen .atelier-insights{flex:none;gap:8px}.at2-home-screen .atelier-stat{min-height:65px;gap:1px;padding:8px 12px}.at2-home-screen .atelier-stat strong{font-size:24px}
+  .at2-home-content{flex:1;min-height:0;align-items:stretch;gap:12px;grid-template-columns:minmax(0,1.2fr) minmax(260px,1fr)}
+  .at2-home-content>section{display:flex;flex-direction:column;min-height:0;overflow:hidden}.at2-home-content .atelier-section-heading{flex:none;margin:0 0 7px}.at2-home-content .atelier-section-heading h2{font-size:17px;margin:2px 0}
+  .at2-home-content :is(.atelier-recent-list,.atelier-live-section){flex:1;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}.atelier-recent-row{padding-block:9px}
+  /* Upload: independent left source/preset and right recognition/settings.
+     The actual submit button stays outside both scrollers. */
+  .at2-upload-screen>.at2-aside-card{padding:8px 12px;flex:none}
+  .at2-upload-form{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:1;min-height:0;width:100%}
+  .at2-upload-form>.at2-upload-feedback{flex:none;max-height:18%;overflow:auto}
+  .at2-upload-form>.at2-upload-main{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px;width:100%}
+  .at2-upload-form>.at2-upload-side{display:none}
+  .at-desktop-upload-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;gap:12px;flex:1;min-height:0}
+  :is(.at-desktop-upload-inputs,.at-desktop-upload-settings){display:flex;flex-direction:column;gap:9px;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:1px 3px 3px 1px}
+  :is(.at-desktop-upload-inputs,.at-desktop-upload-settings)>.at2-upload-pane{flex:none}
+  .at2-upload-form .at2-upload-pane{padding:12px;border-radius:12px}.at2-upload-form .at2-panel-header{margin-bottom:10px}.at2-upload-form .at2-panel-header h2{font-size:17px}
+  .at2-upload-form [role=tablist]{margin-bottom:8px;gap:5px}.at2-upload-form [role=tab]{min-height:34px;padding:5px 8px}
+  .at2-upload-form .at2-source-drop{min-height:96px;padding:10px;gap:3px}.at2-upload-form .at2-source-drop svg{width:25px;height:25px;margin:0}
+  .at2-upload-form .at2-upload-presets .grid{gap:6px}.at2-upload-form .at2-upload-presets .grid button{min-height:62px}.at2-upload-form .at2-upload-presets .card-body{padding:8px;gap:4px}
+  .at2-upload-form .at2-upload-ai>button{min-height:35px;padding:8px}.at2-upload-form .at2-upload-ai>button+.space-y-3{margin-top:6px}
+  .at2-upload-form .at2-upload-submit{flex:none;position:relative!important;bottom:auto!important;z-index:1;padding:8px 12px;margin:0;box-shadow:none}.at2-upload-submit>div{width:100%;justify-content:space-between}.at2-upload-form .at2-upload-submit .btn{min-height:36px}
+  .at2-upload-form .at2-vad-option{padding:9px}.at2-upload-form .at2-vad-options{gap:6px}
+  /* Presets and editor: preserve all configuration controls and anchors. */
+  .at2-presets-screen>.at2-panel{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 14px}
+  .at2-presets-screen>.at2-panel:first-of-type{flex:0 1 auto;max-height:48%}
+  .at2-preset-card{padding:12px!important;min-height:0!important}.at2-preset-card h3{font-size:16px}.at2-preset-grid{gap:8px}
+  .at2-editor-form{display:flex;flex-direction:column;flex:1;min-height:0}
+  .at2-editor-content{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 190px;align-items:stretch;gap:10px}
+  .at2-editor-stack{min-height:0;display:flex;flex-direction:column;gap:9px;overflow:auto;overscroll-behavior:contain;padding:1px 3px 3px 1px}
+  .at2-editor-stack>.card{flex:none}.at2-editor-stack>.card>.card-body{padding:12px;gap:8px}.at2-editor-sidebar{position:static;align-self:start;max-height:100%;overflow:auto;padding:12px;gap:10px}
+  .at2-editor-actions{flex:none;position:sticky;bottom:0;padding:9px 12px;z-index:4;background:var(--atelier-surface);box-shadow:0 -4px 12px #0002}
+  /* Reader: document scroll + player scroll. Technical details remain visible
+     as a compact, independently scrollable area when expanded. */
+  #page-content>.wv-page{gap:8px!important;width:100%;max-width:none;min-height:0}
+  .wv-page>.wv-breadcrumb{flex:none;font-size:11px;margin:0}.wv-heading{flex-wrap:wrap}.wv-heading-copy{min-width:0;flex:1}.wv-heading h1{margin:2px 0 5px}.wv-meta{font-size:11px;gap:8px}.wv-actions{gap:6px}
+  .wv-workspace{flex:1;min-height:0;align-items:stretch;gap:10px}.wv-with-audio{grid-template-columns:minmax(0,1fr) minmax(260px,310px)}
+  .wv-document{display:flex;flex-direction:column;min-height:0}.wv-document-head{flex:none;padding:12px 14px 8px}.wv-document-head h2,.wv-panel-heading h2{font-size:17px;margin:2px 0}.wv-document-toolbar{flex:none;padding:0 14px 8px;gap:5px}.wv-document-caption,.wv-document-footer{flex:none;padding:6px 14px}
+  .wv-transcript-scroll{flex:1;min-height:0;max-height:none!important;overflow:auto;padding:6px 12px}.wv-page .wv-segment,.wv-page .wv-paragraph{padding:10px 8px}
+  .wv-player{position:static;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px}.wv-player>.wv-switch{margin-top:9px}.wv-clock{margin-block:8px}.wv-clock strong{font-size:26px}.wv-waveform canvas{height:72px;max-height:72px}.wv-zoom{margin:5px 0}.wv-transport{margin-block:8px}.wv-spectrum-details{margin-top:8px;padding-top:8px}
+  .wv-details{display:flex;gap:7px;flex:none;max-height:27%;overflow:auto;overscroll-behavior:contain}.wv-details>details{flex:1;min-width:0;padding:7px 11px}.wv-details-body{padding-top:8px}.wv-details summary span{font-size:10px;margin-left:5px}.wv-details:has(details[open]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wv-mini-player{display:none!important}
+  /* Studio: timeline and mode fixed, each version scrolls independently. */
+  .at2-review-shell{gap:7px!important}.at2-review-shell>.at2-viewer-breadcrumb{flex:none;font-size:11px}.at2-review-shell>.at2-review-step{display:none}
+  .at2-review-audio{flex:none;max-height:42%;overflow:auto;overscroll-behavior:contain}.at2-review-audio>.card-body{padding:9px 12px;gap:5px}.at2-review-audio .rounded-box{padding:7px 9px}.at2-review-audio .space-y-3>:not([hidden])~:not([hidden]){margin-top:3px;margin-bottom:0}.at2-review-audio .range{height:13px}.at2-review-audio .range-xs{height:10px}
+  .at2-studio-mode-switch{flex:none;margin:0}.at2-studio-mode-switch button{min-height:30px;padding:5px 11px}
+  .at2-review-columns{flex:1;min-height:0;gap:8px;align-items:stretch}.at2-review-columns>.card{min-height:0;overflow:hidden}.at2-review-columns>.card>.card-body{display:flex;flex-direction:column;min-height:0;padding:9px;gap:6px}.at2-review-columns>.card>.card-body>*{flex:none}.at2-review-columns [x-ref$="List"]{flex:1!important;min-height:0!important;max-height:none!important;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.at2-review-columns .at2-review-card textarea{min-height:60px;font-size:12px}
+  /* Summary editor: independent library, text and rendered Markdown. */
+  .summary-workspace{display:flex;flex-direction:column}.summary-grid{flex:1;min-height:0;grid-template-columns:minmax(185px,235px) minmax(0,1fr);align-items:stretch;gap:10px}
+  .summary-library{position:static;display:flex;flex-direction:column;min-height:0;padding:10px;gap:7px}.summary-library-head,.summary-library>input{flex:none}.summary-list{flex:1;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain;align-content:start;gap:5px}.summary-entry{padding:8px;gap:3px}
+  .summary-document{display:flex;flex-direction:column;min-height:0;padding:11px;overflow:hidden}.summary-error{flex:none;margin-bottom:6px}.summary-editor{display:flex;flex-direction:column;flex:1;min-height:0;gap:5px}.summary-dochead{flex:none;padding-bottom:6px;gap:6px}.summary-title{font-size:23px;padding:3px 2px}.summary-meta{font-size:10px}.summary-content{display:flex;flex-direction:column;min-height:0;flex:1}.summary-toolbar{flex:none;padding:5px 0;gap:5px}.summary-tabs button,.summary-format button{padding:5px 8px}.summary-edit-status{flex:none;margin:5px 0}.summary-panes{flex:1;min-height:0;gap:8px;grid-template-rows:minmax(0,1fr)}.summary-pane{display:flex;flex-direction:column;min-height:0}.summary-format{flex:none;padding:3px}.summary-pane textarea{flex:1;height:100%;min-height:0!important;max-height:none;resize:none;padding:10px 12px;font-size:13px;line-height:1.6;overflow:auto;overscroll-behavior:contain}.summary-markdown{display:block;min-height:0!important;overflow:auto;overscroll-behavior:contain;padding:10px 14px;font-size:13px;line-height:1.65}.summary-docfooter{flex:none;margin-top:5px}.summary-create,.summary-progress{overflow:auto;min-height:0;overscroll-behavior:contain}.summary-form{gap:9px;margin-top:10px}.summary-create h2{font-size:19px}.summary-empty{flex:1;min-height:0;overflow:auto}
+  /* Existing dialogs stay in the browser's top layer, not clipped by panels. */
+  .atelier-page dialog .modal-box{max-height:calc(100dvh - 30px);overflow:auto;overscroll-behavior:contain}
+}
+@media(min-width:1600px) and (min-height:500px){.atelier-sidebar{width:224px}.summary-grid{grid-template-columns:minmax(220px,260px) minmax(0,1fr)}.wv-with-audio{grid-template-columns:minmax(0,1fr) 340px}}
+@media(min-width:1000px) and (min-height:500px) and (max-height:690px){
+  .atelier-sidebar .atelier-brand{margin-bottom:14px}.atelier-sidebar .atelier-caption-spaced{margin-top:10px}
+  .atelier-topbar{height:44px;min-height:44px}#page-content.app-page-shell.atelier-page{padding:8px 12px!important}
+  .atelier-page :is(.at2-page-heading,.summary-heading,.at2-review-hero) p{display:none}.at2-home-start{padding:9px 12px}.at2-home-screen .atelier-stat{min-height:54px}.at2-review-audio{max-height:39%}
+}
+/* Constrain the dashboard's intrinsic grid row; otherwise a long library
+   can force the entire workspace to grow even with overflow on its children. */
+@media(min-width:1000px) and (min-height:500px){
+ #page-content>.at2-home-screen{flex:1 1 0%;min-height:0;min-width:0}
+ #page-content>.at2-screen,#page-content>.summary-workspace{flex:1 1 0%;min-height:0}
+ .at2-home-content{grid-template-rows:minmax(0,1fr)}
+ .at2-home-content>section{min-height:0;max-height:100%}
+ .at2-home-screen .atelier-recent-row{padding:8px 10px;gap:8px}
+ .at2-home-screen .atelier-recent-list{min-height:0;align-content:start}
+ .at2-home-start{min-height:0}
+ .at2-review-columns,.wv-workspace{grid-template-rows:minmax(0,1fr)}
+ .at2-review-columns>.card>.card-body{flex:1}
+ .at2-editor-stack>.card{scroll-margin-top:8px}
+ .at2-editor-content{grid-template-rows:minmax(0,1fr)}
+ .summary-grid{grid-template-rows:minmax(0,1fr)}
+ .at2-admin-users-screen .admin-table-scroll{margin-bottom:0}
+}
+
+/* Standalone desktop screens use the same viewport model. */
+@media(min-width:1000px) and (min-height:500px){
+  .at2-auth-layout{height:100dvh;min-height:0;grid-template-rows:minmax(0,1fr)}
+  .at2-auth-story{min-height:0;padding:clamp(24px,3.5vw,46px);overflow:auto}.at2-auth-story-text{padding-bottom:4vh}.at2-auth-story-text h2{font-size:clamp(42px,5vw,68px);margin:9px 0 12px;letter-spacing:-2.7px}
+  .at2-auth-form-side{min-height:0;overflow:auto;align-items:safe center;padding:22px 36px;overscroll-behavior:contain}.at2-auth-form-wrap h1{font-size:31px;margin:9px 0}.at2-auth-form-wrap>.at2-description{margin-bottom:15px}.at2-auth-form-wrap form{gap:12px}.at2-auth-form-wrap label{margin-bottom:5px}.at2-auth-form-wrap input:not([type=hidden]){min-height:42px}.at2-auth-form-wrap .btn-primary{min-height:42px;margin-top:3px}.at2-auth-switch{margin-top:13px}
+  .at2-share-root{height:100dvh;min-height:0;width:min(1450px,100%);padding:12px 24px;display:flex;flex-direction:column;gap:9px;overflow:auto;overscroll-behavior:contain}
+  .at2-share-header{flex:none;margin:0}.at2-share-hero{flex:none;padding:10px 15px;margin:0}.at2-share-hero h1{font-size:25px;margin:3px 0}.at2-share-hero p{font-size:12px;margin:2px 0}
+  .at2-share-body .at2-shared-reader{display:flex;flex-direction:column;flex:1;min-height:0;padding:10px 12px}.at2-share-body .player-wrapper{flex:none;margin:0 0 8px}.at2-share-body .player-wrapper video{max-height:22dvh}.at2-shared-reader>div[x-data]{display:flex;flex-direction:column;flex:1;min-height:0}.at2-share-body .at2-shared-search{flex:none;margin-bottom:6px;padding:0 0 6px}.at2-share-body .at2-shared-search input{height:34px;min-height:34px;font-size:13px}
+  .at2-share-body .at2-shared-reader .shared-transcript-list{flex:1;min-height:0;height:auto;max-height:none!important;overflow:auto;overscroll-behavior:contain}.at2-share-root>footer{flex:none;margin:0;padding-top:5px}
+}

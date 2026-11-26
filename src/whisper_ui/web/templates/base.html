@@ -24,7 +24,7 @@
   {# htmx fragment scripts come from a different HTTP response; keep the CSP
      nonce of the initial document so Alpine screen controllers may execute. #}
   <script nonce="{{ csp_nonce }}">if (window.htmx) htmx.config.inlineScriptNonce = {{ csp_nonce|tojson }};</script>
-  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r5"></script>
+  <script defer src="{{ url_for('static', path='atelier-router.js') }}?v=router-r6"></script>
   <script defer src="{{ url_for('static', path='vendor/markdown-it.min.js') }}"></script>
   <script defer src="{{ url_for('static', path='atelier-summaries.js') }}?v=3"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='atelier-summaries.css') }}?v=1">
@@ -34,6 +34,7 @@
      responses inside the existing #job-list-wrapper and break polling. #}
   <script src="{{ url_for('static', path='vendor/idiomorph-ext.min.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='viewer.css') }}?v=reader-r1">
+  <link rel="stylesheet" href="{{ url_for('static', path='atelier-desktop.css') }}?v=desktop-r1">
   <script defer src="{{ url_for('static', path='viewer-timeline.js') }}?v=reader-r1"></script>
   <script defer src="{{ url_for('static', path='viewer.js') }}?v=reader-r1"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.14.8/dist/cdn.min.js"

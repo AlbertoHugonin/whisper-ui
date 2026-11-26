@@ -150,7 +150,7 @@
     node.focus({preventScroll:true});
     const anchor = location.hash && document.getElementById(location.hash.slice(1));
     if (anchor) anchor.scrollIntoView({block:'start',behavior:'instant'});
-    else window.scrollTo({top:0,behavior:'instant'});
+    else { document.getElementById('page-content')?.scrollTo({top:0,behavior:'instant'}); window.scrollTo({top:0,behavior:'instant'}); }
     document.dispatchEvent(new CustomEvent('atelier:navigated', {detail:{path:location.pathname}}));
   });
   document.addEventListener('htmx:responseError', (event) => {

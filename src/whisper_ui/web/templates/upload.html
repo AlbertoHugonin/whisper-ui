@@ -96,6 +96,8 @@
 
 
   <div class="at2-upload-main">
+  <div class="at-desktop-upload-fields">
+  <div class="at-desktop-upload-inputs">
 {% if not rt %}
 <section class="at2-upload-pane at2-upload-source" aria-label="Origine del contenuto">
 <div class="at2-panel-header"><div><span class="at2-kicker">01 / SORGENTE</span><h2>Scegli la registrazione</h2><p>Carica file, scegli una cartella o importa un link.</p></div></div>
@@ -285,6 +287,8 @@
 
   {# Settings #}
   {# Basic settings — always visible, the two controls every user adjusts. #}
+  </div>
+  <div class="at-desktop-upload-settings">
   <section class="at2-upload-pane at2-upload-basic">
     <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
 
@@ -492,6 +496,8 @@
   {# Sticky submit footer — keeps the primary action close to the user's
      cursor regardless of how far they've scrolled (Fitts's Law). The status
      line previews how many files / URLs the current selection will submit. #}
+  </div>
+  </div>
   <div class="at2-upload-submit">
     <div class="flex items-center gap-3">
       <span class="text-sm opacity-70 flex-1 min-w-0 truncate" x-text="statusLine"></span>
