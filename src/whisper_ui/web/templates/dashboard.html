@@ -2,15 +2,14 @@
 {% from "_atelier_components.html" import empty_state %}
 {% block title %}Panoramica · Atelier{% endblock %}
 {% block content %}
-<div class="at2-home-screen">
+<div class="at2-home-screen signal-dashboard">
 <header class="atelier-dashboard-heading">
-  <div><div class="atelier-eyebrow"><span class="atelier-eyebrow-line"></span> IL TUO WORKSPACE AUDIO</div>
-    <h1>Le idee diventano <em>parole.</em></h1>
-    <p>Riprendi una trascrizione o parti da una nuova registrazione.</p>
+  <div><h1>Panoramica</h1>
+    <p>Registrazioni, trascrizioni e documenti in un unico spazio.</p>
   </div>
 </header>
 <section class="at2-home-start" aria-labelledby="start-work-title">
-  <div><span class="at2-kicker">UN NUOVO CONTENUTO</span><h2 id="start-work-title">Cosa vuoi trascrivere?</h2><p>Scegli la sorgente. Al resto pensiamo noi.</p></div>
+  <div><h2 id="start-work-title">Nuova trascrizione</h2><p>Scegli come importare la registrazione.</p></div>
   <div class="at2-home-sources" aria-label="Crea una trascrizione">
     <a href="/upload?mode=files"><span aria-hidden="true">↥</span><strong>Carica file</strong><small>Audio e video</small></a>
     <a href="/upload?mode=folder"><span aria-hidden="true">▤</span><strong>Importa cartella</strong><small>Più file insieme</small></a>
@@ -24,7 +23,7 @@
 </section>
 <div class="at2-home-content">
   <section class="at2-home-library" aria-label="Trascrizioni recenti">
-    <div class="atelier-section-heading"><div><span class="atelier-eyebrow">RIPRENDI DA QUI</span><h2>Ultime trascrizioni</h2></div><a href="/jobs" class="atelier-text-link">Vedi tutte ↗</a></div>
+    <div class="atelier-section-heading"><div><h2>Ultime trascrizioni</h2></div><a href="/jobs" class="atelier-text-link">Vedi tutte ↗</a></div>
     {% if recent_completed %}
     <div class="atelier-recent-list">
       {% for job in recent_completed %}
@@ -36,11 +35,11 @@
       {% endfor %}
     </div>
     {% else %}
-    {{ empty_state('Qui ritroverai le tue parole.', 'Le trascrizioni completate appariranno in questa sezione.', '/upload', 'Crea la prima trascrizione') }}
+    {{ empty_state('Nessuna trascrizione completata', 'Le trascrizioni completate appariranno in questa sezione.', '/upload', 'Crea la prima trascrizione') }}
     {% endif %}
   </section>
   <section class="at2-home-activity" aria-label="Attività in corso">
-    <div class="atelier-section-heading"><div><span class="atelier-eyebrow">IN TEMPO REALE</span><h2>Attività</h2></div><span class="at2-live"><i></i> Automatico</span></div>
+    <div class="atelier-section-heading"><div><h2>Attività</h2></div><span class="at2-live"><i></i> Automatico</span></div>
     <div class="atelier-live-section">{% include "_dashboard_active.html" %}</div>
   </section>
 </div>

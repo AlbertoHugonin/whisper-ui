@@ -52,7 +52,7 @@
 {{ alert('error', upload_error_msg|trim, 'mb-4') }}
 {% endif %}
 
-<form method="post" class="at2-upload-form at-upload-wizard" novalidate
+<form method="post" class="at2-upload-form at-upload-wizard signal-workflow" novalidate
       x-data="uploadForm()"
       {% if rt %}
       action="/jobs/{{ rt.id }}/re-transcribe"
@@ -97,7 +97,7 @@
     <nav class="wizard-steps" aria-label="Passaggi della nuova trascrizione" x-cloak>
       <template x-for="(label,index) in steps" :key="index">
         <button type="button" class="wizard-step" :class="{'is-current':step===index+1,'is-done':step>index+1}" :aria-current="step===index+1?'step':null" :disabled="step===index+1||index+1>furthestStep||uploading||preparing" :aria-label="'Passaggio '+(index+1)+': '+label" @click="goTo(index+1)">
-          <span class="wizard-number" x-text="step>index+1?'✓':index+1"></span><span class="wizard-step-label" x-text="label"></span>
+          <span class="wizard-number" x-text="step>index+1?'✓':index+1"></span><span class="wizard-step-label" x-text="label"></span><span class="signal-step-state" x-show="step===index+1" aria-hidden="true">→</span>
         </button>
       </template>
     </nav>

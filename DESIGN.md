@@ -1,0 +1,11 @@
+# Atelier / Signal
+
+A quiet editorial workbench for recordings and their text. Visitors operate and read, not shop. One visual signature: a numbered signal path (source → audio → detection → text → documents), shown as a continuous ordered workflow. No promotional hero, no decorative charts or gratuitous gradients. Keep recording/text/document names as the primary information. Distinguish an action from a state by shape and text.
+
+- Desktop: full-width top navigation, compact 52px shell, 12–20px gutters, independently scrolling content, fixed action bars. Small laptop at 1366×650 must work. Wizard has a dedicated step rail, not global navigation; content remains mounted. Summaries retain library, text and Markdown view. Reader and studio preserve audio tools.
+- Mobile: 428×926 logical px iPhone, five bottom destinations, 44px minimum principal touch targets, 16px form inputs, safe-area insets, vertical flow. Wizard uses numbered progress and current phase. No horizontal document scrolling.
+- Palette: paper neutral, graphite ink, blue for actions and selected controls, green/amber/red only for states. Dark mode uses slate-neutral surfaces and a lighter blue. Text and functional controls meet contrast requirements. No neon. Use existing semantic token names so DaisyUI and custom controls agree.
+- Type: system sans (local, no font download), 14px UI / 16px reading text, 24px page title, 17px section, 12px metadata. Tabular numbers for durations and counts. 4/8/12/16/24 spacing scale; 6–10px control radii, 10px panel radius. Flat surfaces with 1px separation, minimal shadow except overlays.
+- Structure: distinct primary action, clear section labels, no repeated marketing taglines. Status chips are semantic. Use semantic native controls, inline contextual explanations, standard keyboard interactions. No new remote client assets. Preserve all existing routes and behavioral contracts.
+
+Derived from UI/UX Pro Max's Swiss/minimalist recommendation (see docs/design/pro-max-recommendation.txt), Impeccable Operate/Layout, Anthropic Frontend Design, and Vercel Web Interface Guidelines. Rejected marketing landing-page pattern and red primary; red is reserved for destructive actions. System font and established interaction structure chosen for performance and continuity.

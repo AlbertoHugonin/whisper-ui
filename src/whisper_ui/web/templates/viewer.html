@@ -9,7 +9,7 @@
   {% elif error == 'no_result' %}{{ alert('error', labels.VIEWER_RESULT_NOT_FOUND) }}{% endif %}
   {% if result %}
   <header class="wv-heading">
-    <div class="wv-heading-copy"><span class="at2-kicker">IL TUO AUDIO, PAROLA PER PAROLA</span><h1>{{ job.filename }}</h1>
+    <div class="wv-heading-copy"><span class="at2-kicker">TRASCRIZIONE</span><h1>{{ job.filename }}</h1>
       <div class="wv-meta"><span class="wv-ready"><i></i>Trascrizione pronta</span><span>{{ result.duration|format_time }}</span><span>{{ result.language|upper }}</span><span>{{ result.segments|length }} battute</span></div>
     </div>
     <div class="wv-actions"><a class="at2-button at2-button-quiet" href="/studio/{{ job.id }}">Modifica in Studio ↗</a>
@@ -20,7 +20,7 @@
   <div class="wv-workspace {{ 'wv-with-audio' if media_available else '' }}">
     {% if media_available %}
     <aside class="wv-player" :class="{'is-expanded': audioExpanded}" aria-label="Ascolto della registrazione">
-      <div class="wv-panel-heading"><div><span class="at2-kicker">ASCOLTA E RITROVA</span><h2>La registrazione</h2></div><button type="button" class="wv-expand" @click="audioExpanded=!audioExpanded; $nextTick(() => _timeline?.refresh())" :aria-expanded="audioExpanded" x-text="audioExpanded ? 'Meno dettagli -' : 'Dettagli audio +'">Dettagli audio +</button><span class="wv-audio-dot" :class="{'is-playing': playing}" aria-hidden="true">♪</span></div>
+      <div class="wv-panel-heading"><div><span class="at2-kicker">AUDIO</span><h2>La registrazione</h2></div><button type="button" class="wv-expand" @click="audioExpanded=!audioExpanded; $nextTick(() => _timeline?.refresh())" :aria-expanded="audioExpanded" x-text="audioExpanded ? 'Meno dettagli -' : 'Dettagli audio +'">Dettagli audio +</button><span class="wv-audio-dot" :class="{'is-playing': playing}" aria-hidden="true">♪</span></div>
       <div class="wv-switch" role="group" aria-label="Versione audio">
         {% if original_available %}<button type="button" :aria-pressed="audioSource==='original'" @click="switchAudio('original')">Originale</button>{% endif %}
         {% if processed_available %}<button type="button" :aria-pressed="audioSource==='processed'" @click="switchAudio('processed')">Audio elaborato</button>{% endif %}

@@ -150,15 +150,15 @@
   .atelier-desktop-nav .atelier-nav-item{padding:6px 11px;min-height:32px;border-radius:8px;gap:7px;font-size:12px;line-height:1.2;white-space:nowrap}
   .atelier-desktop-nav .atelier-nav-item .atelier-nav-symbol{width:auto;min-width:14px;font-size:16px;line-height:1;color:inherit}
   .atelier-desktop-nav .atelier-nav-item.is-active{box-shadow:none}
-  .atelier-desktop-nav .atelier-desktop-create:not(.is-active){border-color:#d7ff7040;color:#d7ff70!important}
+  .atelier-desktop-nav .atelier-desktop-create:not(.is-active){border-color:#8eb6ff40;color:#8eb6ff!important}
   .atelier-topbar-context,.atelier-topbar-state,.atelier-topbar-create,.atelier-mobile-logo{display:none!important}
   .atelier-topbar-actions{margin-left:auto;flex:none;gap:8px}
   .atelier-topbar .atelier-icon-button{color:#e7eff1;background:#ffffff08;border-color:#ffffff24;border-radius:8px}
   .atelier-topbar .atelier-icon-button:hover,.atelier-topbar .atelier-icon-button:focus-visible{background:#ffffff19}
-  .atelier-topbar .atelier-account-active>summary{border-color:#d7ff70;color:#d7ff70}
+  .atelier-topbar .atelier-account-active>summary{border-color:#8eb6ff;color:#8eb6ff}
   .atelier-topbar .atelier-account-panel{color:var(--color-base-content);background:var(--color-base-100);z-index:40}
   .atelier-topbar .atelier-account-panel a,.atelier-topbar .atelier-account-panel button{color:inherit}
-  .atelier-topbar a:focus-visible,.atelier-topbar button:focus-visible,.atelier-topbar summary:focus-visible{outline:2px solid #d7ff70;outline-offset:2px}
+  .atelier-topbar a:focus-visible,.atelier-topbar button:focus-visible,.atelier-topbar summary:focus-visible{outline:2px solid #8eb6ff;outline-offset:2px}
 }
 @media(min-width:1000px) and (max-width:1199px) and (min-height:500px){
   .atelier-topbar{gap:9px;padding-inline:12px}.atelier-desktop-brand.atelier-brand{padding-right:5px;gap:7px}.atelier-desktop-nav.atelier-navigation{gap:2px}.atelier-desktop-nav .atelier-nav-item{padding-inline:8px;gap:5px}

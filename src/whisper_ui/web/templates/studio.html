@@ -2,12 +2,12 @@
 {% block content %}
 <div class="at2-screen at2-review-shell" x-data="reviewStudio()" :class="{'is-comparing': studioView==='compare'}">
   <nav aria-label="Percorso" class="at2-viewer-breadcrumb"><a href="/jobs">Libreria</a> <span> / </span> <a href="/viewer/{{ job.id }}">Trascrizione</a> <span> / Studio</span></nav>
-  <header class="at2-review-hero"><div><span class="at2-kicker">STUDIO / POST-PRODUZIONE</span>
+  <header class="at2-review-hero"><div><span class="at2-kicker">STUDIO</span>
       <h1>Rivedi la trascrizione.</h1>
       <p>{{ job.filename }} · Confronta le versioni, modifica il testo e salva la tua interpretazione. L'originale resta intatto.</p></div>
     <div class="flex flex-wrap gap-2"><a class="at2-button at2-button-quiet" id="studio-summary" href="/summaries?job={{ summary_job_id|default(job.id) }}">Apri riassunti →</a><a class="at2-button at2-button-quiet" href="/viewer/{{ job.id }}">← Torna alla lettura</a></div>
   </header>
-  <div class="at2-review-step"><span class="at2-kicker">01 / ASCOLTO</span><h2>Riascolta un passaggio.</h2><p>Riproduci, ingrandisci e raggiungi qualsiasi istante.</p></div>
+  <div class="at2-review-step"><span class="at2-kicker">01 / ASCOLTO</span><h2>Ascolta la registrazione</h2><p>Riproduci, ingrandisci e raggiungi qualsiasi istante.</p></div>
   <section class="card at2-review-section at2-review-audio"><div class="card-body gap-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <strong>Audio · navigazione temporale</strong>
@@ -62,7 +62,7 @@
 
   <div role="alert" class="alert alert-error" x-show="error" x-cloak><span x-text="error"></span><button type="button" class="btn btn-ghost btn-xs" @click="error=''">Chiudi</button></div>
 
-  <div class="at2-review-step"><span class="at2-kicker">02 / CONFRONTO</span><h2>Confronta e modifica.</h2><p>Ascolta l'originale, confronta le alternative e modifica senza perdere la cronologia.</p></div>
+  <div class="at2-review-step"><span class="at2-kicker">02 / CONFRONTO</span><h2>Confronta le versioni</h2><p>Ascolta l'originale, confronta le alternative e modifica senza perdere la cronologia.</p></div>
   <div class="at2-studio-mode-switch" role="group" aria-label="Modalità dello Studio">
     <button type="button" :aria-pressed="studioView==='edit'" @click="studioView='edit'">Modifica testo</button>
     <button type="button" :aria-pressed="studioView==='compare'" @click="studioView='compare'">Confronta versioni</button>

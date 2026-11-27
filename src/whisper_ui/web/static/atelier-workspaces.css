@@ -164,7 +164,7 @@
 .at2-home-screen .atelier-dashboard-heading{margin:0;align-items:center}
 .at2-home-screen .atelier-dashboard-heading h1{font-size:clamp(29px,2.8vw,40px);margin:9px 0;letter-spacing:-1.1px}
 .at2-home-screen .atelier-dashboard-heading p{font-size:13px;line-height:1.6}
-.at2-home-start{display:grid;grid-template-columns:minmax(200px,1fr) minmax(380px,1.25fr);gap:24px;align-items:center;padding:24px 27px;background:linear-gradient(115deg,#d7ff70,#c2edaa);border-radius:17px;color:#203420}
+.at2-home-start{display:grid;grid-template-columns:minmax(200px,1fr) minmax(380px,1.25fr);gap:24px;align-items:center;padding:24px 27px;background:linear-gradient(115deg,#8eb6ff,#c2edaa);border-radius:17px;color:#203420}
 .at2-home-start>.at2-kicker,.at2-home-start .at2-kicker{color:#305c35}
 .at2-home-start h2{font-size:clamp(25px,2.6vw,34px);line-height:1.18;font-weight:760;letter-spacing:-.9px;margin:8px 0}
 .at2-home-start p{font-size:12px;line-height:1.7;color:#36533a}
