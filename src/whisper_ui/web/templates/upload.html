@@ -4,6 +4,7 @@
 
 {% from "_atelier_components.html" import heading %}
 {% set rt = retranscribe_source %}
+{% set initial_audio_mode = 'custom' if rt and rt.audio_processing == 'auto' and (rt.audio_denoise != 'auto' or rt.audio_compression != 'auto' or rt.audio_target_lufs != -16 or rt.audio_max_gain_db != 18 or rt.audio_highpass_hz != 80) else (rt.audio_processing if rt else 'auto') %}
 {% block content %}
 <div class="at2-screen at2-upload-screen">
   {{ heading('STUDIO / NUOVA TRASCRIZIONE', 'Nuova trascrizione.', 'Importa una registrazione, scegli le impostazioni e lascia lavorare Whisper.') if not rt else heading('STUDIO / NUOVA VERSIONE', 'Crea una nuova versione.', 'Crea una nuova versione senza modificare la trascrizione originale.') }}
@@ -298,45 +299,96 @@
   {# Basic settings — always visible, the two controls every user adjusts. #}
   </div>
   <div class="wizard-stage" data-wizard-step="3" x-show="step===3" x-cloak>
-  <section class="at2-upload-pane wizard-phase">
-    <div class="at2-panel-header"><div><span class="at2-kicker">03 / PREPARAZIONE AUDIO</span><h2>Prepara la registrazione</h2><p>Regola la qualità dell’audio prima di riconoscere le parole.</p></div></div>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Elaborazione</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Automatica (consigliata)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Solo conversione</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Personalizzata</option></select></fieldset>
-<p class="wizard-hint">Automatica per la maggior parte delle registrazioni. Solo conversione se preferisci mantenere l’audio senza filtri.</p>
-  </section>
-  <details class="at2-upload-pane at2-upload-audio at2-settings-disclosure" @invalid.capture="$el.open=true">
-    <summary><span><strong>Regolazioni audio avanzate</strong><small>Riduzione del rumore, compressione, volume e filtri</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary>
+    <section class="at2-upload-pane wizard-phase">
+      <div class="at2-panel-header"><div><span class="at2-kicker">03 / PREPARAZIONE AUDIO</span><h2>Come vuoi preparare l'audio?</h2><p>Il file viene convertito in WAV mono a 16 kHz. Scegli se applicare anche filtri per rendere la voce più intelligibile.</p></div></div>
+      <fieldset class="wizard-audio-choice"><legend class="sr-only">Modalità di preparazione audio</legend><div class="wizard-audio-options">
+        <label class="wizard-audio-card" :class="{'is-selected':audioMode==='auto'}"><input class="radio radio-primary radio-sm" type="radio" name="audio_processing" value="auto" x-model="audioMode"><span><strong>Automatica <small class="wizard-recommended">Consigliata</small></strong><span>Analizza il volume e applica riduzione del rumore e compressione in base alla registrazione. Normalizza la voce con i valori standard.</span></span></label>
+        <label class="wizard-audio-card" :class="{'is-selected':audioMode==='off'}"><input class="radio radio-primary radio-sm" type="radio" name="audio_processing" value="off" x-model="audioMode"><span><strong>Solo conversione</strong><span>Nessuna pulizia, normalizzazione o compressione. Mantiene il segnale senza filtri, salvo il passaggio a mono e 16 kHz.</span></span></label>
+        <label class="wizard-audio-card" :class="{'is-selected':audioMode==='custom'}"><input class="radio radio-primary radio-sm" type="radio" name="audio_processing" value="custom" x-model="audioMode"><span><strong>Personalizzata</strong><span>Decidi tu intensità dei filtri, volume, amplificazione e frequenze da attenuare.</span></span></label>
+      </div></fieldset>
+      <p class="wizard-hint" x-show="audioMode==='auto'" role="status">Valori standard: obiettivo −16 LUFS, amplificazione massima 18 dB, filtro passa-alto 80 Hz. Riduzione del rumore e compressione si adattano all'audio.</p>
+      <p class="wizard-hint" x-show="audioMode==='off'" role="status">Utile se la registrazione è già pulita o vuoi evitare che i filtri alterino il parlato.</p>
+    </section>
+    <section class="at2-upload-pane at2-upload-audio wizard-custom-audio" x-show="audioMode==='custom'" x-cloak>
+      <div class="at2-panel-header"><div><h2>Regolazioni personalizzate</h2><p>Imposta i filtri prima della trascrizione. Puoi mantenere alcuni controlli automatici.</p></div></div>
+      <fieldset :disabled="audioMode!=='custom'" class="wizard-custom-fields"><legend class="sr-only">Filtri personalizzati</legend>
+    <div class="wizard-audio-parameters">
 
-    <p class="text-xs opacity-60 mb-4">Questi parametri affinano la pulizia quando è attiva. In modalità Solo conversione non vengono applicati.</p>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Riduzione del rumore</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Compressione della voce</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Volume obiettivo (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Un valore più vicino a zero aumenta il volume.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Amplificazione massima (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Limita l’amplificazione delle registrazioni molto deboli.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Filtro passa-alto (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Riduce i rumori bassi sotto la voce.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Riduzione del rumore</legend><div class="wizard-filter-options"><label><input type="radio" class="radio radio-primary radio-xs" name="audio_denoise" value="auto" {% if (rt.audio_denoise if rt else "auto") == "auto" %}checked{% endif %}><span>Automatica</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_denoise" value="off" {% if (rt.audio_denoise if rt else "auto") == "off" %}checked{% endif %}><span>Disattivata</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_denoise" value="light" {% if (rt.audio_denoise if rt else "auto") == "light" %}checked{% endif %}><span>Leggera</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_denoise" value="medium" {% if (rt.audio_denoise if rt else "auto") == "medium" %}checked{% endif %}><span>Media</span></label></div></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Compressione della voce</legend><div class="wizard-filter-options"><label><input type="radio" class="radio radio-primary radio-xs" name="audio_compression" value="auto" {% if (rt.audio_compression if rt else "auto") == "auto" %}checked{% endif %}><span>Automatica</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_compression" value="off" {% if (rt.audio_compression if rt else "auto") == "off" %}checked{% endif %}><span>Disattivata</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_compression" value="light" {% if (rt.audio_compression if rt else "auto") == "light" %}checked{% endif %}><span>Leggera</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_compression" value="medium" {% if (rt.audio_compression if rt else "auto") == "medium" %}checked{% endif %}><span>Media</span></label><label><input type="radio" class="radio radio-primary radio-xs" name="audio_compression" value="strong" {% if (rt.audio_compression if rt else "auto") == "strong" %}checked{% endif %}><span>Forte</span></label></div></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Volume obiettivo (LUFS)</legend><input name="audio_target_lufs" type="number" required min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Obiettivo del volume percepito: −16 LUFS è il valore standard.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Amplificazione massima (dB)</legend><input name="audio_max_gain_db" type="number" required min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Impedisce di amplificare troppo una registrazione debole. Standard: 18 dB.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Filtro passa-alto (Hz)</legend><input name="audio_highpass_hz" type="number" required min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Attenua rombi e vibrazioni. 0 = disattivato; standard: 80 Hz.</p></fieldset>
     </div>
-  </details>
+      </fieldset>
+    </section>
   </div>
   <div class="wizard-stage" data-wizard-step="4" x-show="step===4" x-cloak>
-  <section class="at2-upload-pane at2-upload-basic">
-    <div class="at2-panel-header"><div><span class="at2-kicker">04 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Scegli lingua, modello Whisper e modalità di rilevamento del parlato.</p></div></div>
-
-    <fieldset class="at2-vad-choice" aria-label="Modalità di trascrizione">
-      <legend class="at2-vad-label">Modalità di trascrizione</legend>
+    <section class="at2-upload-pane wizard-phase"><div class="at2-panel-header"><div><span class="at2-kicker">04 / SILERO VAD</span><h2>Rileva le parti parlate</h2><p>Silero individua dove si parla: non riconosce le parole e non è un filtro di pulizia audio. Il rilevamento viene usato durante la trascrizione Whisper.</p></div></div>
+    <fieldset class="at2-vad-choice" aria-label="Rilevamento del parlato">
+      <legend class="at2-vad-label">Rilevamento del parlato</legend>
       <div class="at2-vad-options">
         <label class="at2-vad-option" :class="vadEnabled === 'true' ? 'is-selected' : ''">
           <input type="radio" name="vad_enabled" value="true" x-model="vadEnabled" aria-describedby="vad-standard-info">
-          <span class="at2-vad-option-copy"><strong>Standard · Silero VAD</strong><small id="vad-standard-info">Rileva il parlato e salta i silenzi lunghi. Consigliata.</small></span>
+          <span class="at2-vad-option-copy"><strong>Attivo · Silero VAD</strong><small id="vad-standard-info">Rileva le regioni di parlato e limita i silenzi inviati a Whisper. Consigliato per molte registrazioni.</small></span>
           <span class="at2-vad-option-tick" aria-hidden="true">✓</span>
         </label>
         <label class="at2-vad-option" :class="vadEnabled === 'false' ? 'is-selected' : ''">
           <input type="radio" name="vad_enabled" value="false" x-model="vadEnabled" aria-describedby="vad-direct-info">
-          <span class="at2-vad-option-copy"><strong>Diretta · senza Silero</strong><small id="vad-direct-info">Trascrive tutto l'audio, anche le pause. Può salvare parole deboli, ma generare frasi inesistenti nei silenzi.</small></span>
+          <span class="at2-vad-option-copy"><strong>Disattivato · senza Silero</strong><small id="vad-direct-info">Whisper riceve anche le pause. Utile se Silero esclude voci deboli; può aumentare i falsi riconoscimenti nei silenzi.</small></span>
           <span class="at2-vad-option-tick" aria-hidden="true">✓</span>
         </label>
       </div>
       <p class="at2-vad-notice" x-show="vadEnabled === 'false'" x-cloak role="status">Silero disattivato per questo lavoro. Controlla eventuali parole inventate nelle pause.</p>
-    </fieldset>
+    </fieldset>    </section>
+    <section class="at2-upload-pane wizard-vad-settings" x-show="vadEnabled==='true'" x-cloak>
+      <fieldset class="wizard-option-stack" :disabled="vadEnabled!=='true'"><legend class="sr-only">Parametri Silero VAD</legend>
+
+      <div class="fieldset rounded-box border border-base-300 p-4 space-y-3">
+        <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
+          class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
+          aria-label="Apri guida e consigli VAD">i</button></div>
+        <p class="text-xs opacity-65">Imposta sensibilità, durata minima del parlato e margini dei segmenti.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
+            <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
+          <label class="fieldset"><span class="fieldset-label">Pausa per dividere (ms)</span>
+            <input type="number" name="vad_min_silence_ms" class="input input-bordered w-full" min="0" max="10000" step="10" value="{{ rt.vad_min_silence_ms if rt else 300 }}"><span class="text-xs opacity-60">300 ms standard · valori più alti tengono unite più parole</span></label>
+          <label class="fieldset"><span class="fieldset-label">Margine audio (ms)</span>
+            <input type="number" name="vad_speech_pad_ms" class="input input-bordered w-full" min="0" max="5000" step="50" value="{{ rt.vad_speech_pad_ms if rt else 400 }}"><span class="text-xs opacity-60">400 ms standard · prova 800 ms ai confini</span></label>
+          <label class="fieldset"><span class="fieldset-label">Sovrapposizione (secondi)</span>
+            <input type="number" name="vad_samples_overlap" class="input input-bordered w-full" min="0" max="1.00" step="0.05" value="{{ rt.vad_samples_overlap if rt else 0.20 }}"><span class="text-xs opacity-60">0,20 s standard · prova 0,50 s ai confini</span></label>
+        </div>
+      </div>
+
+      <div class="fieldset rounded-box border border-base-300 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <label for="vad-threshold" class="fieldset-label font-semibold">Sensibilità rilevamento voce (Silero VAD)</label>
+          <output for="vad-threshold" class="badge badge-primary badge-outline font-mono" x-text="Number(vadThreshold).toFixed(2)">{{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }}</output>
+        </div>
+        <input type="range" id="vad-threshold" name="vad_threshold" min="0.10" max="0.60" step="0.05"
+               class="range range-primary range-sm w-full" x-model.number="vadThreshold"
+               aria-label="Soglia di rilevamento della voce: valori bassi riconoscono voci più deboli">
+        <div class="flex justify-between text-xs opacity-70">
+          <span>0,10 · Più sensibile</span>
+          <span>0,25 · Consigliato</span>
+          <span>0,60 · Più selettivo</span>
+        </div>
+        <p class="text-xs opacity-75 mt-2" aria-live="polite"
+           x-text="vadThreshold <= 0.15 ? 'Recupera anche voci deboli, ma può confondere rumori con parlato.' : vadThreshold <= 0.30 ? 'Bilanciato: mantiene più parole brevi e deboli. Valore raccomandato: 0,25.' : 'Riduce rumori e falsi riconoscimenti, ma può saltare parole o interventi brevi.'">
+        </p>
+        <p class="text-xs opacity-60">Non cambia il volume: decide quanto il VAD deve essere sicuro che un tratto sia parlato prima di passarlo a Whisper. Si applica soltanto a questa trascrizione.</p>
+      </div>
+
+
+        </fieldset>
+    </section>
+  </div>
+  <div class="wizard-stage" data-wizard-step="5" x-show="step===5" x-cloak>
+  <section class="at2-upload-pane at2-upload-basic">
+    <div class="at2-panel-header"><div><span class="at2-kicker">05 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Scegli la lingua, il modello Whisper e i parametri di riconoscimento delle parole.</p></div></div>
+
+
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <fieldset class="fieldset w-full">
@@ -360,7 +412,7 @@
     </div>
   </section>
   <section class="at2-upload-pane wizard-phase">
-    <div class="at2-panel-header"><div><span class="at2-kicker">04 / VOCABOLARIO</span><h2>Parole da riconoscere</h2><p>Facoltativo: aiuta Whisper con nomi, sigle e termini tecnici.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">05 / VOCABOLARIO</span><h2>Parole da riconoscere</h2><p>Facoltativo: aiuta Whisper con nomi, sigle e termini tecnici.</p></div></div>
       <div class="fieldset">
         <label for="whisper-keywords" class="fieldset-label">Parole chiave per Whisper</label>
         <textarea id="whisper-keywords" name="whisper_keywords" rows="2" maxlength="1500"
@@ -397,49 +449,11 @@
 
 
   </div></details>
-  <details class="at2-upload-pane at2-settings-disclosure wizard-vad-settings" @invalid.capture="$el.open=true"><summary><span><strong>Parametri Silero VAD</strong><small>Sensibilità, pause e margini del parlato</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary><div class="wizard-option-stack">
-      <div class="fieldset rounded-box border border-base-300 p-4 space-y-3">
-        <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
-          class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
-          aria-label="Apri guida e consigli VAD">i</button></div>
-        <p class="text-xs opacity-65">La modalità si sceglie in questa fase. Questi valori hanno effetto solo quando Silero è attivo.</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="vadEnabled === 'false' ? 'opacity-50' : ''">
-          <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
-            <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
-          <label class="fieldset"><span class="fieldset-label">Pausa per dividere (ms)</span>
-            <input type="number" name="vad_min_silence_ms" class="input input-bordered w-full" min="0" max="10000" step="10" value="{{ rt.vad_min_silence_ms if rt else 300 }}"><span class="text-xs opacity-60">300 ms standard · valori più alti tengono unite più parole</span></label>
-          <label class="fieldset"><span class="fieldset-label">Margine audio (ms)</span>
-            <input type="number" name="vad_speech_pad_ms" class="input input-bordered w-full" min="0" max="5000" step="50" value="{{ rt.vad_speech_pad_ms if rt else 400 }}"><span class="text-xs opacity-60">400 ms standard · prova 800 ms ai confini</span></label>
-          <label class="fieldset"><span class="fieldset-label">Sovrapposizione (secondi)</span>
-            <input type="number" name="vad_samples_overlap" class="input input-bordered w-full" min="0" max="1.00" step="0.05" value="{{ rt.vad_samples_overlap if rt else 0.20 }}"><span class="text-xs opacity-60">0,20 s standard · prova 0,50 s ai confini</span></label>
-        </div>
-      </div>
 
-      <div class="fieldset rounded-box border border-base-300 p-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <label for="vad-threshold" class="fieldset-label font-semibold">Sensibilità rilevamento voce (Silero VAD)</label>
-          <output for="vad-threshold" class="badge badge-primary badge-outline font-mono" x-text="Number(vadThreshold).toFixed(2)">{{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }}</output>
-        </div>
-        <input type="range" id="vad-threshold" name="vad_threshold" min="0.10" max="0.60" step="0.05"
-               class="range range-primary range-sm w-full" x-model.number="vadThreshold"
-               aria-label="Soglia di rilevamento della voce: valori bassi riconoscono voci più deboli">
-        <div class="flex justify-between text-xs opacity-70">
-          <span>0,10 · Più sensibile</span>
-          <span>0,25 · Consigliato</span>
-          <span>0,60 · Più selettivo</span>
-        </div>
-        <p class="text-xs opacity-75 mt-2" aria-live="polite"
-           x-text="vadThreshold <= 0.15 ? 'Recupera anche voci deboli, ma può confondere rumori con parlato.' : vadThreshold <= 0.30 ? 'Bilanciato: mantiene più parole brevi e deboli. Valore raccomandato: 0,25.' : 'Riduce rumori e falsi riconoscimenti, ma può saltare parole o interventi brevi.'">
-        </p>
-        <p class="text-xs opacity-60">Non cambia il volume: decide quanto il VAD deve essere sicuro che un tratto sia parlato prima di passarlo a Whisper. Si applica soltanto a questa trascrizione.</p>
-      </div>
-
-
-  </div></details>
   </div>
-  <div class="wizard-stage" data-wizard-step="5" x-show="step===5" x-cloak>
+  <div class="wizard-stage" data-wizard-step="6" x-show="step===6" x-cloak>
   <section class="at2-upload-pane wizard-phase">
-    <div class="at2-panel-header"><div><span class="at2-kicker">05 / PARLANTI</span><h2>Distingui chi sta parlando</h2><p>Facoltativo: assegna etichette ai diversi interlocutori, utili in riunioni e interviste.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">06 / PARLANTI</span><h2>Distingui chi sta parlando</h2><p>Facoltativo: assegna etichette ai diversi interlocutori, utili in riunioni e interviste.</p></div></div>
       <div class="fieldset">
         <label class="fieldset-label gap-3">
           <input type="checkbox" name="enable_diarization" value="true"
@@ -470,9 +484,9 @@
 {% if not diarization_available %}<p class="wizard-hint" role="status">Il riconoscimento dei parlanti non è disponibile su questo server.</p>{% endif %}<p class="wizard-hint">I nomi dei parlanti potranno essere modificati nello Studio della trascrizione.</p>
   </section>
   </div>
-  <div class="wizard-stage" data-wizard-step="6" x-show="step===6" x-cloak>
+  <div class="wizard-stage" data-wizard-step="7" x-show="step===7" x-cloak>
   <section class="at2-upload-pane wizard-phase">
-    <div class="at2-panel-header"><div><span class="at2-kicker">06 / CORREZIONE AI</span><h2>Migliora il testo con l’AI</h2><p>Facoltativo: corregge errori di riconoscimento e termini ambigui, conservando la trascrizione originale.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">07 / CORREZIONE AI</span><h2>Migliora il testo con l’AI</h2><p>Facoltativo: corregge errori di riconoscimento e termini ambigui, conservando la trascrizione originale.</p></div></div>
       <div class="fieldset">
         <label class="fieldset-label gap-3">
           <input type="checkbox" name="llm_correction_enabled" value="true"
@@ -501,9 +515,9 @@
 </div>
   </section>
   </div>
-  <div class="wizard-stage" data-wizard-step="7" x-show="step===7" x-cloak>
+  <div class="wizard-stage" data-wizard-step="8" x-show="step===8" x-cloak>
   <section class="at2-upload-pane wizard-phase">
-    <div class="at2-panel-header"><div><span class="at2-kicker">07 / RIASSUNTO AI</span><h2>Crea un riassunto</h2><p>Facoltativo: ottieni un documento separato dalla trascrizione, con istruzioni personalizzabili.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">08 / RIASSUNTO AI</span><h2>Crea un riassunto</h2><p>Facoltativo: ottieni un documento separato dalla trascrizione, con istruzioni personalizzabili.</p></div></div>
     <label class="fieldset-label wizard-toggle-row"><input type="checkbox" name="summary_enabled" value="true" class="toggle toggle-primary toggle-sm" x-model="summaryEnabled" {% if not llm_correction_available %}disabled{% endif %}><span><strong>Genera automaticamente il riassunto</strong><small>Il lavoro AI parte quando la trascrizione originale è disponibile.</small></span></label>
     {% if not llm_correction_available %}<p class="wizard-hint" role="status">Il riassunto AI non è attualmente configurato.</p>{% endif %}
     <div x-show="summaryEnabled" x-cloak class="wizard-option-stack">
@@ -514,9 +528,9 @@
     <p class="wizard-hint" x-show="!summaryEnabled">Puoi creare uno o più riassunti dalla libreria Riassunti in qualsiasi momento, senza ritrascrivere.</p>
   </section>
   </div>
-  <div class="wizard-stage" data-wizard-step="8" x-show="step===steps.length" x-cloak>
+  <div class="wizard-stage" data-wizard-step="9" x-show="step===steps.length" x-cloak>
     <section class="at2-upload-pane wizard-review">
-      <div class="at2-panel-header"><div><span class="at2-kicker">08 / CONFERMA</span><h2>Pronto per trascrivere?</h2><p>Controlla le impostazioni. Puoi ancora tornare a qualsiasi passaggio.</p></div></div>
+      <div class="at2-panel-header"><div><span class="at2-kicker">09 / CONFERMA</span><h2>Pronto per trascrivere?</h2><p>Controlla le impostazioni. Puoi ancora tornare a qualsiasi passaggio.</p></div></div>
       <div class="wizard-review-grid">
         <template x-for="item in review" :key="item.title"><div class="wizard-review-item"><div><small x-text="item.title"></small><strong x-text="item.value"></strong></div><button type="button" class="btn btn-ghost btn-sm" @click="goTo(item.step)">Modifica</button></div></template>
       </div>
@@ -549,7 +563,8 @@ function uploadForm() {
     initialPreset: {{ initial_preset | tojson }},
     retranscribing: {{ 'true' if rt else 'false' }},
     step: 1,
-    steps: ['Sorgente','Preset','Audio','Whisper','Parlanti','Correzione AI','Riassunto AI','Conferma'],
+    steps: ['Sorgente','Preset','Audio','Silero VAD','Whisper','Parlanti','Correzione AI','Riassunto AI','Conferma'],
+    audioMode: {{ initial_audio_mode|tojson }},
     furthestStep: 1,
     review: [],
     wizardError: '',
@@ -630,19 +645,19 @@ function uploadForm() {
     },
     buildReview() {
       const form=this.$root, data=new FormData(form);
-      const label=name=>{const select=form.querySelector(`select[name="${name}"]`);return select?.selectedOptions[0]?.textContent.trim()||String(data.get(name)||'—')};
+      const label=name=>{const select=form.querySelector(`select[name="${name}"]`);const radio=form.querySelector(`input[type=radio][name="${name}"]:checked`);return select?.selectedOptions[0]?.textContent.trim()||radio?.closest('label')?.querySelector('span')?.textContent.trim()||String(data.get(name)||'—')};
       const on=name=>data.has(name)?'Attivo':'Disattivato';
       const source=this.retranscribing?this.statusLine:this.tab==='url'?this.urlText.split('\n').filter(v=>v.trim()).map(v=>v.trim()).join(' · '):this.selectedFiles.map(f=>f.name).join(' · ');
       const preset=this.activePreset?form.querySelector('.at2-upload-presets button[aria-pressed="true"] .card-body')?.firstElementChild?.textContent.trim()||this.activePreset:(this.presetsTouched?'Personalizzato':'Impostazioni predefinite');
       this.review=[
         {title:'Sorgente',value:source,step:1},
         {title:'Profilo',value:preset,step:2},
-        {title:'Preparazione audio',value:label('audio_processing')+(data.get('audio_processing')==='off'?'':' · Rumore: '+label('audio_denoise')+' · Compressione: '+label('audio_compression')),step:3},
-        {title:'Whisper',value:label('language')+' · '+label('model_name')+' · '+label('whisper_beam_size'),step:4},
-        {title:'Rilevamento parlato',value:data.get('vad_enabled')==='true'?'Standard · Silero VAD · soglia '+data.get('vad_threshold'):'Diretta · senza Silero',step:4},
-        {title:'Parlanti',value:on('enable_diarization')+(data.has('enable_diarization')?' · '+(Number(data.get('num_speakers'))||'Automatico'):' '),step:5},
-        {title:'Correzione AI',value:on('llm_correction_enabled'),step:6},
-        {title:'Riassunto AI',value:data.has('summary_enabled')?'Attivo · trascrizione originale':'Da generare in seguito, se desiderato',step:7}
+        {title:'Preparazione audio',value:({auto:'Automatica · valori standard',off:'Solo conversione · nessun filtro',custom:'Personalizzata · Rumore: '+label('audio_denoise')+' · Compressione: '+label('audio_compression')+' · '+data.get('audio_target_lufs')+' LUFS'})[this.audioMode],step:3},
+        {title:'Silero VAD',value:this.vadEnabled==='true'?'Attivo · soglia '+data.get('vad_threshold'):'Diretta · senza Silero',step:4},
+        {title:'Whisper',value:label('language')+' · '+label('model_name')+' · '+label('whisper_beam_size'),step:5},
+        {title:'Parlanti',value:on('enable_diarization')+(data.has('enable_diarization')?' · '+(Number(data.get('num_speakers'))||'Automatico'):' '),step:6},
+        {title:'Correzione AI',value:on('llm_correction_enabled'),step:7},
+        {title:'Riassunto AI',value:data.has('summary_enabled')?'Attivo · trascrizione originale':'Da generare in seguito, se desiderato',step:8}
       ];
       if(!this.retranscribing&&this.tab!=='url'&&this.selectedFiles.length>1)this.review.splice(1,0,{title:'Più registrazioni',value:this.mergeMode==='merge'?'Unisci in una registrazione':'Trascrizioni separate',step:1});
     },
@@ -771,8 +786,13 @@ function uploadForm() {
       return bytes + ' B';
     },
     applyPreset(id) {
-      const config = UPLOAD_PRESETS[id];
-      if (!config) return;
+      const stored = UPLOAD_PRESETS[id];
+      if (!stored) return;
+      const config = {...stored};
+      // Legacy auto presets could carry manual overrides: show them as custom
+      // rather than silently discard their effective filters.
+      const audioDefaults={audio_denoise:'auto',audio_compression:'auto',audio_target_lufs:-16,audio_max_gain_db:18,audio_highpass_hz:80};
+      if(config.audio_processing==='auto'&&Object.entries(audioDefaults).some(([k,v])=>config[k]!==undefined&&String(config[k])!==String(v)))config.audio_processing='custom';
       this._applyingPreset = true;
       this.activePreset = id;
       this.presetsTouched = true;
@@ -795,6 +815,7 @@ function uploadForm() {
         eventField.dispatchEvent(new Event('input', { bubbles: true }));
         eventField.dispatchEvent(new Event('change', { bubbles: true }));
         if (name === 'vad_enabled') this.vadEnabled = String(value);
+        if (name === 'audio_processing') this.audioMode = String(value);
       }
       // Release the suppression flag after the dispatch cycle settles.
       Promise.resolve().then(() => { this._applyingPreset = false; });

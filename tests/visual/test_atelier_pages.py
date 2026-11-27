@@ -198,20 +198,16 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             assert page.locator("#merge-mode").is_hidden()
             page.locator('.wizard-next').click()
             page.locator('.wizard-next').click()
-            page.locator(".at2-upload-audio summary").click()
-            page.locator('select[name="audio_denoise"]').select_option("medium")
-            page.locator('input[name="audio_target_lufs"]').fill("-2")
-            page.locator(".at2-upload-audio summary").click()
-            assert not page.locator("form.at2-upload-form").evaluate("el => el.reportValidity()")
-            assert page.locator(".at2-upload-audio").get_attribute("open") is not None
-            page.locator('input[name="audio_target_lufs"]').fill("-16")
-            page.locator(".at2-upload-audio summary").click()
-            assert (
-                page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('audio_denoise')") == "medium"
-            )
+            page.locator('input[name="audio_processing"][value="custom"]').check()
+            page.locator('input[name="audio_denoise"][value="medium"]').check()
+            page.locator('input[name="audio_target_lufs"]').fill('-2')
+            page.locator('.wizard-next').click()
+            assert page.locator('.wizard-error').is_visible()
+            page.locator('input[name="audio_target_lufs"]').fill('-16')
+            assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('audio_denoise')")=='medium'
             page.locator('.wizard-next').click()
             page.locator('input[name="vad_enabled"][value="false"]').check()
-            assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
+            assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
             page.locator('input[name="vad_enabled"][value="true"]').check()
             page.locator(".wizard-step").first.click()
             page.locator("button").evaluate_all(
@@ -618,12 +614,12 @@ def test_viewport_workspaces(atelier_page, atelier_app, viewport):
             chooser.value.set_files(job.filepath)
             page.locator('.wizard-next').click()
             page.locator('.wizard-next').click()
-            page.locator('.at2-upload-audio summary').click()
-            page.locator('select[name="audio_denoise"]').select_option('medium')
+            page.locator('input[name="audio_processing"][value="custom"]').check()
+            page.locator('input[name="audio_denoise"][value="medium"]').check()
             page.locator('.wizard-next').click()
             page.locator('input[name="vad_enabled"][value="false"]').check()
             assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
-            for _ in range(4):page.locator('.wizard-next').click()
+            for _ in range(5):page.locator('.wizard-next').click()
             assert page.locator('.wizard-submit').is_visible()
             if desktop:
                 assert page.locator('.wizard-submit').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
@@ -728,48 +724,81 @@ def test_upload_guided_workflow(atelier_page,atelier_app,viewport):
     page.locator('#upload-files').set_input_files(media)
     next_button.click();stage(2)
     page.locator('.at2-upload-presets button').first.click()
+    # Legacy auto presets with explicit filters must retain the same processing.
+    page.evaluate("""() => {window.__meetingDefaults={...UPLOAD_PRESETS.meeting}; UPLOAD_PRESETS.meeting.audio_denoise='medium';}""")
+    page.locator('.at2-upload-presets button').first.click()
     next_button.click();stage(3)
-    assert page.locator('select[name="audio_processing"]').is_visible()
-    page.locator('.at2-upload-audio summary').click()
+    assert page.locator('input[name="audio_processing"][value="custom"]').is_checked()
+    assert page.locator('input[name="audio_denoise"][value="medium"]').is_checked()
+    page.locator('.wizard-step').nth(1).click();stage(2)
+    page.evaluate("UPLOAD_PRESETS.meeting=window.__meetingDefaults")
+    page.locator('.at2-upload-presets button').first.click()
+    next_button.click();stage(3)
+    audio=page.locator('.wizard-custom-audio')
+    mode=lambda value:page.locator(f'input[name="audio_processing"][value="{value}"]')
+    data=lambda name:page.locator('form.at2-upload-form').evaluate('(el,name)=>new FormData(el).get(name)',name)
+    assert page.locator('input[name="audio_processing"]:visible').count()==3
+    assert mode('auto').is_checked()
+    audio.wait_for(state='hidden')
+    assert data('audio_target_lufs') is None
+    mode('custom').check();audio.wait_for(state='visible')
     page.locator('input[name="audio_target_lufs"]').fill('-2')
     next_button.click();stage(3)
     assert page.locator('.wizard-error').is_visible()
-    page.locator('input[name="audio_target_lufs"]').fill('-16')
-    page.locator('select[name="audio_denoise"]').select_option('medium')
+    # Hidden invalid manual settings must not block automatic or conversion mode.
+    mode('off').check();audio.wait_for(state='hidden')
+    assert data('audio_target_lufs') is None and data('audio_processing')=='off'
     next_button.click();stage(4)
+    page.locator('.wizard-step').nth(2).click();stage(3)
+    mode('auto').check();audio.wait_for(state='hidden')
+    assert data('audio_denoise') is None
+    mode('custom').check();audio.wait_for(state='visible')
+    assert page.locator('input[name="audio_target_lufs"]').input_value()=='-2'
+    page.locator('input[name="audio_target_lufs"]').fill('-16')
+    page.locator('input[name="audio_denoise"][value="medium"]').check()
+    page.locator('input[name="audio_compression"][value="light"]').check()
+    next_button.click();stage(4)
+    assert page.locator('#vad-threshold').is_visible()
+    page.locator('input[name="vad_min_speech_ms"]').fill('200')
     page.locator('input[name="vad_enabled"][value="false"]').check()
+    page.locator('#vad-threshold').wait_for(state='hidden')
+    assert data('vad_min_speech_ms') is None
+    page.locator('input[name="vad_enabled"][value="true"]').check()
+    page.locator('#vad-threshold').wait_for(state='visible')
+    assert page.locator('input[name="vad_min_speech_ms"]').input_value()=='200'
+    page.locator('input[name="vad_enabled"][value="false"]').check()
+    next_button.click();stage(5)
     page.locator('select[name="language"]').select_option('it')
     page.locator('#whisper-keywords').fill('Termini QA')
     page.locator('.wizard-whisper-settings summary').click()
     page.locator('#whisper-beam-size').select_option('8')
-    page.locator('.wizard-vad-settings summary').click()
-    assert page.locator('#vad-threshold').is_visible()
-    next_button.click();stage(5)
+    assert not page.locator('#vad-threshold').is_visible()
+    next_button.click();stage(6)
     page.locator('input[name="enable_diarization"]').check()
     page.locator('input[name="num_speakers"]').fill('3')
-    next_button.click();stage(6)
+    next_button.click();stage(7)
     page.locator('input[name="llm_correction_enabled"]').check()
     page.locator('#llm-context-prompt').fill('Contesto QA')
-    next_button.click();stage(7)
+    next_button.click();stage(8)
     page.locator('input[name="summary_enabled"]').check()
     assert page.locator('#summary-prompt').input_value()==DEFAULT_SUMMARY_PROMPT
     page.locator('#summary-prompt').fill('Riassunto QA personalizzato')
-    next_button.click();stage(8)
+    next_button.click();stage(9)
     assert submit.is_visible()
     review=page.locator('.wizard-review').inner_text()
     for label in ('senza Silero','Correzione AI','Riassunto AI','Parlanti',Path(media).name):assert label in review
     page.locator('.wizard-step').first.click();stage(1)
     assert page.locator('#upload-files').evaluate('el=>el.files.length')==1
-    page.locator('.wizard-step').last.click();stage(8)
+    page.locator('.wizard-step').last.click();stage(9)
     # Returning directly from a visited phase preserves all field values.
-    page.locator('.wizard-step').nth(6).click();stage(7)
+    page.locator('.wizard-step').nth(7).click();stage(8)
     assert page.locator('#summary-prompt').input_value()=='Riassunto QA personalizzato'
     page.locator('input[name="summary_enabled"]').uncheck()
     page.locator('#summary-prompt').wait_for(state='hidden')
     page.locator('input[name="summary_enabled"]').check()
     page.locator('#summary-prompt').wait_for(state='visible')
     assert page.locator('#summary-prompt').input_value()=='Riassunto QA personalizzato'
-    next_button.click();stage(8)
+    next_button.click();stage(9)
     assert page.locator('input[name="vad_enabled"][value="false"]').is_checked()
     requests=[]
     def capture(route):
@@ -781,8 +810,9 @@ def test_upload_guided_workflow(atelier_page,atelier_app,viewport):
     submit.click()
     page.get_by_text('Invio QA completato').wait_for()
     assert len(requests)==1 and b'filename=' in requests[0]
-    for key,value in {'vad_enabled':'false','language':'it','audio_denoise':'medium','whisper_beam_size':'8','whisper_keywords':'Termini QA','enable_diarization':'true','num_speakers':'3','llm_correction_enabled':'true','llm_context_prompt':'Contesto QA','summary_enabled':'true','summary_prompt':'Riassunto QA personalizzato'}.items():
+    for key,value in {'vad_enabled':'false','language':'it','audio_processing':'custom','audio_denoise':'medium','audio_compression':'light','whisper_beam_size':'8','whisper_keywords':'Termini QA','enable_diarization':'true','num_speakers':'3','llm_correction_enabled':'true','llm_context_prompt':'Contesto QA','summary_enabled':'true','summary_prompt':'Riassunto QA personalizzato'}.items():
         assert ('name="'+key+'"\r\n\r\n'+value).encode() in requests[0],key
+    assert b'name="vad_min_speech_ms"' not in requests[0]
     assert not errors,errors
 
 
@@ -805,7 +835,7 @@ def test_upload_wizard_alternative_sources(atelier_page,atelier_app,tmp_path):
     page.route(ORIGIN+'/upload/url',capture)
     page.route(ORIGIN+'/jobs/*/re-transcribe',capture)
     def finish():
-        for _ in range(7):page.locator('.wizard-next').click()
+        for _ in range(8):page.locator('.wizard-next').click()
         page.locator('.wizard-submit').click()
         page.get_by_text('QA ricevuto',exact=True).wait_for()
     page.goto(ORIGIN+'/upload?mode=url')
@@ -823,12 +853,14 @@ def test_upload_wizard_alternative_sources(atelier_page,atelier_app,tmp_path):
     subprocess.run(['ffmpeg','-loglevel','error','-f','lavfi','-i','color=c=black:s=160x120:r=10','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','2','-c:v','libx264','-c:a','aac','-ac','2',str(video)],check=True)
     page.goto(ORIGIN+'/upload')
     page.locator('#upload-files').set_input_files(str(video))
-    for _ in range(7):page.locator('.wizard-next').click()
+    for _ in range(8):page.locator('.wizard-next').click()
     assert page.get_by_text('Il video MP4 resterà sul dispositivo.',exact=False).is_visible()
     page.locator('.wizard-submit').click()
     page.get_by_text('QA ricevuto',exact=True).wait_for(timeout=25000)
     path,headers,body=sent[-1]
     assert path=='/upload' and b'filename="wizard-test.wav"' in body and b'filename="wizard-test.mp4"' not in body
+    assert b'name="audio_processing"\r\n\r\nauto' in body
+    assert b'name="audio_target_lufs"' not in body
     msg=BytesParser(policy=default).parsebytes(('Content-Type: '+headers['content-type']+'\r\n\r\n').encode()+body)
     audio=next(part.get_payload(decode=True) for part in msg.iter_parts() if part.get_filename()=='wizard-test.wav')
     with wave.open(io.BytesIO(audio),'rb') as wav:
