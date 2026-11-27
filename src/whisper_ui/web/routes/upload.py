@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from markupsafe import escape
 
-from whisper_ui.core.constants import MAX_BATCH_SIZE
+from whisper_ui.core.constants import DEFAULT_SUMMARY_PROMPT, MAX_BATCH_SIZE
 from whisper_ui.core.languages import DEFAULT_WHISPER_MODEL, LANGUAGE_CHOICES, WHISPER_MODELS
 from whisper_ui.core.models import Job, JobStatus
 from whisper_ui.core.presets import BUILTIN_PRESETS, PresetSettings
@@ -189,6 +189,7 @@ async def upload_page(
             "diarization_available": settings.diarization_available,
             "diarization_default": settings.diarization_default_for_form,
             "llm_correction_available": settings.llm_correction_available,
+            "default_summary_prompt": DEFAULT_SUMMARY_PROMPT,
             "default_language": settings.language,
             "default_model": settings.whisper_model,
             "supported_extensions": sorted(SUPPORTED_EXTENSIONS),

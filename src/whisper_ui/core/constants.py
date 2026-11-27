@@ -99,3 +99,6 @@ WORKER_QUEUE_IO = "whisper:io"
 WORKER_QUEUE_GPU = "whisper:gpu"
 WORKER_QUEUE_CPU = "whisper:cpu"
 WORKER_QUEUE_LLM = "whisper:llm"
+
+# Shared, editable initial prompt for new summary requests.
+DEFAULT_SUMMARY_PROMPT = "Riassumi la trascrizione in maniera esaustiva e discorsiva in Italiano con un linguaggio semplice."

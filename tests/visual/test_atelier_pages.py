@@ -198,10 +198,6 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             assert page.locator("#merge-mode").is_hidden()
             page.locator('.wizard-next').click()
             page.locator('.wizard-next').click()
-            page.locator('input[name="vad_enabled"][value="false"]').check()
-            assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
-            page.locator('input[name="vad_enabled"][value="true"]').check()
-            page.locator('.wizard-next').click()
             page.locator(".at2-upload-audio summary").click()
             page.locator('select[name="audio_denoise"]').select_option("medium")
             page.locator('input[name="audio_target_lufs"]').fill("-2")
@@ -213,6 +209,10 @@ def test_all_atelier_screens(atelier_page, atelier_app, viewport, browser_name):
             assert (
                 page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('audio_denoise')") == "medium"
             )
+            page.locator('.wizard-next').click()
+            page.locator('input[name="vad_enabled"][value="false"]').check()
+            assert page.locator("form.at2-upload-form").evaluate("el => new FormData(el).get('vad_enabled')") == "false"
+            page.locator('input[name="vad_enabled"][value="true"]').check()
             page.locator(".wizard-step").first.click()
             page.locator("button").evaluate_all(
                 "buttons => buttons.find(b => /tab.*folder/.test(b.getAttribute('@click') || '')).click()"
@@ -618,12 +618,12 @@ def test_viewport_workspaces(atelier_page, atelier_app, viewport):
             chooser.value.set_files(job.filepath)
             page.locator('.wizard-next').click()
             page.locator('.wizard-next').click()
-            page.locator('input[name="vad_enabled"][value="false"]').check()
-            assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
-            page.locator('.wizard-next').click()
             page.locator('.at2-upload-audio summary').click()
             page.locator('select[name="audio_denoise"]').select_option('medium')
             page.locator('.wizard-next').click()
+            page.locator('input[name="vad_enabled"][value="false"]').check()
+            assert page.locator('form.at2-upload-form').evaluate("el=>new FormData(el).get('vad_enabled')")=='false'
+            for _ in range(4):page.locator('.wizard-next').click()
             assert page.locator('.wizard-submit').is_visible()
             if desktop:
                 assert page.locator('.wizard-submit').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
@@ -704,38 +704,73 @@ def test_horizontal_desktop_navigation(atelier_page, viewport):
 
 @pytest.mark.parametrize('viewport',[(1366,650),(1600,1000),(428,926)])
 def test_upload_guided_workflow(atelier_page,atelier_app,viewport):
+    from whisper_ui.core.constants import DEFAULT_SUMMARY_PROMPT
+    # Exercise both optional AI steps without calling external inference.
+    settings=atelier_app['client'].app.state.settings
+    settings.ollama_base_url='http://127.0.0.1:1'
+    settings.diarization_remote_worker_available=True
     page,_,errors=atelier_page
     page.set_viewport_size({'width':viewport[0],'height':viewport[1]})
     page.goto(ORIGIN+'/upload')
     next_button=page.locator('.wizard-next')
     submit=page.locator('.wizard-submit')
+    def stage(n):
+        visible=page.locator('.wizard-stage:visible')
+        assert visible.count()==1
+        assert visible.get_attribute('data-wizard-step')==str(n)
+        if viewport[0]>=1000:
+            assert page.locator('.wizard-footer').evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
+            assert page.evaluate("document.querySelector('#page-content').scrollHeight<=document.querySelector('#page-content').clientHeight+2")
+        return visible
     assert next_button.is_disabled() and submit.is_hidden()
-    assert page.locator('.wizard-stage:visible').count()==1
+    stage(1)
     media=atelier_app['db'].get_job(atelier_app['job']).filepath
     page.locator('#upload-files').set_input_files(media)
-    page.locator('.wizard-next').click()
-    page.locator('.wizard-stage[data-wizard-step="2"]').wait_for()
+    next_button.click();stage(2)
     page.locator('.at2-upload-presets button').first.click()
-    next_button.click()
-    page.locator('input[name="vad_enabled"][value="false"]').check()
-    page.locator('select[name="language"]').select_option('it')
-    next_button.click()
+    next_button.click();stage(3)
+    assert page.locator('select[name="audio_processing"]').is_visible()
     page.locator('.at2-upload-audio summary').click()
     page.locator('input[name="audio_target_lufs"]').fill('-2')
-    next_button.click()
-    assert page.locator('.wizard-stage[data-wizard-step="4"]').is_visible()
+    next_button.click();stage(3)
     assert page.locator('.wizard-error').is_visible()
     page.locator('input[name="audio_target_lufs"]').fill('-16')
-    next_button.click()
+    page.locator('select[name="audio_denoise"]').select_option('medium')
+    next_button.click();stage(4)
+    page.locator('input[name="vad_enabled"][value="false"]').check()
+    page.locator('select[name="language"]').select_option('it')
+    page.locator('#whisper-keywords').fill('Termini QA')
+    page.locator('.wizard-whisper-settings summary').click()
+    page.locator('#whisper-beam-size').select_option('8')
+    page.locator('.wizard-vad-settings summary').click()
+    assert page.locator('#vad-threshold').is_visible()
+    next_button.click();stage(5)
+    page.locator('input[name="enable_diarization"]').check()
+    page.locator('input[name="num_speakers"]').fill('3')
+    next_button.click();stage(6)
+    page.locator('input[name="llm_correction_enabled"]').check()
+    page.locator('#llm-context-prompt').fill('Contesto QA')
+    next_button.click();stage(7)
+    page.locator('input[name="summary_enabled"]').check()
+    assert page.locator('#summary-prompt').input_value()==DEFAULT_SUMMARY_PROMPT
+    page.locator('#summary-prompt').fill('Riassunto QA personalizzato')
+    next_button.click();stage(8)
     assert submit.is_visible()
-    assert 'senza Silero' in page.locator('.wizard-review').inner_text()
+    review=page.locator('.wizard-review').inner_text()
+    for label in ('senza Silero','Correzione AI','Riassunto AI','Parlanti',Path(media).name):assert label in review
+    page.locator('.wizard-step').first.click();stage(1)
     assert page.locator('#upload-files').evaluate('el=>el.files.length')==1
-    assert Path(media).name in page.locator('.wizard-review').inner_text()
-    page.locator('.wizard-step').first.click()
-    assert page.locator('#upload-files').evaluate('el=>el.files.length')==1
-    for _ in range(4):next_button.click()
+    page.locator('.wizard-step').last.click();stage(8)
+    # Returning directly from a visited phase preserves all field values.
+    page.locator('.wizard-step').nth(6).click();stage(7)
+    assert page.locator('#summary-prompt').input_value()=='Riassunto QA personalizzato'
+    page.locator('input[name="summary_enabled"]').uncheck()
+    page.locator('#summary-prompt').wait_for(state='hidden')
+    page.locator('input[name="summary_enabled"]').check()
+    page.locator('#summary-prompt').wait_for(state='visible')
+    assert page.locator('#summary-prompt').input_value()=='Riassunto QA personalizzato'
+    next_button.click();stage(8)
     assert page.locator('input[name="vad_enabled"][value="false"]').is_checked()
-    assert submit.is_visible() and page.locator('.wizard-stage:visible').count()==1
     requests=[]
     def capture(route):
         if route.request.method=='POST':
@@ -745,8 +780,9 @@ def test_upload_guided_workflow(atelier_page,atelier_app,viewport):
     page.route(ORIGIN+'/upload',capture)
     submit.click()
     page.get_by_text('Invio QA completato').wait_for()
-    assert len(requests)==1 and b'name="vad_enabled"\r\n\r\nfalse' in requests[0]
-    assert b'name="language"\r\n\r\nit' in requests[0] and b'filename=' in requests[0]
+    assert len(requests)==1 and b'filename=' in requests[0]
+    for key,value in {'vad_enabled':'false','language':'it','audio_denoise':'medium','whisper_beam_size':'8','whisper_keywords':'Termini QA','enable_diarization':'true','num_speakers':'3','llm_correction_enabled':'true','llm_context_prompt':'Contesto QA','summary_enabled':'true','summary_prompt':'Riassunto QA personalizzato'}.items():
+        assert ('name="'+key+'"\r\n\r\n'+value).encode() in requests[0],key
     assert not errors,errors
 
 
@@ -769,7 +805,7 @@ def test_upload_wizard_alternative_sources(atelier_page,atelier_app,tmp_path):
     page.route(ORIGIN+'/upload/url',capture)
     page.route(ORIGIN+'/jobs/*/re-transcribe',capture)
     def finish():
-        for _ in range(4):page.locator('.wizard-next').click()
+        for _ in range(7):page.locator('.wizard-next').click()
         page.locator('.wizard-submit').click()
         page.get_by_text('QA ricevuto',exact=True).wait_for()
     page.goto(ORIGIN+'/upload?mode=url')
@@ -787,7 +823,7 @@ def test_upload_wizard_alternative_sources(atelier_page,atelier_app,tmp_path):
     subprocess.run(['ffmpeg','-loglevel','error','-f','lavfi','-i','color=c=black:s=160x120:r=10','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','2','-c:v','libx264','-c:a','aac','-ac','2',str(video)],check=True)
     page.goto(ORIGIN+'/upload')
     page.locator('#upload-files').set_input_files(str(video))
-    for _ in range(4):page.locator('.wizard-next').click()
+    for _ in range(7):page.locator('.wizard-next').click()
     assert page.get_by_text('Il video MP4 resterà sul dispositivo.',exact=False).is_visible()
     page.locator('.wizard-submit').click()
     page.get_by_text('QA ricevuto',exact=True).wait_for(timeout=25000)

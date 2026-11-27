@@ -63,7 +63,7 @@
       {% endif %}
       hx-encoding="multipart/form-data"
       hx-target="#upload-feedback" hx-swap="innerHTML"
-      @htmx:config-request="if (step !== 5 || !sourceReady) { $event.preventDefault() } else { guardVideoRequest($event); {% if not rt %}if (tab === 'url') { $event.detail.path = '/upload/url' }{% endif %} }"
+      @htmx:config-request="if (step !== steps.length || !sourceReady) { $event.preventDefault() } else { guardVideoRequest($event); {% if not rt %}if (tab === 'url') { $event.detail.path = '/upload/url' }{% endif %} }"
       @htmx:xhr:progress.window="onProgress($event)"
       @htmx:before-request="uploading = true"
       @htmx:after-request="uploading = false; progress = 0"
@@ -95,12 +95,12 @@
   <div class="at2-upload-main">
     <nav class="wizard-steps" aria-label="Passaggi della nuova trascrizione" x-cloak>
       <template x-for="(label,index) in steps" :key="index">
-        <button type="button" class="wizard-step" :class="{'is-current':step===index+1,'is-done':step>index+1}" :aria-current="step===index+1?'step':null" :disabled="step<=index+1||uploading||preparing" @click="goTo(index+1)">
+        <button type="button" class="wizard-step" :class="{'is-current':step===index+1,'is-done':step>index+1}" :aria-current="step===index+1?'step':null" :disabled="step===index+1||index+1>furthestStep||uploading||preparing" :aria-label="'Passaggio '+(index+1)+': '+label" @click="goTo(index+1)">
           <span class="wizard-number" x-text="step>index+1?'✓':index+1"></span><span class="wizard-step-label" x-text="label"></span>
         </button>
       </template>
     </nav>
-    <div class="wizard-mobile-status" aria-live="polite" x-text="'Passaggio '+step+' di 5 · '+steps[step-1]"></div>
+    <div class="wizard-mobile-status" aria-live="polite" x-text="'Passaggio '+step+' di '+steps.length+' · '+steps[step-1]"></div>
     <p x-show="wizardError" x-cloak role="alert" class="alert alert-error wizard-error" x-text="wizardError"></p>
   <div class="at-desktop-upload-fields wizard-body" x-ref="wizardBody">
   <div class="wizard-stage" data-wizard-step="1" x-show="step===1" x-cloak>
@@ -298,8 +298,28 @@
   {# Basic settings — always visible, the two controls every user adjusts. #}
   </div>
   <div class="wizard-stage" data-wizard-step="3" x-show="step===3" x-cloak>
+  <section class="at2-upload-pane wizard-phase">
+    <div class="at2-panel-header"><div><span class="at2-kicker">03 / PREPARAZIONE AUDIO</span><h2>Prepara la registrazione</h2><p>Regola la qualità dell’audio prima di riconoscere le parole.</p></div></div>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Elaborazione</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Automatica (consigliata)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Solo conversione</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Personalizzata</option></select></fieldset>
+<p class="wizard-hint">Automatica per la maggior parte delle registrazioni. Solo conversione se preferisci mantenere l’audio senza filtri.</p>
+  </section>
+  <details class="at2-upload-pane at2-upload-audio at2-settings-disclosure" @invalid.capture="$el.open=true">
+    <summary><span><strong>Regolazioni audio avanzate</strong><small>Riduzione del rumore, compressione, volume e filtri</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary>
+
+    <p class="text-xs opacity-60 mb-4">Questi parametri affinano la pulizia quando è attiva. In modalità Solo conversione non vengono applicati.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Riduzione del rumore</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Compressione della voce</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Volume obiettivo (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Un valore più vicino a zero aumenta il volume.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Amplificazione massima (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Limita l’amplificazione delle registrazioni molto deboli.</p></fieldset>
+      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Filtro passa-alto (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Riduce i rumori bassi sotto la voce.</p></fieldset>
+    </div>
+  </details>
+  </div>
+  <div class="wizard-stage" data-wizard-step="4" x-show="step===4" x-cloak>
   <section class="at2-upload-pane at2-upload-basic">
-    <div class="at2-panel-header"><div><span class="at2-kicker">03 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Seleziona lingua e modello di trascrizione.</p></div></div>
+    <div class="at2-panel-header"><div><span class="at2-kicker">04 / RICONOSCIMENTO</span><h2>Lingua e riconoscimento</h2><p>Scegli lingua, modello Whisper e modalità di rilevamento del parlato.</p></div></div>
 
     <fieldset class="at2-vad-choice" aria-label="Modalità di trascrizione">
       <legend class="at2-vad-label">Modalità di trascrizione</legend>
@@ -339,66 +359,25 @@
       </fieldset>
     </div>
   </section>
-
-  </div>
-  <div class="wizard-stage" data-wizard-step="4" x-show="step===4" x-cloak>
-  <section class="at2-upload-pane wizard-intro"><div class="at2-panel-header"><div><span class="at2-kicker">04 / FACOLTATIVO</span><h2>Audio e opzioni AI</h2><p>Le impostazioni predefinite sono già pronte. Apri i pannelli solo se vuoi personalizzarle.</p></div></div></section>
-  <details class="at2-upload-pane at2-upload-audio at2-settings-disclosure" @invalid.capture="$el.open=true">
-    <summary><span><strong>Pulizia e qualità audio</strong><small>Volume, rumore e filtri · automatica per impostazione predefinita</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary>
-
-    <p class="text-xs opacity-60 mb-4">La modalità automatica regola il volume e pulisce il parlato. Apri queste opzioni per intervenire manualmente.</p>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Elaborazione</legend><select name="audio_processing" class="select w-full"><option value="auto" {% if not rt or rt.audio_processing == "auto" %}selected{% endif %}>Automatica (consigliata)</option><option value="off" {% if rt and rt.audio_processing == "off" %}selected{% endif %}>Solo conversione</option><option value="custom" {% if rt and rt.audio_processing == "custom" %}selected{% endif %}>Personalizzata</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Riduzione del rumore</legend><select name="audio_denoise" class="select w-full"><option value="auto" {% if not rt or rt.audio_denoise == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_denoise == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_denoise == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_denoise == "medium" %}selected{% endif %}>Medium</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Compressione della voce</legend><select name="audio_compression" class="select w-full"><option value="auto" {% if not rt or rt.audio_compression == "auto" %}selected{% endif %}>Auto</option><option value="off" {% if rt and rt.audio_compression == "off" %}selected{% endif %}>Off</option><option value="light" {% if rt and rt.audio_compression == "light" %}selected{% endif %}>Light</option><option value="medium" {% if rt and rt.audio_compression == "medium" %}selected{% endif %}>Medium</option><option value="strong" {% if rt and rt.audio_compression == "strong" %}selected{% endif %}>Strong</option></select></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Volume obiettivo (LUFS)</legend><input name="audio_target_lufs" type="number" min="-24" max="-12" step="1" value="{{ rt.audio_target_lufs if rt else -16 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Un valore più vicino a zero aumenta il volume.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Amplificazione massima (dB)</legend><input name="audio_max_gain_db" type="number" min="0" max="30" step="1" value="{{ rt.audio_max_gain_db if rt else 18 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Limita l’amplificazione delle registrazioni molto deboli.</p></fieldset>
-      <fieldset class="fieldset"><legend class="fieldset-legend text-sm">Filtro passa-alto (Hz)</legend><input name="audio_highpass_hz" type="number" min="0" max="180" step="10" value="{{ rt.audio_highpass_hz if rt else 80 }}" class="input w-full"><p class="text-xs opacity-50 mt-1">Riduce i rumori bassi sotto la voce.</p></fieldset>
-    </div>
-  </details>
-
-  {# Advanced settings — collapsed by default. The enabled-count pill is a
-     summary so users never have to expand the panel just to see whether
-     diarization / Traditional Chinese / LLM are on. #}
-  <section class="at2-upload-pane at2-upload-ai">
-    <div class="at2-panel-header"><div><span class="at2-kicker">04 / OPZIONI AVANZATE</span><h2>Personalizza la trascrizione</h2><p>Precisione, parlanti, VAD e modelli AI.</p></div></div>
-    <button type="button"
-            class="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none"
-            :aria-expanded="advancedOpen.toString()"
-            :aria-label="advancedOpen ? '{{ labels.UPLOAD_ADVANCED_TOGGLE_COLLAPSE }}' : '{{ labels.UPLOAD_ADVANCED_TOGGLE_EXPAND }}'"
-            @click="advancedOpen = !advancedOpen">
-      <h2 class="text-sm font-medium opacity-80">{{ labels.UPLOAD_SECTION_ADVANCED }}</h2>
-      <span class="flex items-center gap-2 text-xs">
-        <span class="badge badge-ghost badge-sm" x-text="`{{ labels.UPLOAD_ADVANCED_ENABLED_COUNT }}`.replace('{count}', enabledCount)"></span>
-        <span class="opacity-50" x-text="advancedOpen ? '−' : '+'"></span>
-      </span>
-    </button>
-
-    <div x-show="advancedOpen" x-transition class="space-y-3 mt-4" x-cloak>
+  <section class="at2-upload-pane wizard-phase">
+    <div class="at2-panel-header"><div><span class="at2-kicker">04 / VOCABOLARIO</span><h2>Parole da riconoscere</h2><p>Facoltativo: aiuta Whisper con nomi, sigle e termini tecnici.</p></div></div>
       <div class="fieldset">
-        <label class="fieldset-label gap-3">
-          <input type="checkbox" name="enable_diarization" value="true"
-                 class="toggle toggle-primary toggle-sm"
-                 x-model="diarization"
-                 {% if not diarization_available %}disabled{% endif %}>
-          <div class="flex-1">
-            <span class="inline-flex items-center gap-1">
-              {{ labels.UPLOAD_ENABLE_DIARIZATION }}
-              {% if not diarization_available %}
-              <span class="tooltip tooltip-right" data-tip="{{ labels.UPLOAD_DIARIZATION_UNAVAILABLE }}">
-                <span class="text-xs opacity-60 cursor-help" tabindex="0" aria-label="{{ labels.UPLOAD_INFOTIP_LABEL }}">ⓘ</span>
-              </span>
-              {% endif %}
-            </span>
-          </div>
-        </label>
-        <div x-show="diarization" x-transition class="ml-12 mt-2">
-          <fieldset class="fieldset w-full max-w-xs">
-            <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_NUM_SPEAKERS }}</legend>
-            <input type="number" name="num_speakers" value="{{ rt.num_speakers or 0 if rt else 0 }}" min="0" max="20"
-                   class="input input-sm w-full max-w-xs">
-          </fieldset>
-        </div>
+        <label for="whisper-keywords" class="fieldset-label">Parole chiave per Whisper</label>
+        <textarea id="whisper-keywords" name="whisper_keywords" rows="2" maxlength="1500"
+                  class="textarea textarea-bordered w-full" placeholder="Airdass, termini tecnici, prodotti, acronimi...">{{ rt.whisper_keywords if rt else 'Airdass' }}</textarea>
+        <p class="text-xs opacity-60">Termini e nomi da riconoscere, non istruzioni. Utilizzati durante la trascrizione.</p>
+      </div>
+
+  </section>
+  <details class="at2-upload-pane at2-settings-disclosure wizard-whisper-settings" @invalid.capture="$el.open=true"><summary><span><strong>Decodifica e lingua</strong><small>Beam search e conversione del cinese</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary><div class="wizard-option-stack">
+      <div class="fieldset rounded-box border border-base-300 p-4">
+        <label for="whisper-beam-size" class="fieldset-label font-semibold">Decodifica Whisper (beam search)</label>
+        <select id="whisper-beam-size" name="whisper_beam_size" class="select select-bordered w-full max-w-md"
+                x-model.number="whisperBeamSize">
+          <option value="5">Standard · Beam 5 (consigliato)</option>
+          <option value="8">Approfondita · Beam 8 (sperimentale)</option>
+        </select>
+        <p class="text-xs opacity-60">Beam 8 esplora più alternative, ma non recupera sempre più parole. Confronta con Ritrascrivi. Contesto automatico disattivato per evitare ripetizioni.</p>
       </div>
 
       <div class="fieldset">
@@ -416,21 +395,14 @@
         </label>
       </div>
 
-      <div class="fieldset rounded-box border border-base-300 p-4">
-        <label for="whisper-beam-size" class="fieldset-label font-semibold">Decodifica Whisper (beam search)</label>
-        <select id="whisper-beam-size" name="whisper_beam_size" class="select select-bordered w-full max-w-md"
-                x-model.number="whisperBeamSize">
-          <option value="5">Standard · Beam 5 (consigliato)</option>
-          <option value="8">Approfondita · Beam 8 (sperimentale)</option>
-        </select>
-        <p class="text-xs opacity-60">Beam 8 esplora più alternative, ma non recupera sempre più parole. Confronta con Ritrascrivi. Contesto automatico disattivato per evitare ripetizioni.</p>
-      </div>
 
+  </div></details>
+  <details class="at2-upload-pane at2-settings-disclosure wizard-vad-settings" @invalid.capture="$el.open=true"><summary><span><strong>Parametri Silero VAD</strong><small>Sensibilità, pause e margini del parlato</small></span><span class="at2-disclosure-plus" aria-hidden="true">+</span></summary><div class="wizard-option-stack">
       <div class="fieldset rounded-box border border-base-300 p-4 space-y-3">
         <div class="flex items-center gap-2"><h3 class="font-semibold text-sm">Suddivisione del parlato · Silero VAD</h3><button type="button" data-vad-help aria-haspopup="dialog" aria-controls="vad-help-dialog"
           class="btn btn-circle btn-outline btn-primary btn-xs" title="Spiegazione e consigli sui parametri VAD"
           aria-label="Apri guida e consigli VAD">i</button></div>
-        <p class="text-xs opacity-65">La modalità si sceglie sopra, in «Lingua e riconoscimento». Questi valori hanno effetto solo quando Silero è attivo.</p>
+        <p class="text-xs opacity-65">La modalità si sceglie in questa fase. Questi valori hanno effetto solo quando Silero è attivo.</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" :class="vadEnabled === 'false' ? 'opacity-50' : ''">
           <label class="fieldset"><span class="fieldset-label">Parlato minimo (ms)</span>
             <input type="number" name="vad_min_speech_ms" class="input input-bordered w-full" min="0" max="5000" step="10" value="{{ rt.vad_min_speech_ms if rt else 100 }}"><span class="text-xs opacity-60">100 ms standard · valori più bassi mantengono interventi brevi</span></label>
@@ -462,28 +434,45 @@
         <p class="text-xs opacity-60">Non cambia il volume: decide quanto il VAD deve essere sicuro che un tratto sia parlato prima di passarlo a Whisper. Si applica soltanto a questa trascrizione.</p>
       </div>
 
+
+  </div></details>
+  </div>
+  <div class="wizard-stage" data-wizard-step="5" x-show="step===5" x-cloak>
+  <section class="at2-upload-pane wizard-phase">
+    <div class="at2-panel-header"><div><span class="at2-kicker">05 / PARLANTI</span><h2>Distingui chi sta parlando</h2><p>Facoltativo: assegna etichette ai diversi interlocutori, utili in riunioni e interviste.</p></div></div>
       <div class="fieldset">
-        <label for="whisper-keywords" class="fieldset-label">Parole chiave per Whisper</label>
-        <textarea id="whisper-keywords" name="whisper_keywords" rows="2" maxlength="1500"
-                  class="textarea textarea-bordered w-full" placeholder="Airdass, termini tecnici, prodotti, acronimi...">{{ rt.whisper_keywords if rt else 'Airdass' }}</textarea>
-        <p class="text-xs opacity-60">Termini e nomi da riconoscere, non istruzioni. Utilizzati durante la trascrizione.</p>
+        <label class="fieldset-label gap-3">
+          <input type="checkbox" name="enable_diarization" value="true"
+                 class="toggle toggle-primary toggle-sm"
+                 x-model="diarization"
+                 {% if not diarization_available %}disabled{% endif %}>
+          <div class="flex-1">
+            <span class="inline-flex items-center gap-1">
+              {{ labels.UPLOAD_ENABLE_DIARIZATION }}
+              {% if not diarization_available %}
+              <span class="tooltip tooltip-right" data-tip="{{ labels.UPLOAD_DIARIZATION_UNAVAILABLE }}">
+                <span class="text-xs opacity-60 cursor-help" tabindex="0" aria-label="{{ labels.UPLOAD_INFOTIP_LABEL }}">ⓘ</span>
+              </span>
+              {% endif %}
+            </span>
+          </div>
+        </label>
+        <div :class="{'wizard-inactive-option':!diarization}" class="mt-3">
+          <fieldset class="fieldset w-full max-w-xs">
+            <legend class="fieldset-legend text-sm">{{ labels.UPLOAD_NUM_SPEAKERS }}</legend>
+            <p class="text-xs opacity-70">0 = rilevamento automatico. Il valore viene usato soltanto se il riconoscimento dei parlanti è attivo.</p>
+            <input type="number" name="num_speakers" value="{{ rt.num_speakers or 0 if rt else 0 }}" min="0" max="20"
+                   class="input input-sm w-full max-w-xs">
+          </fieldset>
+        </div>
       </div>
-      <div class="fieldset">
-        <label for="llm-context-prompt" class="fieldset-label">Contesto per correzione LLM</label>
-        <textarea id="llm-context-prompt" name="llm_context_prompt" rows="4" maxlength="4000"
-                  class="textarea textarea-bordered w-full"
-                  placeholder="Riunione di lavoro Airdass. Vocabolario: nomi di prodotti, clienti, acronimi. Non inventare contenuti.">{{ rt.llm_context_prompt if rt else '' }}</textarea>
-        <p class="text-xs opacity-60">Il modello lo usa per disambiguare termini. Non autorizza aggiunte o riscritture creative.</p>
-      </div>
-      <div class="fieldset">
-        <label for="summary-prompt" class="fieldset-label">Prompt per il riassunto AI</label>
-        <textarea id="summary-prompt" name="summary_prompt" rows="4" maxlength="4000" class="textarea textarea-bordered w-full"
-                  placeholder="Decisioni, azioni, responsabili, scadenze. Non inventare nulla.">{{ rt.summary_prompt if rt else '' }}</textarea>
-        <label class="label justify-start gap-2 mt-2"><input type="checkbox" name="summary_enabled" value="true" class="toggle toggle-primary toggle-sm"
-          x-model="summaryEnabled" {% if not llm_correction_available %}disabled{% endif %}>
-          Genera automaticamente il riassunto dopo Whisper</label>
-        <p class="text-xs opacity-60">Puoi anche generare altri riassunti dalla pagina Riassunti, senza ritrascrivere.</p>
-      </div>
+
+{% if not diarization_available %}<p class="wizard-hint" role="status">Il riconoscimento dei parlanti non è disponibile su questo server.</p>{% endif %}<p class="wizard-hint">I nomi dei parlanti potranno essere modificati nello Studio della trascrizione.</p>
+  </section>
+  </div>
+  <div class="wizard-stage" data-wizard-step="6" x-show="step===6" x-cloak>
+  <section class="at2-upload-pane wizard-phase">
+    <div class="at2-panel-header"><div><span class="at2-kicker">06 / CORREZIONE AI</span><h2>Migliora il testo con l’AI</h2><p>Facoltativo: corregge errori di riconoscimento e termini ambigui, conservando la trascrizione originale.</p></div></div>
       <div class="fieldset">
         <label class="fieldset-label gap-3">
           <input type="checkbox" name="llm_correction_enabled" value="true"
@@ -501,14 +490,33 @@
           </div>
         </label>
       </div>
-    </div>
+{% if llm_correction_available %}<p class="wizard-hint" x-show="!llmCorrection">Se non attivi la correzione, puoi richiederla successivamente nello Studio.</p>{% else %}<p class="wizard-hint" role="status">La correzione AI non è attualmente configurata.</p>{% endif %}<div x-show="llmCorrection" x-cloak class="wizard-option-stack">      <div class="fieldset">
+        <label for="llm-context-prompt" class="fieldset-label">Contesto per correzione LLM</label>
+        <textarea id="llm-context-prompt" name="llm_context_prompt" rows="4" maxlength="4000"
+                  class="textarea textarea-bordered w-full"
+                  placeholder="Riunione di lavoro Airdass. Vocabolario: nomi di prodotti, clienti, acronimi. Non inventare contenuti.">{{ rt.llm_context_prompt if rt else '' }}</textarea>
+        <p class="text-xs opacity-60">Il modello lo usa per disambiguare termini. Non autorizza aggiunte o riscritture creative.</p>
+      </div>
+
+</div>
   </section>
-
-
   </div>
-  <div class="wizard-stage" data-wizard-step="5" x-show="step===5" x-cloak>
+  <div class="wizard-stage" data-wizard-step="7" x-show="step===7" x-cloak>
+  <section class="at2-upload-pane wizard-phase">
+    <div class="at2-panel-header"><div><span class="at2-kicker">07 / RIASSUNTO AI</span><h2>Crea un riassunto</h2><p>Facoltativo: ottieni un documento separato dalla trascrizione, con istruzioni personalizzabili.</p></div></div>
+    <label class="fieldset-label wizard-toggle-row"><input type="checkbox" name="summary_enabled" value="true" class="toggle toggle-primary toggle-sm" x-model="summaryEnabled" {% if not llm_correction_available %}disabled{% endif %}><span><strong>Genera automaticamente il riassunto</strong><small>Il lavoro AI parte quando la trascrizione originale è disponibile.</small></span></label>
+    {% if not llm_correction_available %}<p class="wizard-hint" role="status">Il riassunto AI non è attualmente configurato.</p>{% endif %}
+    <div x-show="summaryEnabled" x-cloak class="wizard-option-stack">
+      <label for="summary-prompt" class="fieldset-label">Istruzioni per il riassunto</label>
+      <textarea id="summary-prompt" name="summary_prompt" rows="4" maxlength="4000" class="textarea textarea-bordered w-full" placeholder="{{ default_summary_prompt }}">{{ (rt.summary_prompt if rt else '') or default_summary_prompt }}</textarea>
+      <p class="wizard-hint">Questa generazione automatica usa la trascrizione originale e il modello AI predefinito del server. Per scegliere modello, strategia o versione corretta, usa la pagina Riassunti al termine del lavoro.</p>
+    </div>
+    <p class="wizard-hint" x-show="!summaryEnabled">Puoi creare uno o più riassunti dalla libreria Riassunti in qualsiasi momento, senza ritrascrivere.</p>
+  </section>
+  </div>
+  <div class="wizard-stage" data-wizard-step="8" x-show="step===steps.length" x-cloak>
     <section class="at2-upload-pane wizard-review">
-      <div class="at2-panel-header"><div><span class="at2-kicker">05 / CONFERMA</span><h2>Pronto per trascrivere?</h2><p>Controlla le impostazioni. Puoi ancora tornare a qualsiasi passaggio.</p></div></div>
+      <div class="at2-panel-header"><div><span class="at2-kicker">08 / CONFERMA</span><h2>Pronto per trascrivere?</h2><p>Controlla le impostazioni. Puoi ancora tornare a qualsiasi passaggio.</p></div></div>
       <div class="wizard-review-grid">
         <template x-for="item in review" :key="item.title"><div class="wizard-review-item"><div><small x-text="item.title"></small><strong x-text="item.value"></strong></div><button type="button" class="btn btn-ghost btn-sm" @click="goTo(item.step)">Modifica</button></div></template>
       </div>
@@ -519,9 +527,9 @@
   </div>
   <div class="at2-upload-submit wizard-footer" x-cloak>
     <button type="button" class="btn btn-ghost wizard-back" x-show="step>1" :disabled="uploading||preparing" @click="goTo(step-1)">← Indietro</button>
-    <div class="wizard-footer-copy"><strong x-text="steps[step-1]"></strong><span x-text="step===1 ? statusLine : 'Passaggio '+step+' di 5'"></span></div>
-    <button type="button" class="btn btn-primary wizard-next" x-show="step<5" :disabled="uploading||preparing||step===1&&!sourceReady" @click="nextStep()" x-text="step===2&&!activePreset?'Continua senza preset':step===4?'Vai alla conferma →':'Avanti →'"></button>
-    <button type="submit" class="btn btn-primary wizard-submit" x-show="step===5" disabled :disabled="step!==5||uploading||preparing||!sourceReady">
+    <div class="wizard-footer-copy"><strong x-text="steps[step-1]"></strong><span x-text="step===1 ? statusLine : 'Passaggio '+step+' di '+steps.length"></span></div>
+    <button type="button" class="btn btn-primary wizard-next" x-show="step<steps.length" :disabled="uploading||preparing||step===1&&!sourceReady" @click="nextStep()" x-text="step===2&&!activePreset&&!presetsTouched?'Continua senza preset':step===steps.length-1?'Vai alla conferma →':'Avanti →'"></button>
+    <button type="submit" class="btn btn-primary wizard-submit" x-show="step===steps.length" disabled :disabled="step!==steps.length||uploading||preparing||!sourceReady">
         {{ icon_upload("w-5 h-5") }} {% if rt %}{{ labels.JOBS_RE_TRANSCRIBE_SUBMIT }}{% else %}{{ labels.UPLOAD_START }}{% endif %}
     </button>
   </div>
@@ -541,7 +549,8 @@ function uploadForm() {
     initialPreset: {{ initial_preset | tojson }},
     retranscribing: {{ 'true' if rt else 'false' }},
     step: 1,
-    steps: ['Sorgente','Preset','Riconoscimento','Audio e AI','Conferma'],
+    steps: ['Sorgente','Preset','Audio','Whisper','Parlanti','Correzione AI','Riassunto AI','Conferma'],
+    furthestStep: 1,
     review: [],
     wizardError: '',
     uploading: false,
@@ -555,24 +564,16 @@ function uploadForm() {
     selectedFiles: [],
     mergeMode: 'separate',
     urlText: '',
-    advancedOpen: false,
-    diarization: {{ 'true' if (rt.enable_diarization if rt else diarization_default) else 'false' }},
+    diarization: {{ 'true' if (diarization_available and (rt.enable_diarization if rt else diarization_default)) else 'false' }},
     convertTraditional: {{ 'true' if (rt.convert_to_traditional if rt else true) else 'false' }},
-    llmCorrection: {{ 'true' if (rt.llm_correction_enabled if rt else false) else 'false' }},
-    summaryEnabled: {{ 'true' if (rt.summary_enabled if rt else false) else 'false' }},
+    llmCorrection: {{ 'true' if (llm_correction_available and (rt.llm_correction_enabled if rt else false)) else 'false' }},
+    summaryEnabled: {{ 'true' if (llm_correction_available and (rt.summary_enabled if rt else false)) else 'false' }},
     vadThreshold: {{ '%.2f'|format(rt.vad_threshold if rt else 0.25) }},
     vadEnabled: {{ (('true' if rt.vad_enabled else 'false') if rt else 'true')|tojson }},
     whisperBeamSize: {{ rt.whisper_beam_size if rt else 5 }},
     activePreset: null,
     presetsTouched: false,
     _applyingPreset: false,
-    get enabledCount() {
-      // Reactive: reads the three toggle booleans, so the badge updates
-      // whenever any of them changes. Disabled toggles start false and
-      // applyPreset skips disabled fields, so filtering on truthiness is
-      // equivalent to the old "!disabled && checked" DOM check.
-      return [this.diarization, this.convertTraditional, this.llmCorrection].filter(Boolean).length;
-    },
     get statusLine() {
       if (this.retranscribing) return {{ ('Nuova versione di '+rt.filename if rt else '')|tojson }};
       if (this.tab === 'url') {
@@ -597,8 +598,11 @@ function uploadForm() {
     },
     get hasVideo() {return this.selectedFiles.some(f=>/\.mp4$/i.test(f.name)||f.type==='video/mp4')},
     goTo(target) {
-      if (this.uploading||this.preparing||target<1||target>=this.step) return;
-      this.wizardError='';this.step=target;this.focusStage();
+      if (this.uploading||this.preparing||target<1||target>this.furthestStep||target===this.step) return;
+      this.wizardError='';
+      if(target>this.step&&!this.validateThrough(target-1))return;
+      if(target===this.steps.length)this.buildReview();
+      this.step=target;this.focusStage();
     },
     focusStage() {
       this.$nextTick(()=>{const body=this.$root.querySelector('.wizard-body');if(body)body.scrollTop=0;const heading=this.$root.querySelector(`[data-wizard-step="${this.step}"] h2`);if(heading){heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true})}if(matchMedia('(max-width:999px)').matches)this.$root.querySelector('.wizard-steps')?.scrollIntoView({block:'start',behavior:'instant'})});
@@ -608,18 +612,21 @@ function uploadForm() {
     },
     revealInvalid(field) {
       this.step=Number(field.closest('[data-wizard-step]')?.dataset.wizardStep)||4;
-      if(field.closest('.at2-upload-ai'))this.advancedOpen=true;
       const details=field.closest('details');if(details)details.open=true;
       this.wizardError='Controlla il valore indicato prima di continuare.';
       this.$nextTick(()=>{field.scrollIntoView({block:'nearest'});field.reportValidity();});
     },
+    validateThrough(last) {
+      if(!this.sourceReady){this.step=1;this.wizardError='Seleziona una registrazione o inserisci un link HTTP/HTTPS valido.';this.focusStage();return false;}
+      for(let i=1;i<=last;i++){const invalid=this.invalidField(i);if(invalid){this.revealInvalid(invalid);return false;}}
+      return true;
+    },
     nextStep() {
-      if(this.uploading||this.preparing||this.step>=5)return;
+      if(this.uploading||this.preparing||this.step>=this.steps.length)return;
       this.wizardError='';
-      if(this.step===1&&!this.sourceReady){this.wizardError='Seleziona una registrazione o inserisci un link HTTP/HTTPS valido.';return;}
-      const invalid=this.invalidField(this.step);if(invalid){this.revealInvalid(invalid);return;}
-      if(this.step===4){const other=this.invalidField();if(other){this.revealInvalid(other);return;}this.buildReview();}
-      this.step++;this.focusStage();
+      if(!this.validateThrough(this.step))return;
+      if(this.step===this.steps.length-1)this.buildReview();
+      this.step++;this.furthestStep=Math.max(this.furthestStep,this.step);this.focusStage();
     },
     buildReview() {
       const form=this.$root, data=new FormData(form);
@@ -627,7 +634,16 @@ function uploadForm() {
       const on=name=>data.has(name)?'Attivo':'Disattivato';
       const source=this.retranscribing?this.statusLine:this.tab==='url'?this.urlText.split('\n').filter(v=>v.trim()).map(v=>v.trim()).join(' · '):this.selectedFiles.map(f=>f.name).join(' · ');
       const preset=this.activePreset?form.querySelector('.at2-upload-presets button[aria-pressed="true"] .card-body')?.firstElementChild?.textContent.trim()||this.activePreset:(this.presetsTouched?'Personalizzato':'Impostazioni predefinite');
-      this.review=[{title:'Sorgente',value:source,step:1},{title:'Profilo',value:preset,step:2},{title:'Lingua e modello',value:label('language')+' · '+label('model_name'),step:3},{title:'Riconoscimento',value:data.get('vad_enabled')==='true'?'Standard · Silero VAD':'Diretta · senza Silero',step:3},{title:'Pulizia audio',value:label('audio_processing')+' · Rumore: '+label('audio_denoise'),step:4},{title:'Elaborazioni AI',value:'Parlanti: '+on('enable_diarization')+' · Correzione: '+on('llm_correction_enabled')+' · Riassunto: '+on('summary_enabled'),step:4}];
+      this.review=[
+        {title:'Sorgente',value:source,step:1},
+        {title:'Profilo',value:preset,step:2},
+        {title:'Preparazione audio',value:label('audio_processing')+(data.get('audio_processing')==='off'?'':' · Rumore: '+label('audio_denoise')+' · Compressione: '+label('audio_compression')),step:3},
+        {title:'Whisper',value:label('language')+' · '+label('model_name')+' · '+label('whisper_beam_size'),step:4},
+        {title:'Rilevamento parlato',value:data.get('vad_enabled')==='true'?'Standard · Silero VAD · soglia '+data.get('vad_threshold'):'Diretta · senza Silero',step:4},
+        {title:'Parlanti',value:on('enable_diarization')+(data.has('enable_diarization')?' · '+(Number(data.get('num_speakers'))||'Automatico'):' '),step:5},
+        {title:'Correzione AI',value:on('llm_correction_enabled'),step:6},
+        {title:'Riassunto AI',value:data.has('summary_enabled')?'Attivo · trascrizione originale':'Da generare in seguito, se desiderato',step:7}
+      ];
       if(!this.retranscribing&&this.tab!=='url'&&this.selectedFiles.length>1)this.review.splice(1,0,{title:'Più registrazioni',value:this.mergeMode==='merge'?'Unisci in una registrazione':'Trascrizioni separate',step:1});
     },
     init() {
@@ -638,7 +654,7 @@ function uploadForm() {
       localMedia = window.AtelierLocalMedia?.create();
       submitListener = event => {
         if (this.preparing || this.uploading) { event.preventDefault(); event.stopImmediatePropagation(); return; }
-        if (this.step !== 5) { event.preventDefault(); event.stopImmediatePropagation(); this.nextStep(); return; }
+        if (this.step !== this.steps.length) { event.preventDefault(); event.stopImmediatePropagation(); this.nextStep(); return; }
         if (!this.sourceReady) {event.preventDefault();event.stopImmediatePropagation();this.step=1;this.wizardError='Seleziona una sorgente valida.';this.focusStage();return;}
         const invalid=this.invalidField();if(invalid){event.preventDefault();event.stopImmediatePropagation();this.revealInvalid(invalid);return;}
         if (this.retranscribing || this.tab === 'url') return;
@@ -774,7 +790,7 @@ function uploadForm() {
           if (!eventField) continue;
           eventField.checked = true;
         } else {
-          field.value = String(value);
+          field.value = name==='summary_prompt' && !value ? {{ default_summary_prompt|tojson }} : String(value);
         }
         eventField.dispatchEvent(new Event('input', { bubbles: true }));
         eventField.dispatchEvent(new Event('change', { bubbles: true }));

@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+from whisper_ui.core.constants import DEFAULT_SUMMARY_PROMPT
 from whisper_ui.core.models import JobStatus
 from whisper_ui.storage import summary_library as library
 from whisper_ui.web.auth import owner_filter
@@ -15,7 +16,7 @@ from whisper_ui.worker.standalone_summary import enqueue_summary, summary_status
 router = APIRouter()
 ACTIVE = {'queued','started','deferred','scheduled'}
 PRIVATE = {'Cache-Control':'private, no-store'}
-DEFAULT_SUMMARY_PROMPT = 'Riassumi la trascrizione in maniera esaustiva e discorsiva in Italiano con un linguaggio semplice.'
+
 
 class Generate(BaseModel):
     job_id: str = Field(max_length=32)
